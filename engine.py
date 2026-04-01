@@ -530,13 +530,13 @@ def main():
         stateshape["countrycolor"] = countrytocolorlookup.get(statecountry, (85, 85, 85))
 
     provinceshapelist = loadsvgshapes(
-        provinsessvgfilepath if False else provincefilepath,
+        provincesvgfilepath if False else provincefilepath,
         onprogress=lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
     )
     # fix accidental typo safely
     if not provinceshapelist:
         provinceshapelist = loadsvgshapes(
-            provinsessvgfilepath if False else provincefilepath,
+            provincesvgfilepath if False else provincefilepath,
             onprogress=lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
         )
     if not provinceshapelist:
