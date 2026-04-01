@@ -266,6 +266,7 @@ def loadcountrydata(filepath):
     statetocountrylookup = {}
     countrytocolorlookup = {}
 
+
     for countryindex, countryentry in enumerate(rawdata):
         if not isinstance(countryentry, dict):
             continue
@@ -274,16 +275,15 @@ def loadcountrydata(filepath):
         if not countryname:
             continue
 
-        parsedcolor = parsecolorvalue(countryentry.get("Color"))
-        if parsedcolor is None:
-            parsedcolor = autocountrycolors[countryindex % len(autocountrycolors)]
+        # No color in new format, assign default (CHATGPT)
+        parsedcolor = autocountrycolors[countryindex % len(autocountrycolors)]
         countrytocolorlookup[countryname] = parsedcolor
 
-        statelist = countryentry.get("States", [])
-        if not isinstance(statelist, list):
+        statesdict = countryentry.get("States", {})
+        if not isinstance(statesdict, dict):
             continue
 
-        for statename in statelist:
+        for statename in statesdict.keys():
             if isinstance(statename, str) and statename.strip():
                 statetocountrylookup[statename.strip()] = countryname
 

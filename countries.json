@@ -2,19 +2,19 @@
 [
     {
         "Country" : "Malaysia",
-        "States" : [
-            "Malaya",
-            "Sabah",
-            "Sarawak"
-        ]
+        "States" : {
+            "Malaya": "Kuala_Lumpur",
+            "Sabah": "Kota_Kinabalu",
+            "Sarawak": "Kuching"
+        }
     },
     {
         "Country" : "Thailand",
-        "States" : [
-            "Northern_Malay",
-            "Siam",
-            "Lanna",
-            "Isan"
-        ]
+        "States" : {
+            "Northern_Malay": "Pattaya",
+            "Siam": "Bangkok",
+            "Lanna": "Chiang_Rai",
+            "Isan": "Khon_Kean"
+        }
     }
 ]
