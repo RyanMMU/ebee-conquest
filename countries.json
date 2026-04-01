@@ -1,0 +1,20 @@
+
+[
+    {
+        "Country" : "Malaysia",
+        "States" : [
+            "Malaya",
+            "Sabah",
+            "Sarawak"
+        ]
+    },
+    {
+        "Country" : "Thailand",
+        "States" : [
+            "Northern_Malay",
+            "Siam",
+            "Lanna",
+            "Isan"
+        ]
+    }
+]
