@@ -13,8 +13,8 @@ from gui import drawchoosecountryoverlay, drawgameplayhud, drawtroopcountbadge, 
 statefilepath = "states.svg"
 provincefilepath = "provinces.svg"
 countrydatafilepath = "countries.json"
-defaultwindowwidth = 1200
-defaultwindowheight = 800
+defaultwindowwidth = 1280
+defaultwindowheight = 720
 backgroundcolor = (30, 30, 30)
 defaultshapecolor = (200, 200, 200)
 hovercolor = (255, 100, 100)
