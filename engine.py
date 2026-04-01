@@ -881,7 +881,5 @@ def main():
 
     pygame.quit()
 
-def test_placeholder(): # Placeholder test function to pass the test without error on github actions
-    assert True
 
 main()
