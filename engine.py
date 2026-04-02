@@ -757,7 +757,9 @@ def main():
                 recruitgoldcost,
                 recruitpopulationcost,
             ) # draw hud after press
-            if countrymenutarget:
+            # show COUNTRY MENU WHEN state is selectedddd not when prvovince or else it will interfere   with move order functions and i dont wanna refactor
+            # TODO: REFACTOR TO SEPARATE STATE AND PROVINCE SELLECTION 
+            if countrymenutarget and hoveredprovinceid is None and hoveredstateid is not None:
                 placehldr, declarewarbuttonrectangle = drawcountryinteractionmenu(
                     screen, # screen is the display surface, value from main loop
                     normalfont,

@@ -89,14 +89,6 @@ def drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountr
 
 
 def drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetcountry, alreadyatwar):
-def drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetcountry, alreadyatwar, is_state_selected=True):
-    """
-    Draws the country interaction menu only if a state is selected.
-    If not a state, returns None, None.
-    """
-    if not is_state_selected:
-        return None, None
-
     placehldr, windowheight = screen.get_size()
     menuwidth = 280
     menuheight = 154
@@ -107,7 +99,7 @@ def drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetcountr
     pygame.draw.rect(screen, (26, 26, 35), menurectangle, border_radius=10)
     pygame.draw.rect(screen, (92, 92, 116), menurectangle, width=2, border_radius=10)
 
-    titlelabel = fontobject.render("Country actions", True, (240, 240, 240)) #titletext for country menus
+    titlelabel = fontobject.render("Country actions", True, (240, 240, 240)) #titletext for country meus
     screen.blit(titlelabel, (menurectangle.x + 12, menurectangle.y + 10))
 
     countrylabel = fontobject.render(targetcountry, True, (220, 220, 220))
