@@ -7,7 +7,7 @@ import xml.etree.ElementTree as elementtree
 from svgelements import Path
 
 from console import developmentconsole, loaddevmodeflag # Thank you Mr Neoh for suggesting module-based development during last sem's problem solving
-from gui import drawchoosecountryoverlay, drawgameplayhud, drawtroopcountbadge, lightencolor, drawcountryinteractionmenu
+from gui import gui_drawchoosecountryoverlay, gui_drawgameplayhud, gui_drawtroopcountbadge, gui_lightencolor, gui_drawcountryinteractionmenu
 
 # configuration
 statefilepath = "states.svg"
@@ -723,7 +723,7 @@ def main():
                             basefillcolor = (75, 75, 75)
                         if pendingcountry and stateshape.get("country") == pendingcountry:
                             pulsevalue = 0.35 + 0.45 * (0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.008))
-                            basefillcolor = lightencolor(basefillcolor, pulsevalue)
+                            basefillcolor = gui_lightencolor(basefillcolor, pulsevalue)
                     elif drawitem.get("id") == selectedprovinceid:
                         basefillcolor = (232, 214, 103)
                     elif drawitem.get("id") in routepreviewset:
@@ -742,7 +742,7 @@ def main():
                         troopbadgelist.append((itemrectanglescreen.center, drawitem["troops"]))
 
         for badgecenter, badgetroops in troopbadgelist:
-            drawtroopcountbadge(screen, badgecenter, badgetroops, smallfont)
+            gui_drawtroopcountbadge(screen, badgecenter, badgetroops, smallfont)
 
         choosebuttonrectangle = None
         recruitbuttonrectangle = None
@@ -750,14 +750,14 @@ def main():
         declarewarbuttonrectangle = None
 
         if gamephase == "choosecountry":
-            choosebuttonrectangle, _ = drawchoosecountryoverlay(screen, titlefont, normalfont, pendingcountry)
+            choosebuttonrectangle, _ = gui_drawchoosecountryoverlay(screen, titlefont, normalfont, pendingcountry)
         else:
             canrecruit = selectedprovinceid is not None and provincemap[selectedprovinceid]["country"] == playercountry
             recruitgoldcost = recruitamount * recruitgoldcostperunit
             recruitpopulationcost = recruitamount * recruitpopulationcostperunit
 
             recruitenabled = canrecruit and (developmentmode or (playergold >= recruitgoldcost and playerpopulation >= recruitpopulationcost))
-            recruitbuttonrectangle, endturnbuttonrectangle = drawgameplayhud(
+            recruitbuttonrectangle, endturnbuttonrectangle = gui_drawgameplayhud(
                 screen,
                 normalfont,
                 smallfont,
@@ -779,7 +779,7 @@ def main():
 
             # TODO: REFACTOR TO SEPARATE STATE AND PROVINCE SELLECTION, right now you can only open country menu when you left click on enemy state and then right click on enemy province
             if countrymenutarget:
-                placehldr, declarewarbuttonrectangle = drawcountryinteractionmenu(
+                placehldr, declarewarbuttonrectangle = gui_drawcountryinteractionmenu(
                     screen, # screen is the display surface, value from main loop
                     normalfont,
                     smallfont,

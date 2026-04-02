@@ -21,7 +21,7 @@ usage of pygame.draw.rect is pygame.draw.rect(surface, color, rect, width (defau
 
 
 
-def lightencolor(colorvalue, amount):
+def gui_lightencolor(colorvalue, amount):
     amount = max(0.0, min(1.0, amount))
     red, green, blue = colorvalue
     return (
@@ -31,13 +31,13 @@ def lightencolor(colorvalue, amount):
     )
 
 
-def drawbutton(screen, rectangle, textvalue, fontobject, enabled=True, pulse=False):
+def gui_drawbutton(screen, rectangle, textvalue, fontobject, enabled=True, pulse=False):
     if enabled:
         basecolor = (56, 116, 198)
         if pulse:
             timer = pygame.time.get_ticks() * 0.008
             glowamount = 0.2 + 0.35 * (0.5 + 0.5 * math.sin(timer))
-            basecolor = lightencolor(basecolor, glowamount)
+            basecolor = gui_lightencolor(basecolor, glowamount)
     else:
         basecolor = (70, 70, 70)
 
@@ -48,7 +48,7 @@ def drawbutton(screen, rectangle, textvalue, fontobject, enabled=True, pulse=Fal
     screen.blit(labelsurface, labelsurface.get_rect(center=rectangle.center))
 
 
-def drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
+def gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
     labelsurface = fontobject.render(str(troopcount), True, (255, 255, 255))
     labelrectangle = labelsurface.get_rect()
     labelrectangle.inflate_ip(10, 6)
@@ -58,7 +58,7 @@ def drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
     screen.blit(labelsurface, labelsurface.get_rect(center=labelrectangle.center))
 
 
-def drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountry):
+def gui_drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountry):
     windowwidth, windowheight = screen.get_size()
     darksurface = pygame.Surface((windowwidth, windowheight), pygame.SRCALPHA)
     darksurface.fill((0, 0, 0, 95))
@@ -72,7 +72,7 @@ def drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountr
 
     choosebuttonrectangle = pygame.Rect(windowwidth - 210, windowheight - 56, 190, 38)
     canchoosecountry = selectedcountry is not None
-    drawbutton(
+    gui_drawbutton(
         screen,
         choosebuttonrectangle,
         "choose country",
@@ -88,7 +88,7 @@ def drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountr
     return choosebuttonrectangle, canchoosecountry
 
 
-def drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetcountry, alreadyatwar):
+def gui_drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetcountry, alreadyatwar):
     placehldr, windowheight = screen.get_size()
     menuwidth = 280
     menuheight = 154
@@ -110,7 +110,7 @@ def drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetcountr
     screen.blit(statuslabel, (menurectangle.x + 12, menurectangle.y + 58))
 
     declarebuttonrectangle = pygame.Rect(menurectangle.x + 12, menurectangle.y + 82, menurectangle.width - 24, 38)
-    drawbutton(
+    gui_drawbutton(
         screen,
         declarebuttonrectangle,
         "already at war" if alreadyatwar else "declare war",
@@ -127,7 +127,7 @@ def drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetcountr
 
 # GAMEPLAY HUD starts here, renders every frame during play phase
 # might need to simplify this later its getting confusing
-def drawgameplayhud(
+def gui_drawgameplayhud(
     screen,
     fontobject,
     smallfontobject,
@@ -167,8 +167,8 @@ def drawgameplayhud(
 
     recruitbuttonrectangle = pygame.Rect(windowwidth - 390, windowheight - 56, 170, 38)
     endturnbuttonrectangle = pygame.Rect(windowwidth - 210, windowheight - 56, 190, 38)
-    drawbutton(screen, recruitbuttonrectangle, f"recruit +{recruitamount}", fontobject, enabled=recruitenabled)
-    drawbutton(screen, endturnbuttonrectangle, "end turn", fontobject, enabled=True)
+    gui_drawbutton(screen, recruitbuttonrectangle, f"recruit +{recruitamount}", fontobject, enabled=recruitenabled)
+    gui_drawbutton(screen, endturnbuttonrectangle, "end turn", fontobject, enabled=True)
 
     if not developmentmode:
         costtext = smallfontobject.render(
