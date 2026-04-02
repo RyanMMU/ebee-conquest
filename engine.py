@@ -230,9 +230,9 @@ def parsecolorvalue(rawcolorvalue):
         if len(colorstring) == 6:
             try:
                 return (
-                    int(colorstring[0:2], 16),
-                    int(colorstring[2:4], 16),
-                    int(colorstring[4:6], 16),
+                    int(colorstring[0:2], 16), # red
+                    int(colorstring[2:4], 16), # green
+                    int(colorstring[4:6], 16), # blue
                 )
             except ValueError:
                 return None
@@ -732,13 +732,13 @@ def main():
                 developmentmode,
                 recruitgoldcost,
                 recruitpopulationcost,
-            )
+            ) # draw hud after processing input so that button rectangles are up to date for clicking
 
         if hovertext:
             hoverlabel = normalfont.render(hovertext, True, (255, 255, 255))
             screen.blit(hoverlabel, (10, 10))
 
-        devconsole.draw(screen, normalfont, smallfont)
+        devconsole.draw(screen, normalfont, smallfont) # draw dev console after hover text so that it appears on top
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -775,7 +775,7 @@ def main():
                                         playerpopulation -= requiredpopulation
                         continue
 
-                    if endturnbuttonrectangle and endturnbuttonrectangle.collidepoint(event.pos):
+                    if endturnbuttonrectangle and endturnbuttonrectangle.collidepoint(event.pos): # end turn and process movement orders
                         processmovementorders(movementorderlist, provincemap)
                         if playercountry:
                             ownedprovincecount = sum(1 for province in provincemap.values() if province.get("country") == playercountry)
@@ -797,7 +797,7 @@ def main():
                         if selectedprovince and selectedprovince.get("country") == playercountry:
                             selectedprovinceid = hoveredprovinceid
 
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3: # right click for move orders
                 if devconsole.visible or gamephase != "play":
                     continue
                 if selectedprovinceid is None or hoveredprovinceid is None:

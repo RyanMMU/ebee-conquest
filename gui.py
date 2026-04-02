@@ -1,6 +1,25 @@
 import math
 import pygame
 
+""" WINDOW FORMAT
+window_width, window_height = screen.get_size()
+simple_window_width = 250
+simple_window_height = 150
+margin = 30  # distance from the right edge
+
+# Calculate position: center vertically, right-aligned
+x = window_width - simple_window_width - margin
+y = (window_height - simple_window_height) // 2
+
+window_rect = pygame.Rect(x, y, simple_window_width, simple_window_height)
+pygame.draw.rect(screen, (40, 40, 60), window_rect, border_radius=10)
+pygame.draw.rect(screen, (120, 120, 180), window_rect, width=2, border_radius=10)
+
+usage of pygame.draw.rect is pygame.draw.rect(surface, color, rect, width (default 0), border_radius (default 0))
+
+"""
+
+
 
 def lightencolor(colorvalue, amount):
     amount = max(0.0, min(1.0, amount))
@@ -58,7 +77,7 @@ def drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountr
         choosebuttonrectangle,
         "choose country",
         fontobject,
-        enabled=canchoosecountry,
+        enabled=canchoosecountry, # only enable the button if a country is selected
         pulse=canchoosecountry,
     )
 
@@ -69,6 +88,8 @@ def drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountr
     return choosebuttonrectangle, canchoosecountry
 
 
+# GAMEPLAY HUD starts here, renders every frame during play phase
+# might need to simplify this later its getting confusing
 def drawgameplayhud(
     screen,
     fontobject,
@@ -84,14 +105,14 @@ def drawgameplayhud(
     developmentmode,
     recruitgoldcost,
     recruitpopulationcost,
-):
+): 
     windowwidth, windowheight = screen.get_size()
 
-    topsurface = pygame.Surface((windowwidth, 74), pygame.SRCALPHA)
+    topsurface = pygame.Surface((windowwidth, 74), pygame.SRCALPHA) # semi-transparent surface for text background
     topsurface.fill((0, 0, 0, 120))
     screen.blit(topsurface, (0, 0))
 
-    headertext = f"{playercountry} | turn {currentturnnumber} | gold {currentgold} | population {currentpopulation}"
+    headertext = f"{playercountry} | turn {currentturnnumber} | gold {currentgold} | population {currentpopulation}" # header text with player info
     screen.blit(fontobject.render(headertext, True, (242, 242, 242)), (10, 8))
 
     if selectedprovinceid:
@@ -99,7 +120,7 @@ def drawgameplayhud(
         detailtext = (
             f"province: {selectedprovinceid} | troops: {selectedprovince['troops']} | "
             f"terrain: {selectedprovince['terrain']}"
-        )
+        ) # detail text for selected province
         screen.blit(fontobject.render(detailtext, True, (236, 236, 236)), (10, 30))
     else:
         screen.blit(fontobject.render("select a province in your country", True, (205, 205, 205)), (10, 30))
