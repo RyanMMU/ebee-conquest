@@ -6,7 +6,7 @@ import pygame
 import xml.etree.ElementTree as elementtree
 from svgelements import Path
 
-from console import developmentconsole, loaddevmodeflag
+from console import developmentconsole, loaddevmodeflag # Thank you Mr Neoh for suggesting module-based development during last sem's problem solving
 from gui import drawchoosecountryoverlay, drawgameplayhud, drawtroopcountbadge, lightencolor
 
 # configuration
@@ -45,9 +45,9 @@ autocountrycolors = [
     (191, 196, 84),
     (129, 144, 224),
     (206, 138, 112),
-]
+] # placeholder colors, will make a dynamic color generator later 
 
-
+# MAP LOADINGG STARTS
 def loadsvgshapes(filepath, onprogress=None):
     # read svg and convert paths into polygons
     tree = elementtree.parse(filepath)
@@ -115,7 +115,12 @@ def getmapbox(shapelist):
         "width": maximumx - minimumx,
         "height": maximumy - minimumy,
     }
+# MAP LOADINGG ENDSS
 
+
+
+
+# UTILITY FUNCTIONS STARTS
 
 def getscreenpoints(pointlist, zoomvalue, offsetx, offsety):
     return [(x * zoomvalue + offsetx, y * zoomvalue + offsety) for x, y in pointlist]
@@ -151,6 +156,12 @@ def wraphorizontalcamera(camerax, zoomvalue, mapbox):
     anchorvalue = mapbox["minimumx"] * zoomvalue
     return ((camerax + anchorvalue) % tilewidth) - anchorvalue
 
+# UTILITY FUNCTIONS ENDSS
+
+
+
+
+# GAME LOGIC AND RENDERING STARTS
 
 def convertpathtopolygons(svgpath):
     polygonlist = []
@@ -252,6 +263,8 @@ def parsecolorvalue(rawcolorvalue):
 
     return None
 
+# The following function is adapted from https://stackoverflow.com/a/29643643 with modifications to handle edge cases 
+
 
 def loadcountrydata(filepath):
     try:
@@ -289,7 +302,7 @@ def loadcountrydata(filepath):
 
     return statetocountrylookup, countrytocolorlookup
 
-
+# group subdivision to their parent state for rendering 
 def groupsubdivisionsbystate(provincelist, statelist):
     stateidset = {state["id"] for state in statelist}
     groupedlookup = {stateid: [] for stateid in stateidset}
@@ -301,9 +314,10 @@ def groupsubdivisionsbystate(provincelist, statelist):
         province["parentid"] = parentstateid
         groupedlookup[parentstateid].append(province)
 
-    return groupedlookup
+    return groupedlookup # stateid to list of provinces for example ("Malaya" -> [province1, province2])
 
 
+# check if rect are close to be considered adjacent to build provinece graph for path finding
 def rectanglesclose(firstrectangle, secondrectangle, padding=1):
     return not (
         firstrectangle.right + padding < secondrectangle.left
@@ -317,6 +331,8 @@ def getshapecenter(shape):
     return (shape["rectangle"].centerx, shape["rectangle"].centery)
 
 
+
+# Movement starts
 def prepareprovincemetadata(provincelist):
     enrichedlist = []
     for province in provincelist:
@@ -465,8 +481,12 @@ def processmovementorders(movementorderlist, provincemap):
 
     for finishedorder in finishedorderlist:
         movementorderlist.remove(finishedorder)
+# Movement ends
+# GAME LOGIC AND RENDERING ENDSS
 
 
+
+# Loading screen and main loop starts
 def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -879,86 +899,9 @@ def main():
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
         pygame.display.flip()
 
     pygame.quit()
+# loading screen and main loop ends
 
-
-main()
+main() #start engine
