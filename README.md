@@ -10,6 +10,7 @@ Game Development (Mini IT Project)
 
 ## 🧠 Language & Tech Stack
 - Python  
+- Supported Python versions: 3.9, 3.11, 3.12 (3.14 unsupported)  
 - Pygame + Pygame-GUI  
 - Pydantic-AI  
 - JSON / SQLite3 (data persistence & optimization)  
