@@ -482,6 +482,9 @@ def processmovementorders(movementorderlist, provincemap):
 
     for finishedorder in finishedorderlist:
         movementorderlist.remove(finishedorder)
+# TODO: handle combat when troop move into enemy province, right now the troops cannot move into the enemy province at all.
+
+
 # Movement ends
 # GAME LOGIC AND RENDERING ENDSS
 
@@ -875,7 +878,18 @@ def main():
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3: # right click for move orders
                 if devconsole.visible or gamephase != "play":
                     continue
+
+                # Only open the country interaction menu when the click is on a state (no hovered province).
                 if hoveredprovinceid is None:
+                    if hoveredstateid is not None:
+                        selectedstateobject = next((state for state in stateshapelist if state["id"] == hoveredstateid), None)
+                        if selectedstateobject:
+                            destinationcountry = selectedstateobject.get("country")
+                            if playercountry and destinationcountry and destinationcountry != playercountry:
+                                countrymenutarget = destinationcountry
+                                routepreviewset = set()
+                                continue
+                    countrymenutarget = None
                     continue
 
                 destinationprovince = provincemap.get(hoveredprovinceid)
