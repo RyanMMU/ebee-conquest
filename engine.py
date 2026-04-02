@@ -46,6 +46,8 @@ autocountrycolors = [
     (129, 144, 224),
     (206, 138, 112),
 ] # placeholder colors, will make a dynamic color generator later 
+# TODO: dynamic color generation
+
 
 # MAP LOADINGG STARTS
 def loadsvgshapes(filepath, onprogress=None):
@@ -326,6 +328,7 @@ def rectanglesclose(firstrectangle, secondrectangle, padding=1):
         or secondrectangle.bottom + padding < firstrectangle.top
     )
 
+# TODO: add interactions against another country (declare war etc, which enables troops to move to enemy provinces)
 
 def getshapecenter(shape):
     return (shape["rectangle"].centerx, shape["rectangle"].centery)
