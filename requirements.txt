@@ -1,2 +1,2 @@
-pygame
-svgelements
+pygame==2.6.1
+svgelements==1.9.6
