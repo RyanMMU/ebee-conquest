@@ -88,6 +88,51 @@ def drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountr
     return choosebuttonrectangle, canchoosecountry
 
 
+def drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetcountry, alreadyatwar):
+def drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetcountry, alreadyatwar, is_state_selected=True):
+    """
+    Draws the country interaction menu only if a state is selected.
+    If not a state, returns None, None.
+    """
+    if not is_state_selected:
+        return None, None
+
+    placehldr, windowheight = screen.get_size()
+    menuwidth = 280
+    menuheight = 154
+    menux = 0
+    menuy = (windowheight - menuheight) // 2
+    menurectangle = pygame.Rect(menux, menuy, menuwidth, menuheight)
+
+    pygame.draw.rect(screen, (26, 26, 35), menurectangle, border_radius=10)
+    pygame.draw.rect(screen, (92, 92, 116), menurectangle, width=2, border_radius=10)
+
+    titlelabel = fontobject.render("Country actions", True, (240, 240, 240)) #titletext for country menus
+    screen.blit(titlelabel, (menurectangle.x + 12, menurectangle.y + 10))
+
+    countrylabel = fontobject.render(targetcountry, True, (220, 220, 220))
+    screen.blit(countrylabel, (menurectangle.x + 12, menurectangle.y + 34))
+
+    statustext = "status: at war" if alreadyatwar else "status: peace"
+    statuslabel = smallfontobject.render(statustext, True, (205, 205, 215))
+    screen.blit(statuslabel, (menurectangle.x + 12, menurectangle.y + 58))
+
+    declarebuttonrectangle = pygame.Rect(menurectangle.x + 12, menurectangle.y + 82, menurectangle.width - 24, 38)
+    drawbutton(
+        screen,
+        declarebuttonrectangle,
+        "already at war" if alreadyatwar else "declare war",
+        fontobject,
+        enabled=not alreadyatwar,
+        pulse=not alreadyatwar,
+    )
+
+    hintlabel = smallfontobject.render("left click to confirm action", True, (178, 178, 188))
+    screen.blit(hintlabel, (menurectangle.x + 12, menurectangle.y + 126))
+
+    return menurectangle, declarebuttonrectangle
+
+
 # GAMEPLAY HUD starts here, renders every frame during play phase
 # might need to simplify this later its getting confusing
 def drawgameplayhud(
@@ -125,7 +170,7 @@ def drawgameplayhud(
     else:
         screen.blit(fontobject.render("select a province in your country", True, (205, 205, 205)), (10, 30))
 
-    controltext = "left click: open state/select province | right click: set destination from selected province"
+    controltext = "left click: open state/select province | right click foreign province: country actions"
     screen.blit(smallfontobject.render(controltext, True, (215, 215, 215)), (10, 52))
 
     recruitbuttonrectangle = pygame.Rect(windowwidth - 390, windowheight - 56, 170, 38)

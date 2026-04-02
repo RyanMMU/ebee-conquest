@@ -7,7 +7,7 @@ import xml.etree.ElementTree as elementtree
 from svgelements import Path
 
 from console import developmentconsole, loaddevmodeflag # Thank you Mr Neoh for suggesting module-based development during last sem's problem solving
-from gui import drawchoosecountryoverlay, drawgameplayhud, drawtroopcountbadge, lightencolor
+from gui import drawchoosecountryoverlay, drawgameplayhud, drawtroopcountbadge, lightencolor, drawcountryinteractionmenu
 
 # configuration
 statefilepath = "states.svg"
@@ -328,8 +328,6 @@ def rectanglesclose(firstrectangle, secondrectangle, padding=1):
         or secondrectangle.bottom + padding < firstrectangle.top
     )
 
-# TODO: add interactions against another country (declare war etc, which enables troops to move to enemy provinces)
-
 def getshapecenter(shape):
     return (shape["rectangle"].centerx, shape["rectangle"].centery)
 
@@ -610,6 +608,8 @@ def main():
     recruitpopulationcostperunit = 1
     movementorderlist = []
     routepreviewset = set()
+    countriesatwarset = set() # track countries at war
+    countrymenutarget = None
 
     devconsole = developmentconsole(enabled=developmentmode)
 
@@ -732,6 +732,7 @@ def main():
         choosebuttonrectangle = None
         recruitbuttonrectangle = None
         endturnbuttonrectangle = None
+        declarewarbuttonrectangle = None
 
         if gamephase == "choosecountry":
             choosebuttonrectangle, _ = drawchoosecountryoverlay(screen, titlefont, normalfont, pendingcountry)
@@ -755,7 +756,15 @@ def main():
                 developmentmode,
                 recruitgoldcost,
                 recruitpopulationcost,
-            ) # draw hud after processing input so that button rectangles are up to date for clicking
+            ) # draw hud after press
+            if countrymenutarget:
+                placehldr, declarewarbuttonrectangle = drawcountryinteractionmenu(
+                    screen, # screen is the display surface, value from main loop
+                    normalfont,
+                    smallfont,
+                    countrymenutarget,
+                    countrymenutarget in countriesatwarset,
+                )
 
         if hovertext:
             hoverlabel = normalfont.render(hovertext, True, (255, 255, 255))
@@ -782,9 +791,29 @@ def main():
                         expandedstateid = None
                         selectedprovinceid = None
                         routepreviewset = set()
+                        countriesatwarset = set()
+                        countrymenutarget = None # default var
                     continue
 
                 if gamephase == "play":
+                    if countrymenutarget:
+                        if declarewarbuttonrectangle and declarewarbuttonrectangle.collidepoint(event.pos):
+                            if countrymenutarget != playercountry:
+                                countriesatwarset.add(countrymenutarget)
+                        countrymenutarget = None
+                        continue
+
+
+
+
+
+
+
+                    ## economy
+
+
+
+
                     if recruitbuttonrectangle and recruitbuttonrectangle.collidepoint(event.pos):
                         if selectedprovinceid:
                             selectedprovince = provincemap[selectedprovinceid]
@@ -797,6 +826,17 @@ def main():
                                         playergold -= requiredgold
                                         playerpopulation -= requiredpopulation
                         continue
+
+
+
+
+
+
+
+
+
+
+
 
                     if endturnbuttonrectangle and endturnbuttonrectangle.collidepoint(event.pos): # end turn and process movement orders
                         processmovementorders(movementorderlist, provincemap)
@@ -823,21 +863,45 @@ def main():
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3: # right click for move orders
                 if devconsole.visible or gamephase != "play":
                     continue
-                if selectedprovinceid is None or hoveredprovinceid is None:
+                if hoveredprovinceid is None:
+                    continue
+
+                destinationprovince = provincemap.get(hoveredprovinceid)
+                if not destinationprovince:
+                    continue
+
+                destinationcountry = destinationprovince.get("country")
+                if playercountry and destinationcountry and destinationcountry != playercountry:
+                    countrymenutarget = destinationcountry
+                    routepreviewset = set()
+                    continue
+
+                countrymenutarget = None
+
+                if selectedprovinceid is None:
                     continue
                 if hoveredprovinceid == selectedprovinceid:
                     continue
 
                 sourceprovince = provincemap.get(selectedprovinceid)
-                destinationprovince = provincemap.get(hoveredprovinceid)
-                if not sourceprovince or not destinationprovince:
+                if not sourceprovince:
                     continue
-                if sourceprovince.get("country") != playercountry or destinationprovince.get("country") != playercountry:
+                if sourceprovince.get("country") != playercountry:
                     continue
                 if sourceprovince["troops"] <= 0:
                     continue
 
-                allowedprovinceidset = {provinceid for provinceid, province in provincemap.items() if province.get("country") == playercountry}
+                allowedcountryset = {playercountry} | countriesatwarset
+                if destinationcountry not in allowedcountryset:
+                    continue
+                allowedprovinceidset = {
+                    provinceid for provinceid, province in provincemap.items() if province.get("country") in allowedcountryset
+                }
+
+
+
+                #Path findign
+
                 foundpath = findprovincepath(
                     selectedprovinceid,
                     hoveredprovinceid,
@@ -845,6 +909,20 @@ def main():
                     provincegraph,
                     allowedprovinceidset=allowedprovinceidset,
                 )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
                 routepreviewset = set(foundpath)
                 if len(foundpath) >= 2:
                     movingtroopcount = sourceprovince["troops"]
@@ -852,8 +930,8 @@ def main():
                     movementorderlist.append(
                         {
                             "amount": movingtroopcount,
-                            "path": foundpath,
-                            "index": 0,
+                            "path": foundpath, # list of province ids to move through in order per turn
+                            "index": 0, # the current provincei n the path list
                             "current": foundpath[0],
                             "speedmodifier": 1.0,
                         }
