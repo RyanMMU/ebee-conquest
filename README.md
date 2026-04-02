@@ -8,6 +8,15 @@ Game Development (Mini IT Project)
 
 ---
 
+## 🔧 Installation
+1. Install a supported Python version: 3.9, 3.11, or 3.12.
+2. Install dependencies:
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+---
+
 ## 🧠 Language & Tech Stack
 - Python  
 - Supported Python versions: 3.9, 3.11, 3.12 (3.14 unsupported)  
