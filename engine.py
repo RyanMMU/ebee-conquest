@@ -545,10 +545,15 @@ def main():
         return
 
     statetocountrylookup, countrytocolorlookup = loadcountrydata(countrydatafilepath)
-    for stateshape in stateshapelist:
+
+
+    for stateshape in stateshapelist: # to prepare to load province data and assign countries to state 
         statecountry = statetocountrylookup.get(stateshape["id"])
         stateshape["country"] = statecountry
-        stateshape["countrycolor"] = countrytocolorlookup.get(statecountry, (85, 85, 85))
+        stateshape["countrycolor"] = countrytocolorlookup.get(statecountry, (85, 85, 85)) 
+
+
+
 
     provinceshapelist = loadsvgshapes(
         provincefilepath if False else provincefilepath,
@@ -570,7 +575,14 @@ def main():
         province["country"] = provincecountry
         province["countrycolor"] = countrytocolorlookup.get(provincecountry, (85, 85, 85))
 
-    provincemap = {province["id"]: province for province in provinceenrichedlist}
+
+
+
+    provincemap = {province["id"]: province for province in provinceenrichedlist} 
+
+
+
+
     provincegraph = buildprovinceadjacencygraph(
         provincemap,
         onprogress=lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
@@ -740,6 +752,7 @@ def main():
             canrecruit = selectedprovinceid is not None and provincemap[selectedprovinceid]["country"] == playercountry
             recruitgoldcost = recruitamount * recruitgoldcostperunit
             recruitpopulationcost = recruitamount * recruitpopulationcostperunit
+
             recruitenabled = canrecruit and (developmentmode or (playergold >= recruitgoldcost and playerpopulation >= recruitpopulationcost))
             recruitbuttonrectangle, endturnbuttonrectangle = drawgameplayhud(
                 screen,
@@ -757,9 +770,12 @@ def main():
                 recruitgoldcost,
                 recruitpopulationcost,
             ) # draw hud after press
-            # show COUNTRY MENU WHEN state is selectedddd not when prvovince or else it will interfere   with move order functions and i dont wanna refactor
-            # TODO: REFACTOR TO SEPARATE STATE AND PROVINCE SELLECTION 
-            if countrymenutarget and hoveredprovinceid is None and hoveredstateid is not None:
+
+
+
+
+            # TODO: REFACTOR TO SEPARATE STATE AND PROVINCE SELLECTION, right now you can only open country menu when you left click on enemy state and then right click on enemy province
+            if countrymenutarget:
                 placehldr, declarewarbuttonrectangle = drawcountryinteractionmenu(
                     screen, # screen is the display surface, value from main loop
                     normalfont,
@@ -767,6 +783,10 @@ def main():
                     countrymenutarget,
                     countrymenutarget in countriesatwarset,
                 )
+
+
+
+
 
         if hovertext:
             hoverlabel = normalfont.render(hovertext, True, (255, 255, 255))
@@ -797,6 +817,9 @@ def main():
                         countrymenutarget = None # default var
                     continue
 
+
+
+                # collidepoint checks button and country menu interacts
                 if gamephase == "play":
                     if countrymenutarget:
                         if declarewarbuttonrectangle and declarewarbuttonrectangle.collidepoint(event.pos):
@@ -806,12 +829,6 @@ def main():
                         continue
 
 
-
-
-
-
-
-                    ## economy
 
 
 
@@ -828,13 +845,6 @@ def main():
                                         playergold -= requiredgold
                                         playerpopulation -= requiredpopulation
                         continue
-
-
-
-
-
-
-
 
 
 
@@ -875,10 +885,14 @@ def main():
                 destinationcountry = destinationprovince.get("country")
                 if playercountry and destinationcountry and destinationcountry != playercountry:
                     countrymenutarget = destinationcountry
-                    routepreviewset = set()
+                    routepreviewset = set() # set() is an empty set to clear route preview
                     continue
 
                 countrymenutarget = None
+
+
+
+
 
                 if selectedprovinceid is None:
                     continue
@@ -892,6 +906,11 @@ def main():
                     continue
                 if sourceprovince["troops"] <= 0:
                     continue
+
+
+
+
+
 
                 allowedcountryset = {playercountry} | countriesatwarset
                 if destinationcountry not in allowedcountryset:
@@ -956,8 +975,10 @@ def main():
                     camerax = wraphorizontalcamera(camerax, zoomvalue, mapbox)
 
             elif event.type == pygame.KEYDOWN:
+
+
                 if devconsole.handlekeydown(event, provincemap, playercountry, countrytocolorlookup, defaultshapecolor):
-                    continue
+                    continue # handle dev console input and skip rest of loop if it was dev console related
 
             elif event.type == pygame.VIDEORESIZE:
                 oldwindowwidth, oldwindowheight = screen.get_size()
