@@ -12,7 +12,7 @@ def loaddevmodeflag(filepath="dev.txt"):
 
 
 def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallbackcolor):
-    commandparts = commandline.strip().split()
+    commandparts = commandline.strip().split() # arguments
     if not commandparts:
         return "empty command"
 
@@ -21,6 +21,9 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
 
     def getprovinceid(rawtext):
         return lowercaselookup.get(rawtext.lower())
+
+
+
 
     if commandname == "add_troops" and len(commandparts) == 3:
         provinceid = getprovinceid(commandparts[1])
@@ -31,7 +34,10 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
         except ValueError:
             return "amount must be int"
         provincemap[provinceid]["troops"] += amountvalue
-        return f"ok: {provinceid} troops={provincemap[provinceid]['troops']}"
+        return f"ok {provinceid} troops={provincemap[provinceid]['troops']}"
+
+
+
 
     if commandname == "remove_troops" and len(commandparts) == 3:
         provinceid = getprovinceid(commandparts[1])
@@ -42,7 +48,10 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
         except ValueError:
             return "amount must be int"
         provincemap[provinceid]["troops"] = max(0, provincemap[provinceid]["troops"] - amountvalue)
-        return f"ok: {provinceid} troops={provincemap[provinceid]['troops']}"
+        return f"ok {provinceid} troops={provincemap[provinceid]['troops']}"
+
+
+
 
     if commandname == "annex" and len(commandparts) == 2:
         if not playercountry:
@@ -52,9 +61,20 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
             return "province not found"
         provincemap[provinceid]["country"] = playercountry
         provincemap[provinceid]["countrycolor"] = countrytocolor.get(playercountry, fallbackcolor)
-        return f"ok: annexed {provinceid} to {playercountry}"
+        return f"ok annexed {provinceid} to {playercountry}"
+    
 
-    return "unknown command"
+    if commandname == "exit" and len(commandparts) == 1:
+        pygame.quit()
+        exit(0)
+
+
+    if commandname == "help" and len(commandparts) == 1:
+        return "commands: add_troops [province] [amount], remove_troops [province] [amount], annex [province], help"
+
+
+
+    return "what??"
 
 
 class developmentconsole:
@@ -72,7 +92,7 @@ class developmentconsole:
 
     def drawbutton(self, screen, rectangle, textvalue, fontobject, enabled=True, pulse=False):
         if enabled:
-            basecolor = (56, 116, 198)
+            basecolor = (56, 116, 198) #blue
             if pulse:
                 timer = pygame.time.get_ticks() * 0.008
                 glowamount = 0.2 + 0.35 * (0.5 + 0.5 * math.sin(timer))
@@ -82,11 +102,11 @@ class developmentconsole:
                     int(basecolor[2] + (255 - basecolor[2]) * glowamount),
                 )
         else:
-            basecolor = (70, 70, 70)
+            basecolor = (70, 70, 70)#gray
 
         pygame.draw.rect(screen, basecolor, rectangle, border_radius=6)
-        pygame.draw.rect(screen, (35, 35, 35), rectangle, width=1, border_radius=6)
-        textcolor = (240, 240, 240) if enabled else (145, 145, 145)
+        pygame.draw.rect(screen, (35, 35, 35), rectangle, width=1, border_radius=6) #dark border
+        textcolor = (240, 240, 240) if enabled else (145, 145, 145) # light if enabled dark if not
         labelsurface = fontobject.render(textvalue, True, textcolor)
         screen.blit(labelsurface, labelsurface.get_rect(center=rectangle.center))
 
