@@ -32,7 +32,7 @@ A **Google Maps-style, 2D turn-based grand strategy war simulator** where player
 
 -----
 
-## 🧠 Tech Stack
+## Tech Stack
 
   * **Engine:** Ebee Engine (Custom Python Map/Physics Engine)
   * **Graphics/UI:** Pygame, Pygame-GUI
@@ -41,24 +41,24 @@ A **Google Maps-style, 2D turn-based grand strategy war simulator** where player
 
 -----
 
-## ⚙️ Ebee Engine (EE) — Core Systems
+## Ebee Engine (EE) | Self-Developed Engine
 
-The **Ebee Engine** is the project's backbone, converting static SVG data into an interactive, gameplay-ready strategic theater.
+The **Ebee Engine** is the project's main engine, converting static SVG data into an interactive, gameplay-ready strategic render.
 
-### 🗺️ Map & Geometry
+### Map & Geometry
 
   * **SVG Processing:** Converts path data into renderable polygons and hitboxes.
   * **Interactive Projection:** Maps world coordinates to screen points with horizontal "infinite scroll" wrapping.
-  * **Centroid Calculation:** Automatically determines label and unit placement for provinces.
+  * **Centroid Calculation:** Automatically determines label and unit placement for provinces (To be fixed).
 
-### 🧭 Pathfinding & Movement
+### Pathfinding & Movement
 
   * **Adjacency Graph:** Built dynamically to allow AI and players to navigate provinces.
   * \**A* Pathfinding:\*\* Implements optimal routing with terrain-based cost modifiers (Mountains, Urban, Plains).
 
 -----
 
-## 🌍 Key Features
+## Key Features
 
 ### 1\. dNPC™ (LLM-Driven Diplomacy)
 
@@ -79,7 +79,7 @@ Non-player nations aren't just scripts; they are agents.
 
 -----
 
-## 👥 Development Team
+## Development Team
 
 | Member | Role | Primary Contributions |
 | :--- | :--- | :--- |
@@ -89,7 +89,7 @@ Non-player nations aren't just scripts; they are agents.
 
 -----
 
-## 🧩 AI Integration Strategy
+## AI Integration 
 
 To ensure the game remains playable in all environments, we utilize a three-tier AI fallback strategy:
 
