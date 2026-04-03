@@ -69,8 +69,29 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
         exit(0)
 
 
+
+    if commandname == "evaluate"  and len(commandparts) >= 2:
+        code = " ".join(commandparts[1:])
+        try:            # only allow access to a limited set of variables and functions for safety
+            whitelist = {
+                "provincemap": provincemap,
+                "playercountry": playercountry,
+                "countrytocolor": countrytocolor,
+                "fallbackcolor": fallbackcolor,
+            }
+            result = eval(code, {"__builtins__": {}}, whitelist)
+            return f"eval result: {result}"
+        except Exception as e:
+            return f"eval error: {e}"
+        """ Example eval:
+        provincemap.keys() = see all province id for debug
+        provincemap['provinceid'] = read info about specific province
+        playercountry = current country
+        fallbackcolor = test color rendering
+        """
+
     if commandname == "help" and len(commandparts) == 1:
-        return "commands: add_troops [province] [amount], remove_troops [province] [amount], annex [province], help"
+        return "commands: add_troops [province] [amount], remove_troops [province] [amount], annex [province], help, exit"
 
 
 

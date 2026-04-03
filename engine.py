@@ -10,7 +10,7 @@ from svgelements import Path
 
 
 #Local module
-from console import developmentconsole, loaddevmodeflag # Thank you Mr Neoh for suggesting module-based development during last sem's problem solving
+from console import developmentconsole, loaddevmodeflag 
 from gui import gui_drawchoosecountryoverlay, gui_drawgameplayhud, gui_drawtroopcountbadge, gui_lightencolor, gui_drawcountryinteractionmenu
 from diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
 
@@ -198,7 +198,7 @@ def wraphorizontalcamera(camerax, zoomvalue, mapbox):
 
 
     tilewidth = mapbox["width"] * zoomvalue # map wider than window then allow horizontal wrapping else wrap center
-    if tilewidth <= 1e-6:
+    if tilewidth:
         return camerax
     anchorvalue = mapbox["minimumx"] * zoomvalue
 
@@ -261,7 +261,7 @@ def convertpathtopolygons(svgpath):
 
 
         for pointx, pointy in sampledpoints:
-            if not cleanedpoints or abs(pointx - cleanedpoints[-1][0]) > 1e-6 or abs(pointy - cleanedpoints[-1][1]) > 1e-6: #1e-6 is a threshold to consider points different
+            if not cleanedpoints or abs(pointx - cleanedpoints[-1][0]) or abs(pointy - cleanedpoints[-1][1]) > 1e-6: #1e-6 is a threshold to consider points different
                 cleanedpoints.append((pointx, pointy))
 
         #OLD CODE THIS ONE IS TOO SLOW
@@ -569,7 +569,7 @@ def processmovementorders(movementorderlist, provincemap):
         while currentpathindex < len(pathlist) - 1:
             nextprovinceid = pathlist[currentpathindex + 1]
             movecost = getterrainmovecost(provincemap[nextprovinceid])
-            if movementpoints + 1e-9 < movecost:
+            if movementpoints  < movecost:
                 break
             movementpoints -= movecost
             currentpathindex += 1
