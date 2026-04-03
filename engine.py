@@ -1185,5 +1185,4 @@ def main():
     pygame.quit()
 # loading screen and main loop ends
 
-if __name__ == "__main__":
-    main() #start engine
+main()
