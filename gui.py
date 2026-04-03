@@ -1,25 +1,25 @@
 import math
 import pygame
 
-""" WINDOW FORMAT
-window_width, window_height = screen.get_size()
-simple_window_width = 250
-simple_window_height = 150
-margin = 30  # distance from the right edge
+''' WINDOW FORMAT GUIDELINES'''
+# window_width, window_height = screen.get_size()
+# simple_window_width = 250
+# simple_window_height = 150
+# margin = 30  # distance from the right edge
 
 # Calculate position: center vertically, right-aligned
-x = window_width - simple_window_width - margin
-y = (window_height - simple_window_height) // 2
+# x = window_width - simple_window_width - margin
+# y = (window_height - simple_window_height) // 2
 
-window_rect = pygame.Rect(x, y, simple_window_width, simple_window_height)
-pygame.draw.rect(screen, (40, 40, 60), window_rect, border_radius=10)
-pygame.draw.rect(screen, (120, 120, 180), window_rect, width=2, border_radius=10)
+# window_rect = pygame.Rect(x, y, simple_window_width, simple_window_height)
+# pygame.draw.rect(screen, (40, 40, 60), window_rect, border_radius=10)
+# pygame.draw.rect(screen, (120, 120, 180), window_rect, width=2, border_radius=10)
 
-usage of pygame.draw.rect is pygame.draw.rect(surface, color, rect, width (default 0), border_radius (default 0))
+# usage of pygame.draw.rect is pygame.draw.rect(surface, color, rect, width (default 0), border_radius (default 0))
 
-"""
 
-# this is a test commit
+
+#TODO: Generic gui functions for drawing buttons, windows, country menus, event popup etccc
 
 def gui_lightencolor(colorvalue, amount):
     amount = max(0.0, min(1.0, amount))

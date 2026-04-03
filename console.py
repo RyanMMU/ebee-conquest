@@ -1,6 +1,7 @@
 import math
 import pygame
 
+#dev console will not be included in the final 
 
 def loaddevmodeflag(filepath="dev.txt"):
     try:
@@ -57,6 +58,9 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
 
 
 class developmentconsole:
+    # in game console
+
+    #init is the only time we can load the dev mode flag
     def __init__(self, enabled):
         self.enabled = enabled
         self.visible = False
@@ -86,6 +90,9 @@ class developmentconsole:
         labelsurface = fontobject.render(textvalue, True, textcolor)
         screen.blit(labelsurface, labelsurface.get_rect(center=rectangle.center))
 
+
+    # the gui render code 
+    #TODO: move this to gui.py
     def draw(self, screen, fontobject, smallfontobject):
         if not self.enabled:
             self.buttonrectangle = None
@@ -95,6 +102,8 @@ class developmentconsole:
 
         windowwidth, windowheight = screen.get_size()
         self.buttonrectangle = pygame.Rect(windowwidth - 132, 10, 122, 30)
+
+
         self.drawbutton(
             screen,
             self.buttonrectangle,
@@ -103,6 +112,9 @@ class developmentconsole:
             enabled=True,
             pulse=self.visible,
         )
+
+
+
 
         if not self.visible:
             self.panelrectangle = None
@@ -187,6 +199,9 @@ class developmentconsole:
         elif keyboardevent.key == pygame.K_BACKSPACE:
             self.inputtext = self.inputtext[:-1]
         else:
+
+
+            # TODO: filter some characters that could mess up the font rendering
             if keyboardevent.unicode and keyboardevent.unicode.isprintable():
                 self.inputtext += keyboardevent.unicode
 
