@@ -20,15 +20,15 @@ def logstartupdiagnostics(startuptimestamp, stage, details=""):
     elapsedseconds = time.perf_counter() - startuptimestamp
     workingmemorymb, privatememorymb = getprocessmemoryusage()
 
-    
+
     if workingmemorymb is None:
-        memorysegment = "mem=n/a"
+        memorysegment = "memory=CANNOT FIND!"
     else:
         memorysegment = f"working={workingmemorymb:.1f}MB private={privatememorymb:.1f}MB"
 
     detailsegment = f" | {details}" if details else ""
     print(
-        f"Ebee Engine (Startup)> {elapsedseconds:7.2f}s | {stage} | {memorysegment}{detailsegment}",
+        f"local@EbeeEngine:~${elapsedseconds:7.2f}s | {stage} | {memorysegment}{detailsegment}",
         flush=True, #
     )
 
