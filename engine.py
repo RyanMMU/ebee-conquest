@@ -349,57 +349,65 @@ def prepareprovincemetadata(provincelist):
 def buildprovinceadjacencygraph(provincemap, onprogress=None):
     provinceidlist = list(provincemap.keys())
     totalprovincecount = len(provinceidlist)
-    if onprogress and not onprogress(0, totalprovincecount):
-        return {}
 
-    gridcellsize = 12.0
+
+    # TEST OPTIMIZATION 3 APRIL
+
+    totalprogresssteps = max(1, totalprovincecount * 2)
+    if onprogress and not onprogress(0, totalprogresssteps):
+        return None
+
+    # Larger cells reduce grid bookkeeping overhead for very large province maps.
+    gridcellsize = 32.0
+    adjacencytestpadding = 1
     gridlookup = {}
+    provinceentrylist = []
 
-    for provinceindex, provinceid in enumerate(provinceidlist, start=1):
+    for provinceindex, provinceid in enumerate(provinceidlist):
         provincerectangle = provincemap[provinceid]["rectangle"]
-        minimumgridx = int(math.floor(provincerectangle.left / gridcellsize))
-        maximumgridx = int(math.floor(provincerectangle.right / gridcellsize))
-        minimumgridy = int(math.floor(provincerectangle.top / gridcellsize))
-        maximumgridy = int(math.floor(provincerectangle.bottom / gridcellsize))
+        minimumgridx = int(math.floor((provincerectangle.left - adjacencytestpadding) / gridcellsize))
+        maximumgridx = int(math.floor((provincerectangle.right + adjacencytestpadding) / gridcellsize))
+        minimumgridy = int(math.floor((provincerectangle.top - adjacencytestpadding) / gridcellsize))
+        maximumgridy = int(math.floor((provincerectangle.bottom + adjacencytestpadding) / gridcellsize))
+
+        provinceentrylist.append((provinceid, provincerectangle, minimumgridx, maximumgridx, minimumgridy, maximumgridy))
 
         for gridx in range(minimumgridx, maximumgridx + 1):
             for gridy in range(minimumgridy, maximumgridy + 1):
-                gridlookup.setdefault((gridx, gridy), []).append(provinceid)
+                gridlookup.setdefault((gridx, gridy), []).append(provinceindex)
 
-        if onprogress and (provinceindex == 1 or provinceindex % 200 == 0 or provinceindex == totalprovincecount):
-            if not onprogress(provinceindex, totalprovincecount):
-                return {}
+        if onprogress and (provinceindex == 0 or (provinceindex + 1) % 200 == 0 or (provinceindex + 1) == totalprovincecount):
+            if not onprogress(provinceindex + 1, totalprogresssteps):
+                return None
 
     adjacencygraph = {provinceid: set() for provinceid in provinceidlist}
-    processedpairset = set()
 
-    for bucketprovinceids in gridlookup.values():
-        paircount = len(bucketprovinceids)
-        for firstindex in range(paircount):
-            firstprovinceid = bucketprovinceids[firstindex]
-            firstrectangle = provincemap[firstprovinceid]["rectangle"]
+    for provinceindex, provinceentry in enumerate(provinceentrylist):
+        provinceid, firstrectangle, minimumgridx, maximumgridx, minimumgridy, maximumgridy = provinceentry
+        candidateindexset = set()
 
-            for secondindex in range(firstindex + 1, paircount):
-                secondprovinceid = bucketprovinceids[secondindex]
-                if firstprovinceid == secondprovinceid:
-                    continue
+        for gridx in range(minimumgridx, maximumgridx + 1):
+            for gridy in range(minimumgridy, maximumgridy + 1):
+                for candidateindex in gridlookup.get((gridx, gridy), ()):
+                    
+                    
+                    #compare each pair once only, but avoid storing a global pair set
+                    if candidateindex > provinceindex:
+                        candidateindexset.add(candidateindex)
 
-                if firstprovinceid < secondprovinceid:
-                    pairkey = (firstprovinceid, secondprovinceid)
-                else:
-                    pairkey = (secondprovinceid, firstprovinceid)
+        for candidateindex in candidateindexset:
+            candidateprovinceid, secondrectangle, _, _, _, _ = provinceentrylist[candidateindex]
+            if rectanglesclose(firstrectangle, secondrectangle, padding=adjacencytestpadding):
+                adjacencygraph[provinceid].add(candidateprovinceid)
+                adjacencygraph[candidateprovinceid].add(provinceid)
 
-                if pairkey in processedpairset:
-                    continue
-                processedpairset.add(pairkey)
-
-                secondrectangle = provincemap[secondprovinceid]["rectangle"]
-                if rectanglesclose(firstrectangle, secondrectangle, padding=1):
-                    adjacencygraph[firstprovinceid].add(secondprovinceid)
-                    adjacencygraph[secondprovinceid].add(firstprovinceid)
+        if onprogress and (provinceindex == 0 or (provinceindex + 1) % 100 == 0 or (provinceindex + 1) == totalprovincecount):
+            if not onprogress(totalprovincecount + provinceindex + 1, totalprogresssteps):
+                return None
 
     return adjacencygraph
-
+    
+    # optimization issue, cannot run on Benedict's AMD computer, might need to optimize the adjacency graph building 
 
 def getterrainmovecost(province):
     return terrainmovecostlookup.get(province.get("terrain", "plains"), 1.0)
@@ -590,6 +598,13 @@ def main():
         provincemap,
         onprogress=lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
     )
+
+
+
+    #CRASH if no provincegraph, this is for Benedict's AMD issue
+    if provincegraph is None:
+        pygame.quit()
+        return
 
     groupedsubdivisionlookup = groupsubdivisionsbystate(provinceenrichedlist, stateshapelist)
     for stateshape in stateshapelist:
