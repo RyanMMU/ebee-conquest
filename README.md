@@ -25,9 +25,9 @@ A **Google Maps-style, 2D turn-based grand strategy war simulator** where player
     ```bash
     pip install -r requirements.txt
     ```
-3.  **Run the simulation:**
+3.  **Test the Engine:**
     ```bash
-    python main.py
+    python engine.py
     ```
 
 -----
