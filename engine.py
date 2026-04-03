@@ -89,12 +89,14 @@ def loadsvgshapes(filepath, onprogress=None):
     shapelist = []
 
     mapnode = root.find(".//svg:svg[@id='map']", namespacelookup)
+
     if mapnode is not None:
         pathelementlist = mapnode.findall("svg:path", namespacelookup)
     else:
         pathelementlist = root.findall(".//svg:path", namespacelookup)
 
     totalcount = len(pathelementlist)
+
     if onprogress and not onprogress(0, totalcount):
         return []
 
@@ -111,6 +113,8 @@ def loadsvgshapes(filepath, onprogress=None):
         pathstarttimestamp = time.perf_counter()
         svgpath = Path(pathdata)
         polygonlist = convertpathtopolygons(svgpath)
+
+
         if polygonlist:
             allxvalues = [x for polygon in polygonlist for x, _ in polygon["points"]]
             allyvalues = [y for polygon in polygonlist for _, y in polygon["points"]]
@@ -132,8 +136,9 @@ def loadsvgshapes(filepath, onprogress=None):
 
         if onprogress and (currentindex == 1 or currentindex % 20 == 0 or currentindex == totalcount):
             if not onprogress(currentindex, totalcount):
-                return []
 
+                return []
+    #print(shapelist[0]) 
     return shapelist
 
 
@@ -144,6 +149,8 @@ def getmapbox(shapelist):
     maximumx = max(allxvalues)
     minimumy = min(allyvalues)
     maximumy = max(allyvalues)
+    #print(f"box |  x={minimumx} to {maximumx}, y={minimumy} to {maximumy}")
+
     return {
         "minimumx": minimumx,
         "maximumx": maximumx,
@@ -186,11 +193,17 @@ def clampverticalcamera(cameray, zoomvalue, windowheight, mapbox):
     return max(bottomlimit, min(toplimit, cameray))
 
 
+
 def wraphorizontalcamera(camerax, zoomvalue, mapbox):
+
+
     tilewidth = mapbox["width"] * zoomvalue # map wider than window then allow horizontal wrapping else wrap center
     if tilewidth <= 1e-6:
         return camerax
     anchorvalue = mapbox["minimumx"] * zoomvalue
+
+
+
     return ((camerax + anchorvalue) % tilewidth) - anchorvalue
 
 # UTILITY FUNCTIONS ENDSS
@@ -207,7 +220,7 @@ def getsegmentsamplecount(segment):
         return 1 #no need to sample this
 
     if hasattr(segment, "start") and hasattr(segment, "end"):
-        dx = segment.end.x - segment.start.x # derivate of segment its not accurate i think but should be good enough
+        dx = segment.end.x - segment.start.x 
         dy = segment.end.y - segment.start.y
         approximatelength = math.hypot(dx, dy)
     else:
@@ -216,10 +229,13 @@ def getsegmentsamplecount(segment):
     samplecount = max(1, min(maxsegmentsteps, int(approximatelength / curvesamplestep)))
     if segmenttypename in {"Arc", "CubicBezier", "QuadraticBezier"}:
         samplecount = min(maxsegmentsteps, max(2, samplecount * 2))
-    return samplecount # the segment accuracy is capped or else it will be too heavy
+    return samplecount
+
+
 #TODO: OPTIMIZATION for curve sampling
 
 def convertpathtopolygons(svgpath):
+
     polygonlist = []
 
     for subpath in svgpath.as_subpaths():
@@ -234,12 +250,16 @@ def convertpathtopolygons(svgpath):
                 sampledpoints.append((segment.start.x, segment.start.y))
 
             samplecount = getsegmentsamplecount(segment)
+
+
             for sampleindex in range(1, samplecount + 1):
                 positionratio = sampleindex / samplecount
                 point = segment.point(positionratio)
                 sampledpoints.append((point.x, point.y))
 
         cleanedpoints = []
+
+
         for pointx, pointy in sampledpoints:
             if not cleanedpoints or abs(pointx - cleanedpoints[-1][0]) > 1e-6 or abs(pointy - cleanedpoints[-1][1]) > 1e-6: #1e-6 is a threshold to consider points different
                 cleanedpoints.append((pointx, pointy))
@@ -294,6 +314,8 @@ def getparentstateidfromprovinceid(provinceid):
 
 
 def parsecolorvalue(rawcolorvalue):
+
+
     if isinstance(rawcolorvalue, str):
         colorstring = rawcolorvalue.strip()
         if colorstring.startswith("#"):
@@ -308,6 +330,8 @@ def parsecolorvalue(rawcolorvalue):
             except ValueError:
                 return None
 
+
+
     if isinstance(rawcolorvalue, (list, tuple)) and len(rawcolorvalue) == 3:
         try:
             redvalue = int(rawcolorvalue[0])
@@ -318,6 +342,7 @@ def parsecolorvalue(rawcolorvalue):
                 max(0, min(255, greenvalue)),
                 max(0, min(255, bluevalue)),
             )
+        
         except (TypeError, ValueError):
             return None
 
@@ -364,8 +389,10 @@ def loadcountrydata(filepath):
 
 # group subdivision to their parent state for rendering 
 def groupsubdivisionsbystate(provincelist, statelist):
+
     stateidset = {state["id"] for state in statelist}
     groupedlookup = {stateid: [] for stateid in stateidset}
+
 
     for province in provincelist:
         parentstateid = getparentstateidfromprovinceid(province["id"])
@@ -373,6 +400,8 @@ def groupsubdivisionsbystate(provincelist, statelist):
             continue
         province["parentid"] = parentstateid
         groupedlookup[parentstateid].append(province)
+
+
 
     return groupedlookup # stateid to list of provinces for example ("Malaya" -> [province1, province2])
 
@@ -394,6 +423,7 @@ def getshapecenter(shape):
 # Movement starts
 def prepareprovincemetadata(provincelist):
     enrichedlist = []
+
     for province in provincelist:
         enrichedprovince = dict(province)
         enrichedprovince["parentstateid"] = getparentstateidfromprovinceid(enrichedprovince["id"])
@@ -401,6 +431,10 @@ def prepareprovincemetadata(provincelist):
         enrichedprovince["troops"] = 0
         enrichedprovince["center"] = getshapecenter(enrichedprovince)
         enrichedlist.append(enrichedprovince)
+
+
+    #print(enrichedlist[0])
+
     return enrichedlist
 
 
@@ -462,7 +496,9 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
         if onprogress and (provinceindex == 0 or (provinceindex + 1) % 100 == 0 or (provinceindex + 1) == totalprovincecount):
             if not onprogress(totalprovincecount + provinceindex + 1, totalprogresssteps):
                 return None
+            
 
+    #print(adjacencygraph)
     return adjacencygraph
     
     # optimization issue, cannot run on Benedict's AMD computer, might need to optimize the adjacency graph building 
@@ -1034,7 +1070,7 @@ def main():
 
 
 
-                
+
                 if selectedprovinceid is None:
                     continue
                 if hoveredprovinceid == selectedprovinceid:
