@@ -8,7 +8,7 @@ from svgelements import Path
 
 from console import developmentconsole, loaddevmodeflag # Thank you Mr Neoh for suggesting module-based development during last sem's problem solving
 from gui import gui_drawchoosecountryoverlay, gui_drawgameplayhud, gui_drawtroopcountbadge, gui_lightencolor, gui_drawcountryinteractionmenu
-
+print("CURRENT VERSION - APRIL 3 2024")
 # configuration
 statefilepath = "states.svg"
 provincefilepath = "provinces.svg"
@@ -550,7 +550,7 @@ def main():
     stateshapelist = loadsvgshapes(
         statefilepath,
         onprogress=lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
-    )
+    ) #lambda is a function that calls drawloadingscreen with the completed and total values from loadsvgshapes used for loading screen progress bar
     if not stateshapelist:
         pygame.quit()
         return
