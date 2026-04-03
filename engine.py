@@ -8,9 +8,17 @@ import pygame
 import xml.etree.ElementTree as elementtree
 from svgelements import Path
 
+
+#Local module
 from console import developmentconsole, loaddevmodeflag # Thank you Mr Neoh for suggesting module-based development during last sem's problem solving
 from gui import gui_drawchoosecountryoverlay, gui_drawgameplayhud, gui_drawtroopcountbadge, gui_lightencolor, gui_drawcountryinteractionmenu
+from diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
+
+
 print("CURRENT VERSION - APRIL 3 2024")
+
+
+
 # configuration
 
 #filepath = "map.csv"
@@ -100,6 +108,7 @@ def loadsvgshapes(filepath, onprogress=None):
                     return []
             continue
 
+        pathstarttimestamp = time.perf_counter()
         svgpath = Path(pathdata)
         polygonlist = convertpathtopolygons(svgpath)
         if polygonlist:
@@ -117,6 +126,9 @@ def loadsvgshapes(filepath, onprogress=None):
                     ),
                 }
             )
+
+        pathelapsedseconds = time.perf_counter() - pathstarttimestamp
+        logslowpath(filepath, currentindex, totalcount, shapeid, pathelapsedseconds)
 
         if onprogress and (currentindex == 1 or currentindex % 20 == 0 or currentindex == totalcount):
             if not onprogress(currentindex, totalcount):
@@ -188,6 +200,25 @@ def wraphorizontalcamera(camerax, zoomvalue, mapbox):
 
 # GAME LOGIC AND RENDERING STARTS
 
+# Adapted from Chatgpt
+def getsegmentsamplecount(segment):
+    segmenttypename = type(segment).__name__
+    if segmenttypename == "Move":
+        return 1 #no need to sample this
+
+    if hasattr(segment, "start") and hasattr(segment, "end"):
+        dx = segment.end.x - segment.start.x # derivate of segment its not accurate i think but should be good enough
+        dy = segment.end.y - segment.start.y
+        approximatelength = math.hypot(dx, dy)
+    else:
+        approximatelength = 0.0
+
+    samplecount = max(1, min(maxsegmentsteps, int(approximatelength / curvesamplestep)))
+    if segmenttypename in {"Arc", "CubicBezier", "QuadraticBezier"}:
+        samplecount = min(maxsegmentsteps, max(2, samplecount * 2))
+    return samplecount # the segment accuracy is capped or else it will be too heavy
+#TODO: OPTIMIZATION for curve sampling
+
 def convertpathtopolygons(svgpath):
     polygonlist = []
 
@@ -202,8 +233,7 @@ def convertpathtopolygons(svgpath):
             if not sampledpoints and hasattr(segment, "start"):
                 sampledpoints.append((segment.start.x, segment.start.y))
 
-            segmentlength = float(segment.length()) if hasattr(segment, "length") else 0.0
-            samplecount = max(1, min(maxsegmentsteps, int(segmentlength / curvesamplestep)))
+            samplecount = getsegmentsamplecount(segment)
             for sampleindex in range(1, samplecount + 1):
                 positionratio = sampleindex / samplecount
                 point = segment.point(positionratio)
@@ -293,7 +323,7 @@ def parsecolorvalue(rawcolorvalue):
 
     return None
 
-# The following function is adapted from https://stackoverflow.com/a/29643643 with modifications to handle edge cases 
+# adapted from https://stackoverflow.com/a/29643643 with modifications to handle edge cases 
 
 
 def loadcountrydata(filepath):
@@ -385,7 +415,7 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
     if onprogress and not onprogress(0, totalprogresssteps):
         return None
 
-    # Larger cells reduce grid bookkeeping overhead for very large province maps.
+    # larger cells reduce grid bookeeping overload
     gridcellsize = 32.0
     adjacencytestpadding = 1
     gridlookup = {}
@@ -527,96 +557,6 @@ def processmovementorders(movementorderlist, provincemap):
 
 
 # Loading screen and main loop starts
-
-
-def getprocessmemoryusage():
-    try:
-        import ctypes
-
-        class ProcessMemoryCountersEx(ctypes.Structure): # from https://docs.microsoft.com/en-us/windows/win32/api/psapi/ns-psapi-process_memory_counters_ex
-            _fields_ = [
-                ("cb", ctypes.c_uint32),
-                ("PageFaultCount", ctypes.c_uint32),
-                ("PeakWorkingSetSize", ctypes.c_size_t),
-                ("WorkingSetSize", ctypes.c_size_t),
-                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                ("PagefileUsage", ctypes.c_size_t),
-                ("PeakPagefileUsage", ctypes.c_size_t),
-                ("PrivateUsage", ctypes.c_size_t),
-            ]
-
-        processmemory = ProcessMemoryCountersEx()
-        processmemory.cb = ctypes.sizeof(ProcessMemoryCountersEx)
-        processhandle = ctypes.windll.kernel32.GetCurrentProcess()
-        succeeded = ctypes.windll.psapi.GetProcessMemoryInfo(
-            processhandle,
-            ctypes.byref(processmemory),
-            processmemory.cb,
-        )
-
-
-
-        if not succeeded:
-            return None, None
-
-        megabyte = 1024 * 1024
-        return processmemory.WorkingSetSize / megabyte, processmemory.PrivateUsage / megabyte
-    except Exception:
-        return None, None
-
-#chatgpt for diagnostics function
-def logstartupdiagnostics(startuptimestamp, stage, details=""):
-    elapsedseconds = time.perf_counter() - startuptimestamp
-    workingmemorymb, privatememorymb = getprocessmemoryusage()
-    if workingmemorymb is None:
-        memorysegment = "mem=n/a"
-    else:
-        memorysegment = f"working={workingmemorymb:.1f}MB private={privatememorymb:.1f}MB"
-
-    detailsegment = f" | {details}" if details else ""
-    print(
-        f"[startup] +{elapsedseconds:7.2f}s | {stage} | {memorysegment}{detailsegment}",
-        flush=True,
-    )
-
-
-def createloadingprogresscallback(screen, largefont, smallfont, startuptimestamp, stage):
-    callbackstate = {"lastlogtimestamp": 0.0}
-
-
-
-
-    def loadingprogresscallback(completedcount, totalcount):
-        shouldcontinue = drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount)
-        currenttimestamp = time.perf_counter()
-        shouldlog = (
-            completedcount == 0
-            or (totalcount > 0 and completedcount >= totalcount)
-            or (currenttimestamp - callbackstate["lastlogtimestamp"]) >= 1.5
-        )
-
-
-        if shouldlog:
-            logstartupdiagnostics(startuptimestamp, stage, f"progress={completedcount}/{totalcount}")
-            callbackstate["lastlogtimestamp"] = currenttimestamp
-
-            
-        return shouldcontinue
-
-
-
-
-    return loadingprogresscallback
-
-
-
-
-
-
-# diagnostics end
 def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -674,9 +614,7 @@ def main():
         return
 
     stateprogresscallback = createloadingprogresscallback(
-        screen,
-        loadingtitlefont,
-        loadingtextfont,
+        lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
         startupbegintimestamp,
         "loading states.svg",
     )
@@ -706,9 +644,7 @@ def main():
 
 
     provinceprogresscallback = createloadingprogresscallback(
-        screen,
-        loadingtitlefont,
-        loadingtextfont,
+        lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
         startupbegintimestamp,
         "loading provinces.svg",
     )
@@ -719,9 +655,7 @@ def main():
     # fix accidental typo safely
     if not provinceshapelist:
         provinceprogresscallback = createloadingprogresscallback(
-            screen,
-            loadingtitlefont,
-            loadingtextfont,
+            lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
             startupbegintimestamp,
             "loading provinces.svg (retry)",
         )
@@ -750,10 +684,7 @@ def main():
 
     #for diagnostics
     graphprogresscallback = createloadingprogresscallback(
-        screen,
-        #loadingtext,
-        loadingtitlefont,
-        loadingtextfont,
+        lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
         startupbegintimestamp,
         "building province graph",
     )
@@ -1103,7 +1034,7 @@ def main():
 
 
 
-
+                
                 if selectedprovinceid is None:
                     continue
                 if hoveredprovinceid == selectedprovinceid:
@@ -1218,4 +1149,5 @@ def main():
     pygame.quit()
 # loading screen and main loop ends
 
-main() #start engine
+if __name__ == "__main__":
+    main() #start engine
