@@ -2,6 +2,8 @@ import os
 import json
 import math
 import heapq
+import time
+import platform
 import pygame
 import xml.etree.ElementTree as elementtree
 from svgelements import Path
@@ -10,6 +12,8 @@ from console import developmentconsole, loaddevmodeflag # Thank you Mr Neoh for 
 from gui import gui_drawchoosecountryoverlay, gui_drawgameplayhud, gui_drawtroopcountbadge, gui_lightencolor, gui_drawcountryinteractionmenu
 print("CURRENT VERSION - APRIL 3 2024")
 # configuration
+
+#filepath = "map.csv"
 statefilepath = "states.svg"
 provincefilepath = "provinces.svg"
 countrydatafilepath = "countries.json"
@@ -50,6 +54,25 @@ autocountrycolors = [
 
 
 # MAP LOADINGG STARTS
+
+#def loadhexagonmap(filepath):
+#   shapelist = []
+#   with open(filepath, "r") as fileobject:
+#       for line in fileobject:
+#           parts = line.strip().split()
+#           if len(parts) >= 3:
+#               shapeid = parts[0]
+#               try:
+#                   x = float(parts[1])
+#                   y = float(parts[2])
+#                   shapelist.append({"id": shapeid, "points": [(x, y)]})
+#               except ValueError:
+#                   continue
+#   return shapelist
+#ignore code, hexagon not used
+
+
+
 def loadsvgshapes(filepath, onprogress=None):
     # read svg and convert paths into polygons
     tree = elementtree.parse(filepath)
@@ -188,8 +211,13 @@ def convertpathtopolygons(svgpath):
 
         cleanedpoints = []
         for pointx, pointy in sampledpoints:
-            if not cleanedpoints or abs(pointx - cleanedpoints[-1][0]) > 1e-6 or abs(pointy - cleanedpoints[-1][1]) > 1e-6:
+            if not cleanedpoints or abs(pointx - cleanedpoints[-1][0]) > 1e-6 or abs(pointy - cleanedpoints[-1][1]) > 1e-6: #1e-6 is a threshold to consider points different
                 cleanedpoints.append((pointx, pointy))
+
+        #OLD CODE THIS ONE IS TOO SLOW
+        #if not pointx, pointy in cleanedpoints:
+        #   cleanedpoints.append((pointx, pointy))
+
 
         if len(cleanedpoints) >= 3:
             polygonxvalues = [point[0] for point in cleanedpoints]
@@ -499,6 +527,96 @@ def processmovementorders(movementorderlist, provincemap):
 
 
 # Loading screen and main loop starts
+
+
+def getprocessmemoryusage():
+    try:
+        import ctypes
+
+        class ProcessMemoryCountersEx(ctypes.Structure): # from https://docs.microsoft.com/en-us/windows/win32/api/psapi/ns-psapi-process_memory_counters_ex
+            _fields_ = [
+                ("cb", ctypes.c_uint32),
+                ("PageFaultCount", ctypes.c_uint32),
+                ("PeakWorkingSetSize", ctypes.c_size_t),
+                ("WorkingSetSize", ctypes.c_size_t),
+                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
+                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
+                ("PagefileUsage", ctypes.c_size_t),
+                ("PeakPagefileUsage", ctypes.c_size_t),
+                ("PrivateUsage", ctypes.c_size_t),
+            ]
+
+        processmemory = ProcessMemoryCountersEx()
+        processmemory.cb = ctypes.sizeof(ProcessMemoryCountersEx)
+        processhandle = ctypes.windll.kernel32.GetCurrentProcess()
+        succeeded = ctypes.windll.psapi.GetProcessMemoryInfo(
+            processhandle,
+            ctypes.byref(processmemory),
+            processmemory.cb,
+        )
+
+
+
+        if not succeeded:
+            return None, None
+
+        megabyte = 1024 * 1024
+        return processmemory.WorkingSetSize / megabyte, processmemory.PrivateUsage / megabyte
+    except Exception:
+        return None, None
+
+#chatgpt for diagnostics function
+def logstartupdiagnostics(startuptimestamp, stage, details=""):
+    elapsedseconds = time.perf_counter() - startuptimestamp
+    workingmemorymb, privatememorymb = getprocessmemoryusage()
+    if workingmemorymb is None:
+        memorysegment = "mem=n/a"
+    else:
+        memorysegment = f"working={workingmemorymb:.1f}MB private={privatememorymb:.1f}MB"
+
+    detailsegment = f" | {details}" if details else ""
+    print(
+        f"[startup] +{elapsedseconds:7.2f}s | {stage} | {memorysegment}{detailsegment}",
+        flush=True,
+    )
+
+
+def createloadingprogresscallback(screen, largefont, smallfont, startuptimestamp, stage):
+    callbackstate = {"lastlogtimestamp": 0.0}
+
+
+
+
+    def loadingprogresscallback(completedcount, totalcount):
+        shouldcontinue = drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount)
+        currenttimestamp = time.perf_counter()
+        shouldlog = (
+            completedcount == 0
+            or (totalcount > 0 and completedcount >= totalcount)
+            or (currenttimestamp - callbackstate["lastlogtimestamp"]) >= 1.5
+        )
+
+
+        if shouldlog:
+            logstartupdiagnostics(startuptimestamp, stage, f"progress={completedcount}/{totalcount}")
+            callbackstate["lastlogtimestamp"] = currenttimestamp
+
+            
+        return shouldcontinue
+
+
+
+
+    return loadingprogresscallback
+
+
+
+
+
+
+# diagnostics end
 def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -529,8 +647,15 @@ def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
 
 
 def main():
+    startupbegintimestamp = time.perf_counter()
     pygame.init()
+    logstartupdiagnostics(startupbegintimestamp, "pygame init", f"python={platform.python_version()} pygame={pygame.version.ver}")
     screen = pygame.display.set_mode((defaultwindowwidth, defaultwindowheight), pygame.RESIZABLE)
+    logstartupdiagnostics(
+        startupbegintimestamp,
+        "window created",
+        f"size={defaultwindowwidth}x{defaultwindowheight} driver={pygame.display.get_driver()}",
+    )
     if os.path.exists("dev.txt"):
         pygame.display.set_caption("ebee engine playtest apr 1 - dev mode")
     else:
@@ -542,20 +667,34 @@ def main():
     loadingtitlefont = pygame.font.SysFont("Arial", 36, bold=True)
     loadingtextfont = pygame.font.SysFont("Arial", 18)
     developmentmode = loaddevmodeflag("dev.txt")
+    logstartupdiagnostics(startupbegintimestamp, "fonts ready", f"development_mode={developmentmode}")
 
     if not drawloadingscreen(screen, loadingtitlefont, loadingtextfont, 0, 1):
         pygame.quit()
         return
 
+    stateprogresscallback = createloadingprogresscallback(
+        screen,
+        loadingtitlefont,
+        loadingtextfont,
+        startupbegintimestamp,
+        "loading states.svg",
+    )
     stateshapelist = loadsvgshapes(
         statefilepath,
-        onprogress=lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
-    ) #lambda is a function that calls drawloadingscreen with the completed and total values from loadsvgshapes used for loading screen progress bar
+        onprogress=stateprogresscallback,
+    )
     if not stateshapelist:
         pygame.quit()
         return
+    logstartupdiagnostics(startupbegintimestamp, "states loaded", f"count={len(stateshapelist)}")
 
     statetocountrylookup, countrytocolorlookup = loadcountrydata(countrydatafilepath)
+    logstartupdiagnostics(
+        startupbegintimestamp,
+        "countries loaded",
+        f"state_links={len(statetocountrylookup)} country_colors={len(countrytocolorlookup)}",
+    )
 
 
     for stateshape in stateshapelist: # to prepare to load province data and assign countries to state 
@@ -566,21 +705,37 @@ def main():
 
 
 
+    provinceprogresscallback = createloadingprogresscallback(
+        screen,
+        loadingtitlefont,
+        loadingtextfont,
+        startupbegintimestamp,
+        "loading provinces.svg",
+    )
     provinceshapelist = loadsvgshapes(
         provincefilepath if False else provincefilepath,
-        onprogress=lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
+        onprogress=provinceprogresscallback,
     )
     # fix accidental typo safely
     if not provinceshapelist:
+        provinceprogresscallback = createloadingprogresscallback(
+            screen,
+            loadingtitlefont,
+            loadingtextfont,
+            startupbegintimestamp,
+            "loading provinces.svg (retry)",
+        )
         provinceshapelist = loadsvgshapes(
             provincefilepath if False else provincefilepath,
-            onprogress=lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
+            onprogress=provinceprogresscallback,
         )
     if not provinceshapelist:
         pygame.quit()
         return
+    logstartupdiagnostics(startupbegintimestamp, "provinces loaded", f"count={len(provinceshapelist)}")
 
     provinceenrichedlist = prepareprovincemetadata(provinceshapelist)
+    logstartupdiagnostics(startupbegintimestamp, "province metadata ready", f"count={len(provinceenrichedlist)}")
     for province in provinceenrichedlist:
         provincecountry = statetocountrylookup.get(province["parentstateid"])
         province["country"] = provincecountry
@@ -593,10 +748,25 @@ def main():
 
 
 
+    #for diagnostics
+    graphprogresscallback = createloadingprogresscallback(
+        screen,
+        #loadingtext,
+        loadingtitlefont,
+        loadingtextfont,
+        startupbegintimestamp,
+        "building province graph",
+    )
+
+
 
     provincegraph = buildprovinceadjacencygraph(
         provincemap,
-        onprogress=lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
+        # if not graphprogresscallback:
+        #     pygame.quit()
+        #     return
+
+        onprogress=graphprogresscallback,
     )
 
 
@@ -605,6 +775,12 @@ def main():
     if provincegraph is None:
         pygame.quit()
         return
+    totaledges = sum(len(neighborset) for neighborset in provincegraph.values()) // 2
+    logstartupdiagnostics(
+        startupbegintimestamp,
+        "province graph ready",
+        f"nodes={len(provincegraph)} edges={totaledges}",
+    )
 
     groupedsubdivisionlookup = groupsubdivisionsbystate(provinceenrichedlist, stateshapelist)
     for stateshape in stateshapelist:
@@ -615,6 +791,11 @@ def main():
         stateshape["subdivisions"] = subdivisionsforstate
 
     mapbox = getmapbox(stateshapelist)
+    logstartupdiagnostics(
+        startupbegintimestamp,
+        "startup complete",
+        f"map_size={mapbox['width']:.1f}x{mapbox['height']:.1f}",
+    )
     windowwidth, windowheight = screen.get_size()
     zoomvalue = getminimumzoomforheight(windowheight, mapbox)
     camerax = (windowwidth - mapbox["width"] * zoomvalue) / 2 - mapbox["minimumx"] * zoomvalue
