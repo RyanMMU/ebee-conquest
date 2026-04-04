@@ -820,17 +820,18 @@ def main():
 
         panpixels = edgepanspeed * elapsedseconds
 
-
+        # pan the camera
         if mouseposition[0] <= edgepanmargin:
             camerax += panpixels
         elif mouseposition[0] >= windowwidth - edgepanmargin:
             camerax -= panpixels
 
+        """ disabled for now, because everytime i click any button near the edge the camera will pan and itis getting annoying
         if mouseposition[1] <= edgepanmargin:
             cameray += panpixels
         elif mouseposition[1] >= windowheight - edgepanmargin:
             cameray -= panpixels
-
+        """
 
         minimumzoom = getminimumzoomforheight(windowheight, mapbox)
         if zoomvalue < minimumzoom:
@@ -931,7 +932,7 @@ def main():
         for badgecenter, badgetroops in troopbadgelist:
             gui_drawtroopcountbadge(screen, badgecenter, badgetroops, smallfont)
 
-            
+
 
         choosebuttonrectangle = None
         recruitbuttonrectangle = None
@@ -1133,10 +1134,6 @@ def main():
                     provincegraph,
                     allowedprovinceidset=allowedprovinceidset,
                 )
-
-
-
-
 
 
 
