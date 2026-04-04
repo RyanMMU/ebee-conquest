@@ -3,9 +3,12 @@
 
 ### Powered by the Ebee Engine (EE)
 
-A **Google Maps-style, 2D turn-based grand strategy war simulator** where players command nations and shape global history through conquest, diplomacy, and economic growth. Featuring the innovative **dNPC™ system**—non-player nations controlled by LLMs for dynamic, personality-driven geopolitics.
-> **Note:** This project was developed as a Mini IT Project. It focuses on modular architecture and the integration of modern AI agents within a classic strategy game loop.
+A **Google Maps-style, 2D turn-based grand strategy war simulator** where players command nations and shape global history through conquest, diplomacy, and economic growth. Featuring **dNPC™ system**, non-player nations controlled by LLMs for dynamic, personality-driven geopolitics.
+> **Note:** This project was developed as a Mini IT Project. The main focus is modular architecture and the integration of modern AI agents into a war scenario game.
 -----
+
+![Current Progress for Ebee Engine](images/engineprogresschart.png)
+> **Figure 1:** Currently developed functions assosciated with Ebee Engine shown in a flowchart form. 
 
 ## 🚀 Quick Start
 
