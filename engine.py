@@ -625,6 +625,8 @@ def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
 def main():
     startupbegintimestamp = time.perf_counter()
     pygame.init()
+
+
     logstartupdiagnostics(startupbegintimestamp, "pygame init", f"python={platform.python_version()} pygame={pygame.version.ver}")
     screen = pygame.display.set_mode((defaultwindowwidth, defaultwindowheight), pygame.RESIZABLE)
     logstartupdiagnostics(
@@ -632,6 +634,7 @@ def main():
         "window created",
         f"size={defaultwindowwidth}x{defaultwindowheight} driver={pygame.display.get_driver()}",
     )
+
     if os.path.exists("dev.txt"):
         pygame.display.set_caption("ebee engine playtest apr 1 - dev mode")
     else:
@@ -643,8 +646,9 @@ def main():
     loadingtitlefont = pygame.font.SysFont("Arial", 36, bold=True)
     loadingtextfont = pygame.font.SysFont("Arial", 18)
     developmentmode = loaddevmodeflag("dev.txt")
-    logstartupdiagnostics(startupbegintimestamp, "fonts ready", f"development_mode={developmentmode}")
 
+
+    logstartupdiagnostics(startupbegintimestamp, "fonts ready", f"development_mode={developmentmode}")
     if not drawloadingscreen(screen, loadingtitlefont, loadingtextfont, 0, 1):
         pygame.quit()
         return
@@ -661,16 +665,17 @@ def main():
     if not stateshapelist:
         pygame.quit()
         return
-    logstartupdiagnostics(startupbegintimestamp, "states loaded", f"count={len(stateshapelist)}")
+    
 
+    logstartupdiagnostics(startupbegintimestamp, "states loaded", f"count={len(stateshapelist)}")
     statetocountrylookup, countrytocolorlookup = loadcountrydata(countrydatafilepath)
+
+
     logstartupdiagnostics(
         startupbegintimestamp,
         "countries loaded",
         f"state_links={len(statetocountrylookup)} country_colors={len(countrytocolorlookup)}",
     )
-
-
     for stateshape in stateshapelist: # to prepare to load province data and assign countries to state 
         statecountry = statetocountrylookup.get(stateshape["id"])
         stateshape["country"] = statecountry
@@ -684,10 +689,16 @@ def main():
         startupbegintimestamp,
         "loading provinces.svg",
     )
+
+
+
     provinceshapelist = loadsvgshapes(
         provincefilepath if False else provincefilepath,
         onprogress=provinceprogresscallback,
     )
+
+
+
     # fix accidental typo safely
     if not provinceshapelist:
         provinceprogresscallback = createloadingprogresscallback(
@@ -702,31 +713,29 @@ def main():
     if not provinceshapelist:
         pygame.quit()
         return
-    logstartupdiagnostics(startupbegintimestamp, "provinces loaded", f"count={len(provinceshapelist)}")
+    
 
+
+    logstartupdiagnostics(startupbegintimestamp, "provinces loaded", f"count={len(provinceshapelist)}")
     provinceenrichedlist = prepareprovincemetadata(provinceshapelist)
     logstartupdiagnostics(startupbegintimestamp, "province metadata ready", f"count={len(provinceenrichedlist)}")
+
+
+
     for province in provinceenrichedlist:
         provincecountry = statetocountrylookup.get(province["parentstateid"])
         province["country"] = provincecountry
         province["countrycolor"] = countrytocolorlookup.get(provincecountry, (85, 85, 85))
 
-
-
-
     provincemap = {province["id"]: province for province in provinceenrichedlist} 
 
 
 
-    #for diagnostics
     graphprogresscallback = createloadingprogresscallback(
         lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
         startupbegintimestamp,
         "building province graph",
     )
-
-
-
     provincegraph = buildprovinceadjacencygraph(
         provincemap,
         # if not graphprogresscallback:
@@ -749,6 +758,8 @@ def main():
         f"nodes={len(provincegraph)} edges={totaledges}",
     )
 
+
+
     groupedsubdivisionlookup = groupsubdivisionsbystate(provinceenrichedlist, stateshapelist)
     for stateshape in stateshapelist:
         subdivisionsforstate = groupedsubdivisionlookup.get(stateshape["id"], [])
@@ -757,18 +768,25 @@ def main():
             province["countrycolor"] = stateshape.get("countrycolor", (85, 85, 85))
         stateshape["subdivisions"] = subdivisionsforstate
 
+
+
     mapbox = getmapbox(stateshapelist)
     logstartupdiagnostics(
         startupbegintimestamp,
         "startup complete",
         f"map_size={mapbox['width']:.1f}x{mapbox['height']:.1f}",
     )
+
+
+    
     windowwidth, windowheight = screen.get_size()
     zoomvalue = getminimumzoomforheight(windowheight, mapbox)
     camerax = (windowwidth - mapbox["width"] * zoomvalue) / 2 - mapbox["minimumx"] * zoomvalue
     cameray = (windowheight - mapbox["height"] * zoomvalue) / 2 - mapbox["minimumy"] * zoomvalue
     cameray = clampverticalcamera(cameray, zoomvalue, windowheight, mapbox)
     camerax = wraphorizontalcamera(camerax, zoomvalue, mapbox)
+
+
 
     clock = pygame.time.Clock()
     expandedstateid = None
@@ -778,12 +796,15 @@ def main():
     pendingcountry = None
     playercountry = None
 
+    # Default test stats
     currentturnnumber = 1
     playergold = 1200
     playerpopulation = 2500
     recruitamount = 100
     recruitgoldcostperunit = 1
     recruitpopulationcostperunit = 1
+
+
     movementorderlist = []
     routepreviewset = set()
     countriesatwarset = set() # track countries at war
@@ -798,6 +819,8 @@ def main():
         windowwidth, windowheight = screen.get_size()
 
         panpixels = edgepanspeed * elapsedseconds
+
+
         if mouseposition[0] <= edgepanmargin:
             camerax += panpixels
         elif mouseposition[0] >= windowwidth - edgepanmargin:
@@ -807,6 +830,7 @@ def main():
             cameray += panpixels
         elif mouseposition[1] >= windowheight - edgepanmargin:
             cameray -= panpixels
+
 
         minimumzoom = getminimumzoomforheight(windowheight, mapbox)
         if zoomvalue < minimumzoom:
@@ -827,7 +851,7 @@ def main():
         hoveredstateid = None
         hoveredprovinceid = None
         screenrectangle = screen.get_rect()
-        troopbadgelist = []
+        troopbadgelist = [] # store troop badge info
 
         tilewidth = mapbox["width"] * zoomvalue
         if tilewidth > 1:
@@ -902,10 +926,12 @@ def main():
                         pygame.draw.polygon(screen, (50, 50, 50), drawpolygon, 1)
 
                     if gamephase == "play" and "troops" in drawitem and drawitem["troops"] > 0 and itemrectanglescreen.colliderect(screenrectangle):
-                        troopbadgelist.append((itemrectanglescreen.center, drawitem["troops"]))
+                        troopbadgelist.append((itemrectanglescreen.center, drawitem["troops"])) #store as screen coords, troop count
 
         for badgecenter, badgetroops in troopbadgelist:
             gui_drawtroopcountbadge(screen, badgecenter, badgetroops, smallfont)
+
+            
 
         choosebuttonrectangle = None
         recruitbuttonrectangle = None
@@ -1153,9 +1179,12 @@ def main():
 
             elif event.type == pygame.KEYDOWN:
 
+            # (for quick ctrl f: developer console)
+                if devconsole.handlekeydown(event, provincemap, playercountry, countrytocolorlookup, defaultshapecolor, troopbadgelist):
+                    continue # handle dev console input
 
-                if devconsole.handlekeydown(event, provincemap, playercountry, countrytocolorlookup, defaultshapecolor):
-                    continue # handle dev console input and skip rest of loop if it was dev console related
+
+
 
             elif event.type == pygame.VIDEORESIZE:
                 oldwindowwidth, oldwindowheight = screen.get_size()

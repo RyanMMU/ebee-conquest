@@ -11,7 +11,7 @@ def loaddevmodeflag(filepath="dev.txt"):
         return False
 
 
-def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallbackcolor):
+def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallbackcolor, troopbadgelist):
     commandparts = commandline.strip().split() # arguments
     if not commandparts:
         return "empty command"
@@ -78,6 +78,7 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
                 "playercountry": playercountry,
                 "countrytocolor": countrytocolor,
                 "fallbackcolor": fallbackcolor,
+                "troopbadgelist": troopbadgelist
             }
             result = eval(code, {"__builtins__": {}}, whitelist)
             return f"eval result: {result}"
@@ -218,7 +219,7 @@ class developmentconsole:
 
         return False
 
-    def handlekeydown(self, keyboardevent, provincemap, playercountry, countrytocolor, fallbackcolor):
+    def handlekeydown(self, keyboardevent, provincemap, playercountry, countrytocolor, fallbackcolor, troopbadgelist):
         if not self.visible:
             return False
 
@@ -234,6 +235,7 @@ class developmentconsole:
                     playercountry,
                     countrytocolor,
                     fallbackcolor,
+                    troopbadgelist
                 )
                 self.loglines.append(outputline)
             self.inputtext = ""

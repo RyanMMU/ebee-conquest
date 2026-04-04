@@ -17,19 +17,19 @@ def getprocessmemoryusage():
 
 
 def logstartupdiagnostics(startuptimestamp, stage, details=""):
-    elapsedseconds = time.perf_counter() - startuptimestamp
-    workingmemorymb, privatememorymb = getprocessmemoryusage()
+    secondspassed = time.perf_counter() - startuptimestamp
+    wmemorymb, pmemorymb = getprocessmemoryusage()
 
 
-    if workingmemorymb is None:
+    if wmemorymb is None:
         memorysegment = "memory=CANNOT FIND!"
     else:
-        memorysegment = f"working={workingmemorymb:.1f}MB private={privatememorymb:.1f}MB"
+        memorysegment = f"working={wmemorymb:.1f}MB private={pmemorymb:.1f}MB"
 
     detailsegment = f" | {details}" if details else ""
     print(
-        f"local@EbeeEngine:~${elapsedseconds:7.2f}s | {stage} | {memorysegment}{detailsegment}",
-        flush=True, #
+        f"local@EbeeEngine:~${secondspassed:7.2f}s | {stage} | {memorysegment}{detailsegment}",
+        flush=True,
     )
 
 
@@ -52,10 +52,10 @@ def createloadingprogresscallback(drawprogresscallback, startuptimestamp, stage,
     return loadingprogresscallback
 
 
-def logslowpath(filepath, currentindex, totalcount, shapeid, elapsedseconds, thresholdseconds=1.5):
-    if elapsedseconds < thresholdseconds:
+def logslowpath(filepath, currentprog, totalcount, shapeid, secondspassed, allowedmaxseconds=1.5):
+    if secondspassed < allowedmaxseconds:
         return
     print(
-        f"(startup) slow path | file={os.path.basename(filepath)} index={currentindex}/{totalcount} id={shapeid} took={elapsedseconds:.2f}s",
+        f"local@EbeeEngine:~$ slow path!!!!! | file={os.path.basename(filepath)} was at={currentprog}/{totalcount} id={shapeid} took={secondspassed:.2f}s",
         flush=True,
     )
