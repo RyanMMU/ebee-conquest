@@ -522,8 +522,9 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
     costlookup = {startprovinceid: 0.0}
     visitedset = set()
 
+    # simple A* using openheap
     while openheap:
-        _, currentprovinceid = heapq.heappop(openheap)
+        _, currentprovinceid = heapq.heappop(openheap) # total province with lowest cost
         if currentprovinceid in visitedset:
             continue
 
@@ -569,6 +570,9 @@ def processmovementorders(movementorderlist, provincemap):
         while currentpathindex < len(pathlist) - 1:
             nextprovinceid = pathlist[currentpathindex + 1]
             movecost = getterrainmovecost(provincemap[nextprovinceid])
+
+
+
             if movementpoints  < movecost:
                 break
             movementpoints -= movecost
@@ -585,6 +589,7 @@ def processmovementorders(movementorderlist, provincemap):
     for finishedorder in finishedorderlist:
         movementorderlist.remove(finishedorder)
 # TODO: handle combat when troop move into enemy province, right now the troops cannot move into the enemy province at all.
+# TODO: handle occupation, changing the province ownership when all enemy troops are removed and the player moves into the province, or the npc moves into the province or the players province
 
 
 # Movement ends
@@ -816,6 +821,7 @@ def main():
     while isrunning:
         elapsedseconds = clock.tick(60) / 1000.0
         mouseposition = pygame.mouse.get_pos()
+        #this gives x and y (0 and 1)
         windowwidth, windowheight = screen.get_size()
 
         panpixels = edgepanspeed * elapsedseconds
