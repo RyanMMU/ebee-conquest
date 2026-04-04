@@ -27,12 +27,11 @@
         }
     },
     {
-        "Country" : "brunei",
+        "Country" : "Brunei",
         "States" : {
             "Brunei_Muara": "Bandar_Seri_Begawan",
             "Temburong": "Temburong",
-            "Belait": "Belait",
-            "Miri": "Miri"
+            "Belait": "Belait"
         }
     },
     {
