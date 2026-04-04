@@ -3,15 +3,15 @@ import pygame
 
 ''' WINDOW FORMAT GUIDELINES'''
 # window_width, window_height = screen.get_size()
-# simple_window_width = 250
-# simple_window_height = 150
+# swindow_width = 250
+# swindow_height = 150
 # margin = 30  # distance from the right edge
 
 # Calculate position: center vertically, right-aligned
-# x = window_width - simple_window_width - margin
-# y = (window_height - simple_window_height) // 2
+# x = window_width - swindow_width - margin
+# y = (window_height - swindow_height) // 2
 
-# window_rect = pygame.Rect(x, y, simple_window_width, simple_window_height)
+# window_rect = pygame.Rect(x, y, swindow_width, swindow_height)
 # pygame.draw.rect(screen, (40, 40, 60), window_rect, border_radius=10)
 # pygame.draw.rect(screen, (120, 120, 180), window_rect, width=2, border_radius=10)
 
