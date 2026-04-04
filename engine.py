@@ -983,7 +983,11 @@ def main():
 
         if hovertext:
             hoverlabel = normalfont.render(hovertext, True, (255, 255, 255))
-            screen.blit(hoverlabel, (10, 10))
+            # follow mouse but with an offset so it doesn't get covered by the cursor
+            screen.blit(hoverlabel, (mouseposition[0] + 16, mouseposition[1] + 16))
+
+        #show the province name when you hover over a province 
+
 
         devconsole.draw(screen, normalfont, smallfont) # draw dev console after hover text so that it appears on top
 
