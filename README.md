@@ -11,7 +11,8 @@ A **Google Maps-style, 2D turn-based grand strategy war simulator** where player
 
 ### Prerequisites
 
-  * **Python:** 3.9, 3.11, or 3.12 (Note: 3.14 is currently unsupported).
+  * **Python:** 3.11 and above is recommended
+  * **Pygame:** Pygame is 2.6.1 is required.
   * **API Key:** An OpenAI API key is required for dNPC™ functionality (or a local Ollama instance).
 
 ### Installation

@@ -1,4 +1,2 @@
-# Tested Python versions: 3.9, 3.11, 3.12
-# Benedict tested with Python 3.14 and it didn't work.
-pygame==2.6.1; python_version >= "3.9" and python_version < "3.13"
-svgelements==1.9.6; python_version >= "3.9" and python_version < "3.13"
+pygame==2.6.1
+svgelements==1.9.6
