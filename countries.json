@@ -16,5 +16,31 @@
             "Lanna": "Chiang_Rai",
             "Isan": "Khon_Kean"
         }
+    },
+    {
+        "Country" : "Indonesia",
+        "States" : {
+            "Java": "Jakarta",
+            "Sumatra": "Medan",
+            "Borneo": "Pontianak",
+            "Sulawesi": "Makassar"
+        }
+    }
+    {
+        "Country" : "brunei",
+        "States" : {
+            "Brunei_Muara": "Bandar_Seri_Begawan",
+            "Temburong": "Temburong",
+            "Belait": "Belait",
+            "Miri": "Miri"
+        }
+    }
+    {
+        "Country" : "Philippines",
+        "States" : {
+            "Luzon": "Manila",
+            "Visayas": "Cebu_City",
+            "Mindanao": "Davao_City"
+        }
     }
 ]
