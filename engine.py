@@ -143,21 +143,22 @@ def loadsvgshapes(filepath, onprogress=None):
 
 
 def getmapbox(shapelist):
-    allxvalues = [shape["rectangle"].left for shape in shapelist] + [shape["rectangle"].right for shape in shapelist]
-    allyvalues = [shape["rectangle"].top for shape in shapelist] + [shape["rectangle"].bottom for shape in shapelist]
-    minimumx = min(allxvalues)
-    maximumx = max(allxvalues)
-    minimumy = min(allyvalues)
-    maximumy = max(allyvalues)
-    #print(f"box |  x={minimumx} to {maximumx}, y={minimumy} to {maximumy}")
-
+    allXValues = [shape["rectangle"].left for shape in shapelist] + [shape["rectangle"].right for shape in shapelist]
+    allYValues = [shape["rectangle"].top for shape in shapelist] + [shape["rectangle"].bottom for shape in shapelist]
+    minX = min(allXValues)
+    maxX = max(allXValues)
+    minY = min(allYValues)
+    maxY = max(allYValues)
+    tempVar = 0 
+    # print("Debug: minX=", minX, "maxX=", maxX)  
+    #print(f"box |  x={minX} to {maxX}, y={minY} to {maxY}")
     return {
-        "minimumx": minimumx,
-        "maximumx": maximumx,
-        "minimumy": minimumy,
-        "maximumy": maximumy,
-        "width": maximumx - minimumx,
-        "height": maximumy - minimumy,
+        "minimumx": minX,
+        "maximumx": maxX,
+        "minimumy": minY,
+        "maximumy": maxY,
+        "width": maxX - minX,
+        "height": maxY - minY,
     }
 # MAP LOADINGG ENDSS
 
@@ -167,10 +168,14 @@ def getmapbox(shapelist):
 # UTILITY FUNCTIONS STARTS
 
 def getscreenpoints(pointlist, zoomvalue, offsetx, offsety):
+    #print(pointlist)
+    #return (pointlist)
     return [(x * zoomvalue + offsetx, y * zoomvalue + offsety) for x, y in pointlist]
 
 
 def getscreenrectangle(rectangle, zoomvalue, offsetx, offsety):
+    # print(rectangle)
+    testrectangle1 = None 
     return pygame.Rect(
         int(rectangle.x * zoomvalue + offsetx),
         int(rectangle.y * zoomvalue + offsety),
@@ -180,16 +185,22 @@ def getscreenrectangle(rectangle, zoomvalue, offsetx, offsety):
 
 
 def getminimumzoomforheight(windowheight, mapbox):
+
     if mapbox["height"] <= 0:
         return min(maximumzoomvalue, minimumzoomvalue)
+    # print("getminmumzoom height", windowheight)
+
     return min(maximumzoomvalue, max(minimumzoomvalue, windowheight / mapbox["height"]))
 
 
 def clampverticalcamera(cameray, zoomvalue, windowheight, mapbox):
+
+    clamptest = 1  
     toplimit = -mapbox["minimumy"] * zoomvalue
     bottomlimit = windowheight - mapbox["maximumy"] * zoomvalue
     if bottomlimit > toplimit:
         return (toplimit + bottomlimit) * 0.5
+    # print(cameray)
     return max(bottomlimit, min(toplimit, cameray))
 
 
@@ -213,7 +224,7 @@ def wraphorizontalcamera(camerax, zoomvalue, mapbox):
 
 # GAME LOGIC AND RENDERING STARTS
 
-# Adapted from Chatgpt
+# a* pathfinding adpated from https://www.redblobgames.com/pathfinding/a-star/introduction
 def getsegmentsamplecount(segment):
     segmenttypename = type(segment).__name__
     if segmenttypename == "Move":
@@ -245,7 +256,7 @@ def convertpathtopolygons(svgpath):
             if segmenttypename == "Move":
                 sampledpoints.append((segment.end.x, segment.end.y))
                 continue
-
+            #print(segment)
             if not sampledpoints and hasattr(segment, "start"):
                 sampledpoints.append((segment.start.x, segment.start.y))
 
@@ -263,6 +274,7 @@ def convertpathtopolygons(svgpath):
         for pointx, pointy in sampledpoints:
             if not cleanedpoints or abs(pointx - cleanedpoints[-1][0]) or abs(pointy - cleanedpoints[-1][1]) > 1e-6: #1e-6 is a threshold to consider points different
                 cleanedpoints.append((pointx, pointy))
+                #print(cleanedpoints[-1])
 
         #OLD CODE THIS ONE IS TOO SLOW
         #if not pointx, pointy in cleanedpoints:
@@ -348,7 +360,7 @@ def parsecolorvalue(rawcolorvalue):
 
     return None
 
-# adapted from https://stackoverflow.com/a/29643643 with modifications to handle edge cases 
+#  from https://stackoverflow.com/a/29643643  
 
 
 def loadcountrydata(filepath):
@@ -400,8 +412,8 @@ def groupsubdivisionsbystate(provincelist, statelist):
             continue
         province["parentid"] = parentstateid
         groupedlookup[parentstateid].append(province)
-
-
+        #print(province["id"], "parent", parentstateid)
+    #print(groupedlookup)
 
     return groupedlookup # stateid to list of provinces for example ("Malaya" -> [province1, province2])
 
@@ -422,20 +434,20 @@ def getshapecenter(shape):
 
 # Movement starts
 def prepareprovincemetadata(provincelist):
-    enrichedlist = []
-
+    enrichedList = []
+    testCounter = 0  
     for province in provincelist:
-        enrichedprovince = dict(province)
-        enrichedprovince["parentstateid"] = getparentstateidfromprovinceid(enrichedprovince["id"])
-        enrichedprovince["terrain"] = "plains"
-        enrichedprovince["troops"] = 0
-        enrichedprovince["center"] = getshapecenter(enrichedprovince)
-        enrichedlist.append(enrichedprovince)
-
-
-    #print(enrichedlist[0])
-
-    return enrichedlist
+        enrichedProvince = dict(province)
+        enrichedProvince["parentstateid"] = getparentstateidfromprovinceid(enrichedProvince["id"])
+        enrichedProvince["terrain"] = "plains"
+        enrichedProvince["troops"] = 0
+        enrichedProvince["center"] = getshapecenter(enrichedProvince)
+        # print("Debug: province center =", enrichedProvince["center"])  
+        enrichedList.append(enrichedProvince)
+        testCounter += 1  
+    # print("Total provinces:", testCounter)
+    #print(enrichedList[0])
+    return enrichedList
 
 
 def buildprovinceadjacencygraph(provincemap, onprogress=None):
@@ -444,18 +456,19 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
 
 
     # TEST OPTIMIZATION 3 APRIL
-
     totalprogresssteps = max(1, totalprovincecount * 2)
     if onprogress and not onprogress(0, totalprogresssteps):
+        #print("PROGRES", totalprogresssteps)
         return None
 
-    # larger cells reduce grid bookeeping overload
+    # larger cells will = faster but not as accurate
     gridcellsize = 32.0
     adjacencytestpadding = 1
     gridlookup = {}
     provinceentrylist = []
 
     for provinceindex, provinceid in enumerate(provinceidlist):
+        #print(provinceindex, provinceid, provinceidlist[0])
         provincerectangle = provincemap[provinceid]["rectangle"]
         minimumgridx = int(math.floor((provincerectangle.left - adjacencytestpadding) / gridcellsize))
         maximumgridx = int(math.floor((provincerectangle.right + adjacencytestpadding) / gridcellsize))
@@ -468,12 +481,17 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
             for gridy in range(minimumgridy, maximumgridy + 1):
                 gridlookup.setdefault((gridx, gridy), []).append(provinceindex)
 
+        #if onprogress and provinceindex % 100 == 0:
+        #    onprogress(provinceindex, totalprogresssteps)
+        #       if not onprogress(provinceindex, totalprogresssteps):
+        #          return None
+
         if onprogress and (provinceindex == 0 or (provinceindex + 1) % 200 == 0 or (provinceindex + 1) == totalprovincecount):
             if not onprogress(provinceindex + 1, totalprogresssteps):
                 return None
 
     adjacencygraph = {provinceid: set() for provinceid in provinceidlist}
-
+    #print("graph adjacent", adjacencygraph)
     for provinceindex, provinceentry in enumerate(provinceentrylist):
         provinceid, firstrectangle, minimumgridx, maximumgridx, minimumgridy, maximumgridy = provinceentry
         candidateindexset = set()
@@ -488,7 +506,7 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
                         candidateindexset.add(candidateindex)
 
         for candidateindex in candidateindexset:
-            candidateprovinceid, secondrectangle, _, _, _, _ = provinceentrylist[candidateindex]
+            candidateprovinceid, secondrectangle, _, _, _, _ = provinceentrylist[candidateindex] 
             if rectanglesclose(firstrectangle, secondrectangle, padding=adjacencytestpadding):
                 adjacencygraph[provinceid].add(candidateprovinceid)
                 adjacencygraph[candidateprovinceid].add(provinceid)
@@ -522,7 +540,7 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
     costlookup = {startprovinceid: 0.0}
     visitedset = set()
 
-    # simple A* using openheap
+    #  A* 
     while openheap:
         _, currentprovinceid = heapq.heappop(openheap) # total province with lowest cost
         if currentprovinceid in visitedset:
@@ -597,7 +615,8 @@ def processmovementorders(movementorderlist, provincemap):
 
 
 
-# Loading screen and main loop starts
+# Loading screen and main loop starts 
+# start after main()
 def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -606,10 +625,12 @@ def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
     progressvalue = 0.0 if totalcount <= 0 else completedcount / totalcount
     progressvalue = max(0.0, min(1.0, progressvalue))
     screen.fill((18, 18, 22))
-
+    #print("progress", progressvalue, completedcount, totalcount)
     windowwidth, windowheight = screen.get_size()
-    titletextsurface = largefont.render("Loading engine...", True, (240, 240, 240))
-    screen.blit(titletextsurface, titletextsurface.get_rect(center=(windowwidth // 2, windowheight // 2 - 40)))
+
+
+    titletextabovebar = largefont.render("Loading engine...", True, (240, 240, 240))
+    screen.blit(titletextabovebar, titletextabovebar.get_rect(center=(windowwidth // 2, windowheight // 2 - 40)))
 
     barwidth = min(640, windowwidth - 120)
     barheight = 22
@@ -658,11 +679,17 @@ def main():
         pygame.quit()
         return
 
+    #TODO: make loading screen better, preferably show which file is loading,
+    # current state, it just says provinces and never update
+
+
     stateprogresscallback = createloadingprogresscallback(
         lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
         startupbegintimestamp,
         "loading states.svg",
     )
+
+
     stateshapelist = loadsvgshapes(
         statefilepath,
         onprogress=stateprogresscallback,
@@ -825,7 +852,6 @@ def main():
         windowwidth, windowheight = screen.get_size()
 
         panpixels = edgepanspeed * elapsedseconds
-
         # pan the camera
         if mouseposition[0] <= edgepanmargin:
             camerax += panpixels
