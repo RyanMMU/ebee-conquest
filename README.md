@@ -16,8 +16,8 @@
 <h1 align="center">Turn-Based Sandbox Grand Strategy War Simulator</h1>
 
 <p align="center">
-  <a href="https://awesome.re"><img src="https://awesome.re/badge.svg"></a>
-  <a href="https://google.com"><img src="https://deepwiki.com/badge.svg"></a>
+  <a href="https://propro.click/courses/298/lecturers/1/projects/888"><img src="https://img.shields.io/badge/ProPro-Proposal-red"></a>
+  <a href="https://google.com"><img src="https://img.shields.io/badge/build-development-orange"></a>
   <a href="https://github.com/RyanMMU/ebee-conquest/LICENSE"><img src="https://img.shields.io/github/license/moeru-ai/airi.svg?style=flat&colorA=080f12&colorB=1fa669"></a>
   <a href="https://discord.com/app"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Finvites%2Fpython%3Fwith_counts%3Dtrue&query=%24.approximate_member_count&suffix=%20members&logo=discord&logoColor=white&label=%20&color=7389D8&labelColor=6A7EC2"></a>
   <a href="https://x.com/EbeeConquest"><img src="https://img.shields.io/badge/%40EbeeConquest-black?style=flat&logo=x&labelColor=%23101419&color=%232d2e30"></a>
