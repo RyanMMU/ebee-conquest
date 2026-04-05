@@ -49,5 +49,11 @@
             "Central_Vietnam": "Da_Nang",
             "South_Vietnam": "Ho_Chi_Minh_City"
         }
+    },
+    {
+        "Country" : "Timor_Leste",
+        "States" : {
+            "East_Timor": "Dili"
+        }
     }
 ]
