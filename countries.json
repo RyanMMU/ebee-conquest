@@ -67,5 +67,12 @@
         "States" : {
             "Laos": "Vientiane"
         }
+    },
+    {
+        "Country" : "Myanmar",
+        "States" : {
+            "Burma": "Yangon",
+            "Upper_Burma": "Mandalay"
+        }
     }
 ]
