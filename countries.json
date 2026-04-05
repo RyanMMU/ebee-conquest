@@ -41,5 +41,13 @@
             "Visayas": "Cebu_City",
             "Mindanao": "Davao_City"
         }
+    },
+    {
+        "Country" : "Vietnam",
+        "States" : {
+            "North_Vietnam": "Hanoi",
+            "Central_Vietnam": "Da_Nang",
+            "South_Vietnam": "Ho_Chi_Minh_City"
+        }
     }
 ]
