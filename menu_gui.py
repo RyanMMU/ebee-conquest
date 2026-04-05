@@ -3,7 +3,10 @@ import sys
 
 pygame.init()
 
-screen = pygame.display.set_mode((1000, 600))
+WIDTH,HEIGHT = 1280,720
+
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+
 pygame.display.set_caption('game menu') 
 
 black = (10,10,10)      
@@ -20,6 +23,10 @@ big_font = pygame.font.SysFont('consolas', 50)
 menu = 'main' 
 run = True
 
+button_width = 200
+button_height = 60
+button_m = (WIDTH // 2) - (button_width // 2)
+
 while run:
     mouse = pygame.mouse.get_pos()
     
@@ -35,13 +42,13 @@ while run:
             
                 
                 
-                if 400 < mouse[0] < 600 and 150 < mouse[1] < 210:
+                if button_m < mouse[0] < button_m + button_width and 150 < mouse[1] < 210:
                     print('starting the game....')
                
-                if 400 < mouse[0] < 600 and 250 < mouse[1] < 310:
+                if button_m < mouse[0] < button_m+button_width and 250 < mouse[1] < 310:
                     menu = 'settings'
                 
-                if 400 < mouse[0] < 600 and 350 < mouse[1] < 410:
+                if button_m < mouse[0] < button_m + button_width and 350 < mouse[1] < 410:
                     run = False
             
             elif menu == 'settings':
@@ -49,59 +56,61 @@ while run:
                 
                 
        
-                if 400 < mouse[0] < 600 and 450 < mouse[1] < 510:
+                if button_m < mouse[0] < button_m + button_width and 450 < mouse[1] < 510:
                     menu = 'main'
 
         screen.fill(black)
-        if pygame.draw.rect(screen, bright_green, (400,450,200,60)):
-    
-            
-            txt4 = main_font.render('BACK',True,black)
-            screen.blit(txt4,(465,460))
+
 
     
 
     if menu == 'main':
-       
         t = big_font.render('EBEE CONQUEST',True,white)
-        screen.blit(t, (300,50))
-        
+        title_x = (WIDTH // 2) - (t.get_width() // 2)
+        screen.blit(t,(20,20))
+
+        color = bright_green if button_m < mouse[0] < button_m + button_width and 150 < mouse[1] < 210 else green
+
        
-        if 400 < mouse[0] < 600 and 150 < mouse[1] < 210:
-            pygame.draw.rect(screen, bright_green, (400,150,200,60))
-        else:
-            pygame.draw.rect(screen,green, (400,150,200,60))
+        pygame.draw.rect(screen, color, (button_m ,150,button_width,button_height))
+   
+        
         txt1 = main_font.render('START', True, black)
-        screen.blit(txt1, (450,160))
+        screen.blit(txt1, (button_m+50,165))
 
       
-        if 400 < mouse[0] < 600 and 250 < mouse[1] < 310:
-            pygame.draw.rect(screen, bright_green, (400,250,200,60))
-        else:
-            pygame.draw.rect(screen, green, (400,250,200,60))
+        color = bright_green if button_m < mouse[0] < button_m + button_width and 250 < mouse[1] < 310 else green
+
+ 
+        pygame.draw.rect(screen, color,(button_m ,250,button_width,button_height) )
         txt2 = main_font.render('SETTINGS', True, black)
-        screen.blit(txt2, (415,260))
+        screen.blit(txt2,(button_m + 35, 265))
 
+   
        
-        if 400 < mouse[0] < 600 and 350 < mouse[1] < 410:
-            pygame.draw.rect(screen, bright_green, (400, 350, 200, 60))
-        else:
-            pygame.draw.rect(screen, green, (400,350,200,60))
+        color = bright_green if button_m < mouse[0] < button_m + button_width and 350 < mouse[1] < 410 else green
+        pygame.draw.rect(screen, color,(button_m,350,button_width,button_height))
         txt3 = main_font.render('QUIT', True, black)
-        screen.blit(txt3, (460,360))
-
+        screen.blit(txt3,(button_m + 65,365))
+    
     elif menu == 'settings':
-        t2 = big_font.render('SETTINGS', True, black)
-        screen.blit(t2,(350,50))
+        t2 = big_font.render('SETTINGS', True, white)
+        title_x2 = (WIDTH // 2) - (t2.get_width() // 2)
+        screen.blit(t2,(title_x2,50))
         
        
-    pygame.draw.rect(screen, bright_green, (400,450,200,60))
-    txt4 = main_font.render('BACK', True, black)
-    screen.blit(txt4, (465,460))
+        color = bright_green if button_m < mouse[0] < button_m + button_width and 450 < mouse[1] < 510 else green
+        pygame.draw.rect(screen, color, (button_m, 450, button_width, button_height))
+        txt4 = main_font.render('BACK', True, black)
+        screen.blit(txt4, (button_m + 65, 465))
+
+
 
     
     pygame.display.flip()
 
 
-pygame.quit()
+    
+    
+pygame.quit()           
 sys.exit()
