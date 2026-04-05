@@ -55,5 +55,11 @@
         "States" : {
             "East_Timor": "Dili"
         }
+    },
+    {
+        "Country" : "Cambodia",
+        "States" : {
+            "Cambodia": "Phnom_Penh"
+        }
     }
 ]
