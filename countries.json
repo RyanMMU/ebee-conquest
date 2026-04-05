@@ -61,5 +61,11 @@
         "States" : {
             "Cambodia": "Phnom_Penh"
         }
+    },
+    {
+        "Country" : "Laos",
+        "States" : {
+            "Laos": "Vientiane"
+        }
     }
 ]
