@@ -1,0 +1,28 @@
+# State example (Malaya)
+{
+    "id": "Malaya",
+    "polygons": [...],          # from states.svg
+    "rectangle": <pygame.Rect>,
+    "country": "Malaysia",
+    "countrycolor": (197, 92, 92),
+    "subdivisions": [           # 24 province dicts
+        {"id": "Malaya_01", ...},
+        {"id": "Malaya_02", ...},
+        # ...
+        {"id": "Malaya_24", ...},
+    ],
+}
+
+# Province example (Malaya_01)
+{
+    "id": "Malaya_01",
+    "polygons": [...],          # from provinces.svg
+    "rectangle": <pygame.Rect>,
+    "parentstateid": "Malaya",
+    "parentid": "Malaya",
+    "terrain": "plains",
+    "troops": 0,                # changes during gameplay
+    "center": (x, y),
+    "country": "Malaysia",      # can change on occupation/combat resolution
+    "countrycolor": (197, 92, 92),
+}

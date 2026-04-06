@@ -59,6 +59,8 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
         provinceid = getprovinceid(commandparts[1])
         if provinceid is None:
             return "province not found"
+        provincemap[provinceid]["ownercountry"] = playercountry
+        provincemap[provinceid]["controllercountry"] = playercountry
         provincemap[provinceid]["country"] = playercountry
         provincemap[provinceid]["countrycolor"] = countrytocolor.get(playercountry, fallbackcolor)
         return f"ok annexed {provinceid} to {playercountry}"
