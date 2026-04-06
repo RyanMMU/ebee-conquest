@@ -485,10 +485,12 @@ def prepareprovincemetadata(provincelist):
         enrichedProvince["ownercountry"] = None
         enrichedProvince["controllercountry"] = None
         enrichedProvince["country"] = None
+
+        
         # print("Debug: province center =", enrichedProvince["center"])  
         enrichedList.append(enrichedProvince)
         testCounter += 1  
-        
+
     # print("Total provinces:", testCounter)
     #print(enrichedList[0])
     return enrichedList
