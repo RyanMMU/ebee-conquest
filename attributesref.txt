@@ -1,28 +1,37 @@
 # State example (Malaya)
 {
     "id": "Malaya",
-    "polygons": [...],          # from states.svg
+    "polygons": [...],
     "rectangle": <pygame.Rect>,
-    "country": "Malaysia",
-    "countrycolor": (197, 92, 92),
-    "subdivisions": [           # 24 province dicts
-        {"id": "Malaya_01", ...},
-        {"id": "Malaya_02", ...},
-        # ...
-        {"id": "Malaya_24", ...},
-    ],
+    "subdivisions": [...province dicts...],
+
+    # State-level summary fields
+    "ownercountry": "Malaysia",
+    "controllercountry": "Thailand" or none,  # None when mixed-control
+    "country": "Thailand" or none,            # compatibility 
+    "countrycolor": (r, g, b),
+
 }
+
 
 # Province example (Malaya_01)
 {
     "id": "Malaya_01",
-    "polygons": [...],          # from provinces.svg
+    "polygons": [...],
     "rectangle": <pygame.Rect>,
     "parentstateid": "Malaya",
     "parentid": "Malaya",
     "terrain": "plains",
-    "troops": 0,                # changes during gameplay
+    "troops": 400,
     "center": (x, y),
-    "country": "Malaysia",      # can change on occupation/combat resolution
-    "countrycolor": (197, 92, 92),
+
+    # province ownership
+    "ownercountry": "Malaysia",       # legal owner
+    "controllercountry": "Thailand",  # current controller
+
+    # kept for compatibility
+    "country": "Thailand",
+
+    "countrycolor": (88, 157, 216),   # current controller color
 }
+
