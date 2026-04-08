@@ -27,6 +27,9 @@ button_width = 200
 button_height = 60
 button_m = (WIDTH // 2) - (button_width // 2)
 
+bg_image = pygame.image.load('Group 1.png').convert()
+bg_image = pygame.transform.scale(bg_image,(WIDTH, HEIGHT))
+
 while run:
     mouse = pygame.mouse.get_pos()
     
@@ -59,16 +62,13 @@ while run:
                 if button_m < mouse[0] < button_m + button_width and 450 < mouse[1] < 510:
                     menu = 'main'
 
-        screen.fill(black)
+        screen.blit(bg_image,(0, 0))
 
 
     
 
     if menu == 'main':
-        t = big_font.render('EBEE CONQUEST',True,white)
-        title_x = (WIDTH // 2) - (t.get_width() // 2)
-        screen.blit(t,(20,20))
-
+        
         color = bright_green if button_m < mouse[0] < button_m + button_width and 150 < mouse[1] < 210 else green
 
        
