@@ -1,5 +1,4 @@
-from engine.runtime import main as run_game
+from engine.runtime import main as start
 
 
-if __name__ == "__main__":
-    run_game()
+start()
