@@ -154,7 +154,7 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
     return []
 
 
-def processmovementorders(movementorderlist, provincemap):
+def processmovementorders(movementorderlist, provincemap, emitwarndeclaration=None):
     finishedorderlist = []
     for movementorder in movementorderlist:
         movementpoints = 1.0 * float(movementorder.get("speedmodifier", 1.0))
