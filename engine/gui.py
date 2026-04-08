@@ -21,6 +21,8 @@ import pygame
 
 #TODO: Generic gui functions for drawing buttons, windows, country menus, event popup etccc
 
+
+
 def gui_lightencolor(colorvalue, amount):
     amount = max(0.0, min(1.0, amount))
     red, green, blue = colorvalue
@@ -29,6 +31,8 @@ def gui_lightencolor(colorvalue, amount):
         int(green + (255 - green) * amount),
         int(blue + (255 - blue) * amount),
     )
+
+
 
 
 def gui_drawbutton(screen, rectangle, textvalue, fontobject, enabled=True, pulse=False):
@@ -48,6 +52,8 @@ def gui_drawbutton(screen, rectangle, textvalue, fontobject, enabled=True, pulse
     screen.blit(labelsurface, labelsurface.get_rect(center=rectangle.center))
 
 
+
+
 def gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
     labelsurface = fontobject.render(str(troopcount), True, (255, 255, 255))
     labelrectangle = labelsurface.get_rect()
@@ -57,6 +63,8 @@ def gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
     pygame.draw.rect(screen, (0, 0, 0), labelrectangle, border_radius=4)
     pygame.draw.rect(screen, (165, 165, 165), labelrectangle, width=1, border_radius=4)
     screen.blit(labelsurface, labelsurface.get_rect(center=labelrectangle.center))
+
+
 
 
 def gui_drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountry):
@@ -87,6 +95,8 @@ def gui_drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedco
         screen.blit(selectedlabel, (20, windowheight - 48))
 
     return choosebuttonrectangle, canchoosecountry
+
+
 
 
 def gui_drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetcountry, alreadyatwar):
@@ -128,6 +138,8 @@ def gui_drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetco
 
 # GAMEPLAY HUD starts here, renders every frame during play phase
 # might need to simplify this later its getting confusing
+
+
 def gui_drawgameplayhud(
     screen,
     fontobject,
@@ -180,3 +192,5 @@ def gui_drawgameplayhud(
         screen.blit(costtext, (windowwidth - 390, windowheight - 72))
 
     return recruitbuttonrectangle, endturnbuttonrectangle
+
+

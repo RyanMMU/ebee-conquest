@@ -14,15 +14,23 @@ terrainmovecostlookup = {
 }
 
 
+
+
 def getprovincecontroller(province):
     return province.get("controllercountry", province.get("country"))
+
+
 def getprovinceowner(province):
     return province.get("ownercountry", province.get("country"))
+
+
 def setprovincecontroller(province, countryname, countrycolor=None):
     province["controllercountry"] = countryname
     province["country"] = countryname
     if countrycolor is not None:
         province["countrycolor"] = countrycolor
+
+
 def prepareprovincemetadata(provincelist):
     enrichedlist = []
     for province in provincelist:
@@ -36,6 +44,8 @@ def prepareprovincemetadata(provincelist):
         enrichedprovince["country"] = None
         enrichedlist.append(enrichedprovince)
     return enrichedlist
+
+
 def buildprovinceadjacencygraph(provincemap, onprogress=None):
     provinceidlist = list(provincemap.keys())
     totalprovincecount = len(provinceidlist)
@@ -87,10 +97,8 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
 
 
 
-
 def getterrainmovecost(province):
     return terrainmovecostlookup.get(province.get("terrain", "plains"), 1.0)
-
 
 
 
@@ -152,6 +160,8 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
             heapq.heappush(openheap, (newcost + estimateddistance, nextprovinceid))
 
     return []
+
+
 
 
 def processmovementorders(movementorderlist, provincemap, emitwarndeclaration=None):
@@ -218,3 +228,5 @@ def processmovementorders(movementorderlist, provincemap, emitwarndeclaration=No
 
     for finishedorder in finishedorderlist:
         movementorderlist.remove(finishedorder)
+
+
