@@ -14,6 +14,7 @@ from engine.diagnostics import logstartupdiagnostics, createloadingprogresscallb
 from . import core as coremodule
 from . import gameplay as gameplaymodule
 from .events import EventBus, EngineEventType
+from .apicalltest.newsbannereventtest import NewsSystem, NewsPopup # TEST API CALL
 
 
 print("CURRENT VERSION - APRIL 8 2024")
@@ -944,6 +945,10 @@ def main(eventbus=None):
     countrymenutarget = None
 
     devconsole = developmentconsole(enabled=developmentmode)
+    newssystem = NewsSystem(eventbus)
+    newssystem.start()
+    newspopup = NewsPopup()
+
 
     isrunning = True
     while isrunning:
@@ -1167,13 +1172,51 @@ def main(eventbus=None):
         #show the province name when you hover over a province 
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+        #DRAW GUIS, ON TOP
         devconsole.draw(screen, normalfont, smallfont) # draw dev console after hover text so that it appears on top
+        newspopup.draw(screen, (titlefont, normalfont), newssystem.current)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 isrunning = False
 
+
+
+
+
+            #GUI INTERACTIONS
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if newssystem.current and newspopup.handleclick(event.pos):
+                    newssystem.closecurrent()
+                    continue
+                if newssystem.current:
+                    continue
+
                 if devconsole.handleleftclick(event.pos):
                     continue
 
@@ -1448,7 +1491,7 @@ def main(eventbus=None):
             elif event.type == pygame.KEYDOWN:
 
             # (for quick ctrl f: developer console)
-                if devconsole.handlekeydown(event, provincemap, playercountry, countrytocolorlookup, defaultshapecolor, troopbadgelist):
+                if devconsole.handlekeydown(event, provincemap, playercountry, countrytocolorlookup, defaultshapecolor, troopbadgelist, eventbus=eventbus):
                     continue # handle dev console input
 
 
@@ -1479,6 +1522,7 @@ def main(eventbus=None):
 
         pygame.display.flip()
 
+    newssystem.stop()
     pygame.quit()
 # loading screen and main loop ends
 

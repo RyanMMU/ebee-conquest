@@ -11,7 +11,7 @@ def loaddevmodeflag(filepath="dev.txt"):
         return False
 
 
-def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallbackcolor, troopbadgelist):
+def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallbackcolor, troopbadgelist, eventbus=None):
     commandparts = commandline.strip().split() # arguments
     if not commandparts:
         return "empty command"
@@ -64,6 +64,45 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
         provincemap[provinceid]["country"] = playercountry
         provincemap[provinceid]["countrycolor"] = countrytocolor.get(playercountry, fallbackcolor)
         return f"ok annexed {provinceid} to {playercountry}"
+
+
+    if commandname == "news" and len(commandparts) >= 2:
+
+        
+        rawtext = commandline.strip()[len(commandparts[0]):].strip()
+        titletext = rawtext
+        descriptiontext = "No description."
+        if "|" in rawtext:
+            left, right = rawtext.split("|", 1)
+            titletext = left.strip() or "NEWS UPDATE"
+            descriptiontext = right.strip() or "No description."
+
+        eventbus.emit(
+            "newspopup",
+            {
+                "title": titletext,
+                "description": descriptiontext,
+                "imagekey": "placeholder",
+                "priority": 1,
+            },
+        )
+        return f"ok queued news popup: {titletext}"
+
+    if commandname == "collapse" and len(commandparts) >= 2:
+        if eventbus is None:
+            return "eventbus unavailable"
+        countryname = commandparts[1]
+        descriptiontext = " ".join(commandparts[2:]).strip()
+        if not descriptiontext:
+            descriptiontext = f"{countryname} has collapsed."
+        eventbus.emit(
+            "countrycollapsed",
+            {
+                "country": countryname,
+                "description": descriptiontext,
+            },
+        )
+        return f"queued collapse news for {countryname}"
     
 
     if commandname == "exit" and len(commandparts) == 1:
@@ -94,7 +133,7 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
         """
 
     if commandname == "help" and len(commandparts) == 1:
-        return "commands: add_troops [province] [amount], remove_troops [province] [amount], annex [province], help, exit"
+        return "commands: add_troops [province] [amount], remove_troops [province] [amount], annex [province], news [title | description], collapse [country] [description], help, exit"
 
 
 
@@ -221,7 +260,7 @@ class developmentconsole:
 
         return False
 
-    def handlekeydown(self, keyboardevent, provincemap, playercountry, countrytocolor, fallbackcolor, troopbadgelist):
+    def handlekeydown(self, keyboardevent, provincemap, playercountry, countrytocolor, fallbackcolor, troopbadgelist, eventbus=None):
         if not self.visible:
             return False
 
@@ -237,7 +276,8 @@ class developmentconsole:
                     playercountry,
                     countrytocolor,
                     fallbackcolor,
-                    troopbadgelist
+                    troopbadgelist,
+                    eventbus=eventbus,
                 )
                 self.loglines.append(outputline)
             self.inputtext = ""
