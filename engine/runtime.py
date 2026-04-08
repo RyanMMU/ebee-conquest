@@ -1311,7 +1311,12 @@ def main(eventbus=None):
 
 
                     if endturnbuttonrectangle and endturnbuttonrectangle.collidepoint(event.pos): # end turn and process movement orders
+
+                        #TODO: fix this, theres a problem with the argument, eventbus is not being passed on
                         processmovementorders(movementorderlist, provincemap, emit=eventbus.emit)
+                        
+
+
                         if playercountry:
                             ownedprovincecount = sum(1 for province in provincemap.values() if getprovincecontroller(province) == playercountry)
                             playergold += max(5, ownedprovincecount // 5)
