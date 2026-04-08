@@ -16,19 +16,13 @@ terrainmovecostlookup = {
 
 def getprovincecontroller(province):
     return province.get("controllercountry", province.get("country"))
-
-
 def getprovinceowner(province):
     return province.get("ownercountry", province.get("country"))
-
-
 def setprovincecontroller(province, countryname, countrycolor=None):
     province["controllercountry"] = countryname
     province["country"] = countryname
     if countrycolor is not None:
         province["countrycolor"] = countrycolor
-
-
 def prepareprovincemetadata(provincelist):
     enrichedlist = []
     for province in provincelist:
@@ -41,31 +35,24 @@ def prepareprovincemetadata(provincelist):
         enrichedprovince["controllercountry"] = None
         enrichedprovince["country"] = None
         enrichedlist.append(enrichedprovince)
-
     return enrichedlist
-
-
 def buildprovinceadjacencygraph(provincemap, onprogress=None):
     provinceidlist = list(provincemap.keys())
     totalprovincecount = len(provinceidlist)
     totalprogresssteps = max(1, totalprovincecount * 2)
     if onprogress and not onprogress(0, totalprogresssteps):
         return None
-
     gridcellsize = 32.0
     adjacencytestpadding = 1
     gridlookup = {}
     provinceentrylist = []
-
     for provinceindex, provinceid in enumerate(provinceidlist):
         provincerectangle = provincemap[provinceid]["rectangle"]
         minimumgridx = int(math.floor((provincerectangle.left - adjacencytestpadding) / gridcellsize))
         maximumgridx = int(math.floor((provincerectangle.right + adjacencytestpadding) / gridcellsize))
         minimumgridy = int(math.floor((provincerectangle.top - adjacencytestpadding) / gridcellsize))
         maximumgridy = int(math.floor((provincerectangle.bottom + adjacencytestpadding) / gridcellsize))
-
         provinceentrylist.append((provinceid, provincerectangle, minimumgridx, maximumgridx, minimumgridy, maximumgridy))
-
         for gridx in range(minimumgridx, maximumgridx + 1):
             for gridy in range(minimumgridy, maximumgridy + 1):
                 gridlookup.setdefault((gridx, gridy), []).append(provinceindex)
@@ -73,7 +60,6 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
         if onprogress and (provinceindex == 0 or (provinceindex + 1) % 200 == 0 or (provinceindex + 1) == totalprovincecount):
             if not onprogress(provinceindex + 1, totalprogresssteps):
                 return None
-
     adjacencygraph = {provinceid: set() for provinceid in provinceidlist}
     for provinceindex, provinceentry in enumerate(provinceentrylist):
         provinceid, firstrectangle, minimumgridx, maximumgridx, minimumgridy, maximumgridy = provinceentry
@@ -98,8 +84,16 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
     return adjacencygraph
 
 
+
+
+
+
 def getterrainmovecost(province):
     return terrainmovecostlookup.get(province.get("terrain", "plains"), 1.0)
+
+
+
+
 
 
 def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph, allowedprovinceidset=None):
@@ -111,11 +105,17 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
     if startprovinceid == goalprovinceid:
         return [startprovinceid]
 
+
+
+
     goalcenter = provincemap[goalprovinceid]["center"]
     openheap = [(0.0, startprovinceid)]
     parentlookup = {}
     costlookup = {startprovinceid: 0.0}
     visitedset = set()
+
+
+
 
     while openheap:
         _, currentprovinceid = heapq.heappop(openheap)
@@ -156,6 +156,9 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
 
 def processmovementorders(movementorderlist, provincemap, emitwarndeclaration=None):
     finishedorderlist = []
+
+
+    
     for movementorder in movementorderlist:
         movementpoints = 1.0 * float(movementorder.get("speedmodifier", 1.0))
         pathlist = movementorder["path"]
