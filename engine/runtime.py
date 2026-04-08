@@ -13,10 +13,11 @@ from engine.gui import gui_drawchoosecountryoverlay, gui_drawgameplayhud, gui_dr
 from engine.diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
 from . import core as coremodule
 from . import gameplay as gameplaymodule
+from .events import EventBus, EngineEventType
 
 
 print("CURRENT VERSION - APRIL 8 2024")
-
+# MAIN GAME LOOP FILE
 
 
 # configuration
@@ -731,7 +732,10 @@ def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
     return True
 
 
-def main():
+def main(eventbus=None):
+    if eventbus is None:
+        eventbus = EventBus()
+
     startupbegintimestamp = time.perf_counter()
     pygame.init()
 
@@ -896,6 +900,14 @@ def main():
         startupbegintimestamp,
         "startup complete",
         f"map_size={mapbox['width']:.1f}x{mapbox['height']:.1f}",
+    )
+    eventbus.emit(
+        EngineEventType.WORLDLOADED,
+        {
+            "stateCount": len(stateshapelist),
+            "provinceCount": len(provincemap),
+            "edgeCount": totaledges,
+        },
     )
 
 
@@ -1166,10 +1178,23 @@ def main():
                     continue
 
                 if gamephase == "choosecountry":
+
                     if hoveredstateid:
                         selectedstateobject = next((state for state in stateshapelist if state["id"] == hoveredstateid), None)
                         if selectedstateobject and selectedstateobject.get("country"):
+
+                            #engine bus
+
                             pendingcountry = selectedstateobject["country"]
+                            eventbus.emit(
+                                EngineEventType.COUNTRYCANDIDATESELECTED,
+                                {
+                                    "country": pendingcountry,
+                                    "stateId": selectedstateobject["id"],
+                                },
+                            )
+
+
                     if choosebuttonrectangle and choosebuttonrectangle.collidepoint(event.pos) and pendingcountry:
                         playercountry = pendingcountry
                         gamephase = "play"
@@ -1178,6 +1203,14 @@ def main():
                         routepreviewset = set()
                         countriesatwarset = set()
                         countrymenutarget = None # default var
+                        eventbus.emit(
+                            EngineEventType.PLAYERCOUNTRYSELECTED,
+                            {
+                                "country": playercountry,
+                            },
+                        )
+
+
                     continue
 
 
@@ -1188,6 +1221,18 @@ def main():
                         if declarewarbuttonrectangle and declarewarbuttonrectangle.collidepoint(event.pos):
                             if countrymenutarget != playercountry:
                                 countriesatwarset.add(countrymenutarget)
+
+
+                                eventbus.emit(
+                                    EngineEventType.WARDECLARED,
+                                    {
+                                        "attacker": playercountry,
+                                        "defender": countrymenutarget,
+                                        "turn": currentturnnumber,
+                                    },
+                                )
+
+
                         countrymenutarget = None
                         continue
 
@@ -1207,6 +1252,15 @@ def main():
                                     if not developmentmode:
                                         playergold -= requiredgold
                                         playerpopulation -= requiredpopulation
+                                    eventbus.emit(
+                                        EngineEventType.TROOPSRECRUITED,
+                                        {
+                                            "country": playercountry,
+                                            "provinceId": selectedprovinceid,
+                                            "amount": recruitamount,
+                                            "turn": currentturnnumber,
+                                        },
+                                    )
                         continue
 
 
@@ -1214,13 +1268,22 @@ def main():
 
 
                     if endturnbuttonrectangle and endturnbuttonrectangle.collidepoint(event.pos): # end turn and process movement orders
-                        processmovementorders(movementorderlist, provincemap)
+                        processmovementorders(movementorderlist, provincemap, emit=eventbus.emit)
                         if playercountry:
                             ownedprovincecount = sum(1 for province in provincemap.values() if getprovincecontroller(province) == playercountry)
                             playergold += max(5, ownedprovincecount // 5)
                             playerpopulation += max(10, ownedprovincecount // 3)
                         currentturnnumber += 1
                         routepreviewset = set()
+                        eventbus.emit(
+                            EngineEventType.TURNADVANCED,
+                            {
+                                "turn": currentturnnumber,
+                                "playerCountry": playercountry,
+                                "playerGold": playergold,
+                                "playerPopulation": playerpopulation,
+                            },
+                        )
                         continue
 
                     if hoveredprovinceid:
@@ -1230,10 +1293,24 @@ def main():
                             expandedstateid = selectedprovince.get("parentid", hoveredstateid)
                             routepreviewset = set()
                             countrymenutarget = None
+                            eventbus.emit(
+                                EngineEventType.PROVINCESELECTED,
+                                {
+                                    "provinceId": selectedprovinceid,
+                                    "stateId": selectedprovince.get("parentid"),
+                                    "country": getprovincecontroller(selectedprovince),
+                                },
+                            )
                             continue
 
                     if hoveredstateid is not None:
                         expandedstateid = hoveredstateid
+                        eventbus.emit(
+                            EngineEventType.STATESELECTED,
+                            {
+                                "stateId": expandedstateid,
+                            },
+                        )
                     else:
                         expandedstateid = None
                         selectedprovinceid = None
@@ -1338,6 +1415,17 @@ def main():
                             "country": getprovincecontroller(sourceprovince),
                             "countrycolor": sourceprovince.get("countrycolor"),
                         }
+                    )
+                    eventbus.emit(
+                        EngineEventType.MOVEORDERCREATED,
+                        {
+                            "sourceProvinceId": selectedprovinceid,
+                            "destinationProvinceId": hoveredprovinceid,
+                            "path": list(foundpath),
+                            "troops": movingtroopcount,
+                            "country": getprovincecontroller(sourceprovince),
+                            "turn": currentturnnumber,
+                        },
                     )
 
 

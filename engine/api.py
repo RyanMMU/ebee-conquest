@@ -1,31 +1,20 @@
-from collections import defaultdict
 from . import core, gameplay
+from .events import EngineEventType, EventBus
 
-def outputtest():
-        print(statefilepath, provincefilepath, countrydatafilepath)
-        
+
 class EbeeEngine:
-
-
     def __init__(
-            
         self,
         statefilepath="states.svg",
         provincefilepath="provinces.svg",
         countrydatafilepath="countries.json",
-
-
     ):
-        
-        
-
-        #filepaths
         self.statefilepath = statefilepath
         self.provincefilepath = provincefilepath
         self.countrydatafilepath = countrydatafilepath
 
-        # game data
-        self.events = defaultdict(list)
+        self.eventbus = EventBus()
+
         self.stateshapelist = []
         self.provinceenrichedlist = []
         self.provincemap = {}
@@ -33,31 +22,27 @@ class EbeeEngine:
         self.statetocountrylookup = {}
         self.countrytocolorlookup = {}
 
-
-        # current game state
         self.playercountry = None
         self.currentturnnumber = 1
         self.countriesatwarset = set()
 
-
-
-
     def on(self, eventname, callback):
+        return self.eventbus.subscribe(eventname, callback) #susbcribe
 
-        self.events[eventname].append(callback)
-        return callback
+    def subscribe(self, eventname, callback):
+        return self.eventbus.subscribe(eventname, callback) #same 
 
+    def off(self, eventname, callback):
+        return self.eventbus.unsubscribe(eventname, callback) # unsubscribe from event
 
+    def unsubscribe(self, eventname, callback):
+        return self.eventbus.unsubscribe(eventname, callback) # same thing
 
     def emit(self, eventname, payload):
-        for callback in self.events.get(eventname, ()):
-            callback(payload)
-
+        self.eventbus.emit(eventname, payload)
 
     def onWarDeclaration(self, callback):
-        return self.on("war_declaration", callback)
-
-
+        return self.on(EngineEventType.WARDECLARED, callback) # war declaration event
 
     def loadworld(self, onprogress=None):
         self.stateshapelist = core.loadsvgshapes(self.statefilepath, onprogress=onprogress)
@@ -67,52 +52,58 @@ class EbeeEngine:
         self.statetocountrylookup, self.countrytocolorlookup = core.loadcountrydata(self.countrydatafilepath)
 
         for stateshape in self.stateshapelist:
-
             statecountry = self.statetocountrylookup.get(stateshape["id"])
             stateshape["ownercountry"] = statecountry
             stateshape["controllercountry"] = statecountry
             stateshape["country"] = statecountry
             stateshape["countrycolor"] = self.countrytocolorlookup.get(statecountry, (85, 85, 85))
 
-
-
         provinceshapelist = core.loadsvgshapes(self.provincefilepath, onprogress=onprogress)
         if not provinceshapelist:
             return False
 
-
-
         self.provinceenrichedlist = gameplay.prepareprovincemetadata(provinceshapelist)
-
-        # assign initial country owner,. for starting
         for province in self.provinceenrichedlist:
-
             provincecountry = self.statetocountrylookup.get(province["parentstateid"])
             province["ownercountry"] = provincecountry
             province["controllercountry"] = provincecountry
             province["country"] = provincecountry
             province["countrycolor"] = self.countrytocolorlookup.get(provincecountry, (85, 85, 85))
 
-
-        # make province id to province data map
         self.provincemap = {province["id"]: province for province in self.provinceenrichedlist}
         self.provincegraph = gameplay.buildprovinceadjacencygraph(self.provincemap, onprogress=onprogress)
+        
+        
         if self.provincegraph is None:
             return False
 
         groupedsubdivisionlookup = core.groupsubdivisionsbystate(self.provinceenrichedlist, self.stateshapelist)
+
+
         for stateshape in self.stateshapelist:
 
-            subdivisionsforstate = groupedsubdivisionlookup.get(stateshape["id"], [])
+
+            subdivisionsforstate = groupedsubdivisionlookup.get(stateshape["id"], []);
 
             for province in subdivisionsforstate:
-                ownercountry = stateshape.get("ownercountry", stateshape.get("country"))
+                
+                ownercountry = stateshape.get("ownercountry", stateshape.get("country"));
                 controllercountry = stateshape.get("controllercountry", stateshape.get("country"))
-                province["ownercountry"] = ownercountry
+                province["ownercountry"] = ownercountry;
                 gameplay.setprovincecontroller(province, controllercountry, stateshape.get("countrycolor", (85, 85, 85)))
 
 
             stateshape["subdivisions"] = subdivisionsforstate
+
+        self.emit(
+            EngineEventType.WORLDLOADED, # summary
+            {
+                "stateCount": len(self.stateshapelist),
+                "provinceCount": len(self.provincemap),
+                "edgeCount": sum(len(neighborset) for neighborset in self.provincegraph.values()) // 2,
+            },
+        )
+
 
         return True
 
@@ -124,9 +115,9 @@ class EbeeEngine:
         payload = {
             "attacker": attackercountry,
             "defender": defendercountry,
-            "turn": self.currentturnnumber, #the current turn number
+            "turn": self.currentturnnumber,
         }
-        self.emit("war_declaration", payload)
+        self.emit(EngineEventType.WARDECLARED, payload)
         return payload
 
     def getcountrydata(self, countryname):
@@ -134,9 +125,7 @@ class EbeeEngine:
             return {}
 
         ownedprovinces = [province for province in self.provincemap.values() if gameplay.getprovinceowner(province) == countryname]
-        controlledprovinces = [
-            province for province in self.provincemap.values() if gameplay.getprovincecontroller(province) == countryname
-        ]
+        controlledprovinces = [province for province in self.provincemap.values() if gameplay.getprovincecontroller(province) == countryname]
         totaltroopscontrolled = sum(int(province.get("troops", 0)) for province in controlledprovinces)
 
         stateidsowned = sorted(
@@ -155,9 +144,6 @@ class EbeeEngine:
         )
 
         return {
-
-
-
             "country": countryname,
             "ownedProvinceCount": len(ownedprovinces),
             "controlledProvinceCount": len(controlledprovinces),
@@ -168,5 +154,4 @@ class EbeeEngine:
             "controlledStateIds": stateidscontrolled,
             "atWarWith": sorted(self.countriesatwarset),
             "turn": self.currentturnnumber,
-
         }

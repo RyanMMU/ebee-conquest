@@ -1,6 +1,7 @@
 import heapq
 import math
 from .core import getparentstateidfromprovinceid, getshapecenter, rectanglesclose
+from .events import EngineEventType
 
 
 terrainmovecostlookup = {
@@ -154,7 +155,7 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
     return []
 
 
-def processmovementorders(movementorderlist, provincemap):
+def processmovementorders(movementorderlist, provincemap, emit=None):
     finishedorderlist = []
     for movementorder in movementorderlist:
         movementpoints = 1.0 * float(movementorder.get("speedmodifier", 1.0))
@@ -186,11 +187,33 @@ def processmovementorders(movementorderlist, provincemap):
                 defenders = nextprovince["troops"]
                 if attackers <= defenders:
                     nextprovince["troops"] = defenders - attackers
+                    if emit is not None:
+                        emit(
+                            EngineEventType.COMBATRESOLVED,
+                            {
+                                "provinceId": nextprovinceid,
+                                "attackersBefore": attackers,
+                                "defendersBefore": defenders,
+                                "attackersAfter": 0,
+                                "defendersAfter": nextprovince["troops"],
+                            },
+                        )
                     movementorder["amount"] = 0
                     break
 
                 movementorder["amount"] = attackers - defenders
                 nextprovince["troops"] = 0
+                if emit is not None:
+                    emit(
+                        EngineEventType.COMBATRESOLVED,
+                        {
+                            "provinceId": nextprovinceid,
+                            "attackersBefore": attackers,
+                            "defendersBefore": defenders,
+                            "attackersAfter": movementorder["amount"],
+                            "defendersAfter": 0,
+                        },
+                    )
 
             movementpoints -= movecost
             currentpathindex += 1
@@ -201,17 +224,47 @@ def processmovementorders(movementorderlist, provincemap):
                 and nextcountry != movingcountry
                 and nextprovince["troops"] <= 0
             ):
+                previouscontroller = nextcountry
                 setprovincecontroller(nextprovince, movingcountry, movingcountrycolor)
+                if emit is not None:
+                    emit(
+                        EngineEventType.PROVINCECONTROLCHANGED,
+                        {
+                            "provinceId": nextprovinceid,
+                            "previousController": previouscontroller,
+                            "newController": movingcountry,
+                        },
+                    )
 
         movementorder["index"] = currentpathindex
         movementorder["current"] = pathlist[currentpathindex]
 
         if movementorder["amount"] <= 0:
             finishedorderlist.append(movementorder)
+            if emit is not None:
+                emit(
+                    EngineEventType.MOVEORDERFINISHED,
+                    {
+                        "path": list(pathlist),
+                        "finalProvinceId": pathlist[currentpathindex],
+                        "remainingTroops": 0,
+                        "reason": "destroyed",
+                    },
+                )
         elif currentpathindex >= len(pathlist) - 1:
             destinationprovinceid = pathlist[-1]
             provincemap[destinationprovinceid]["troops"] += movementorder["amount"]
             finishedorderlist.append(movementorder)
+            if emit is not None:
+                emit(
+                    EngineEventType.MOVEORDERFINISHED,
+                    {
+                        "path": list(pathlist),
+                        "finalProvinceId": destinationprovinceid,
+                        "remainingTroops": movementorder["amount"],
+                        "reason": "arrived",
+                    },
+                )
 
     for finishedorder in finishedorderlist:
         movementorderlist.remove(finishedorder)
