@@ -885,8 +885,11 @@ def main(eventbus=None):
 
 
     groupedsubdivisionlookup = groupsubdivisionsbystate(provinceenrichedlist, stateshapelist)
+
     for stateshape in stateshapelist:
+
         subdivisionsforstate = groupedsubdivisionlookup.get(stateshape["id"], [])
+        
         for province in subdivisionsforstate:
             ownercountry = stateshape.get("ownercountry", stateshape.get("country"))
             controllercountry = stateshape.get("controllercountry", stateshape.get("country"))
