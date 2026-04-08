@@ -1,17 +1,24 @@
 from collections import defaultdict
 from . import core, gameplay
 
-
+def outputtest():
+        print(statefilepath, provincefilepath, countrydatafilepath)
+        
 class EbeeEngine:
 
 
     def __init__(
+            
         self,
         statefilepath="states.svg",
         provincefilepath="provinces.svg",
         countrydatafilepath="countries.json",
+
+
     ):
         
+        
+
         #filepaths
         self.statefilepath = statefilepath
         self.provincefilepath = provincefilepath
@@ -36,6 +43,7 @@ class EbeeEngine:
 
 
     def on(self, eventname, callback):
+
         self.events[eventname].append(callback)
         return callback
 
@@ -76,6 +84,7 @@ class EbeeEngine:
 
         self.provinceenrichedlist = gameplay.prepareprovincemetadata(provinceshapelist)
 
+        # assign initial country owner,. for starting
         for province in self.provinceenrichedlist:
 
             provincecountry = self.statetocountrylookup.get(province["parentstateid"])
@@ -85,7 +94,7 @@ class EbeeEngine:
             province["countrycolor"] = self.countrytocolorlookup.get(provincecountry, (85, 85, 85))
 
 
-
+        # make province id to province data map
         self.provincemap = {province["id"]: province for province in self.provinceenrichedlist}
         self.provincegraph = gameplay.buildprovinceadjacencygraph(self.provincemap, onprogress=onprogress)
         if self.provincegraph is None:
@@ -102,7 +111,7 @@ class EbeeEngine:
                 province["ownercountry"] = ownercountry
                 gameplay.setprovincecontroller(province, controllercountry, stateshape.get("countrycolor", (85, 85, 85)))
 
-                
+
             stateshape["subdivisions"] = subdivisionsforstate
 
         return True
@@ -146,6 +155,9 @@ class EbeeEngine:
         )
 
         return {
+
+
+
             "country": countryname,
             "ownedProvinceCount": len(ownedprovinces),
             "controlledProvinceCount": len(controlledprovinces),
@@ -156,4 +168,5 @@ class EbeeEngine:
             "controlledStateIds": stateidscontrolled,
             "atWarWith": sorted(self.countriesatwarset),
             "turn": self.currentturnnumber,
+
         }
