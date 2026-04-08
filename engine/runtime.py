@@ -7,17 +7,15 @@ import platform
 import pygame
 import xml.etree.ElementTree as elementtree
 from svgelements import Path
-
-
 #Local module
-from .console import developmentconsole, loaddevmodeflag 
-from .gui import gui_drawchoosecountryoverlay, gui_drawgameplayhud, gui_drawtroopcountbadge, gui_lightencolor, gui_drawcountryinteractionmenu
-from .diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
+from engine.console import developmentconsole, loaddevmodeflag 
+from engine.gui import gui_drawchoosecountryoverlay, gui_drawgameplayhud, gui_drawtroopcountbadge, gui_lightencolor, gui_drawcountryinteractionmenu
+from engine.diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
 from . import core as coremodule
 from . import gameplay as gameplaymodule
 
 
-print("CURRENT VERSION - APRIL 3 2024")
+print("CURRENT VERSION - APRIL 8 2024")
 
 
 
@@ -1396,7 +1394,8 @@ def main():
     pygame.quit()
 # loading screen and main loop ends
 
-# Use extracted modules as source-of-truth for core/gameplay logic.
+
+# DEFINITIONS
 loadsvgshapes = coremodule.loadsvgshapes
 getmapbox = coremodule.getmapbox
 getscreenpoints = coremodule.getscreenpoints
