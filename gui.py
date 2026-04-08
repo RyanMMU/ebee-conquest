@@ -3,15 +3,15 @@ import pygame
 
 ''' WINDOW FORMAT GUIDELINES'''
 # window_width, window_height = screen.get_size()
-# simple_window_width = 250
-# simple_window_height = 150
+# swindow_width = 250
+# swindow_height = 150
 # margin = 30  # distance from the right edge
 
 # Calculate position: center vertically, right-aligned
-# x = window_width - simple_window_width - margin
-# y = (window_height - simple_window_height) // 2
+# x = window_width - swindow_width - margin
+# y = (window_height - swindow_height) // 2
 
-# window_rect = pygame.Rect(x, y, simple_window_width, simple_window_height)
+# window_rect = pygame.Rect(x, y, swindow_width, swindow_height)
 # pygame.draw.rect(screen, (40, 40, 60), window_rect, border_radius=10)
 # pygame.draw.rect(screen, (120, 120, 180), window_rect, width=2, border_radius=10)
 
@@ -37,7 +37,7 @@ def gui_drawbutton(screen, rectangle, textvalue, fontobject, enabled=True, pulse
         if pulse:
             timer = pygame.time.get_ticks() * 0.008
             glowamount = 0.2 + 0.35 * (0.5 + 0.5 * math.sin(timer))
-            basecolor = gui_lightencolor(basecolor, glowamount)
+            # basecolor = gui_lightencolor(basecolor, glowamount)
     else:
         basecolor = (70, 70, 70)
 
@@ -53,6 +53,7 @@ def gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
     labelrectangle = labelsurface.get_rect()
     labelrectangle.inflate_ip(10, 6)
     labelrectangle.center = (int(centerposition[0]), int(centerposition[1]))
+    # this doesnt work as cleanly as i want it tobecause provinces are not always circular or rectang
     pygame.draw.rect(screen, (0, 0, 0), labelrectangle, border_radius=4)
     pygame.draw.rect(screen, (165, 165, 165), labelrectangle, width=1, border_radius=4)
     screen.blit(labelsurface, labelsurface.get_rect(center=labelrectangle.center))

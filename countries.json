@@ -16,5 +16,66 @@
             "Lanna": "Chiang_Rai",
             "Isan": "Khon_Kean"
         }
+    },
+    {
+        "Country" : "Indonesia",
+        "States" : {
+            "Java": "Jakarta",
+            "Sumatra": "Medan",
+            "Borneo": "Pontianak",
+            "Sulawesi": "Makassar",
+            "Kalimantan": "Banjarmasin",
+            "Interior_Borneo": "Palangkaraya"
+        }
+    },
+    {
+        "Country" : "Brunei",
+        "States" : {
+            "Brunei_Muara": "Bandar_Seri_Begawan",
+            "Temburong": "Temburong",
+            "Belait": "Belait"
+        }
+    },
+    {
+        "Country" : "Philippines",
+        "States" : {
+            "Luzon": "Manila",
+            "Visayas": "Cebu_City",
+            "Mindanao": "Davao_City"
+        }
+    },
+    {
+        "Country" : "Vietnam",
+        "States" : {
+            "Tonkin": "Hanoi",
+            "Trong_Bo": "Da_Nang",
+            "Southern_Indochina": "Ho_Chi_Minh_City"
+            
+        }
+    },
+    {
+        "Country" : "Timor_Leste",
+        "States" : {
+            "East_Timor": "Dili"
+        }
+    },
+    {
+        "Country" : "Cambodia",
+        "States" : {
+            "Cambodia": "Phnom_Penh"
+        }
+    },
+    {
+        "Country" : "Laos",
+        "States" : {
+            "Laos": "Vientiane"
+        }
+    },
+    {
+        "Country" : "Myanmar",
+        "States" : {
+            "Burma": "Yangon",
+            "Upper_Burma": "Mandalay"
+        }
     }
 ]

@@ -1,17 +1,47 @@
 
-# Turn-Based Sandbox Grand Strategy War Simulator
+<picture>
+  <source
+    width="100%"
+    srcset="./images/Banner.png"
+    media="(prefers-color-scheme: dark)"
+  />
+  <source
+    width="100%"
+    srcset="./images/Banner.png"
+    media="(prefers-color-scheme: light), (prefers-color-scheme: no-preference)"
+  />
+  <img width="250" src="./images/Banner.png" />
+</picture>
+
+<h1 align="center">Turn-Based Sandbox Grand Strategy War Simulator</h1>
+
+<p align="center">
+  <a href="https://propro.click/courses/298/lecturers/1/projects/888"><img src="https://img.shields.io/badge/ProPro-Proposal-red"></a>
+  <a href="https://google.com"><img src="https://img.shields.io/badge/build-development-orange"></a>
+  <a href="https://github.com/RyanMMU/ebee-conquest/LICENSE"><img src="https://img.shields.io/github/license/moeru-ai/airi.svg?style=flat&colorA=080f12&colorB=1fa669"></a>
+  <a href="https://discord.com/app"><img src="https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fdiscord.com%2Fapi%2Finvites%2Fpython%3Fwith_counts%3Dtrue&query=%24.approximate_member_count&suffix=%20members&logo=discord&logoColor=white&label=%20&color=7389D8&labelColor=6A7EC2"></a>
+  <a href="https://x.com/EbeeConquest"><img src="https://img.shields.io/badge/%40EbeeConquest-black?style=flat&logo=x&labelColor=%23101419&color=%232d2e30"></a>
+</p>
+
 
 ### Powered by the Ebee Engine (EE)
 
-A **Google Maps-style, 2D turn-based grand strategy war simulator** where players command nations and shape global history through conquest, diplomacy, and economic growth. Featuring the innovative **dNPC™ system**—non-player nations controlled by LLMs for dynamic, personality-driven geopolitics.
-> **Note:** This project was developed as a Mini IT Project. It focuses on modular architecture and the integration of modern AI agents within a classic strategy game loop.
------
+A **Google Maps-style, 2D turn-based grand strategy war simulator** where players command nations and shape global history through conquest, diplomacy, and economic growth. Featuring **dNPC™ system**, non-player nations controlled by LLMs for dynamic, personality-driven geopolitics.
+> **Note:** This project was developed as a Mini IT Project. The main focus is modular architecture and the integration of modern AI agents into a war scenario game.
+
+> [!WARNING]
+> **Attention:** This game currently only **supports windows** and is still under **active development**. Please check the documentation below and proceed with caution.
+
+
+![Current Progress for Ebee Engine](images/engineprogresschart.png)
+> **Figure 1:** Currently developed functions assosciated with Ebee Engine shown in a flowchart form. 
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-  * **Python:** 3.9, 3.11, or 3.12 (Note: 3.14 is currently unsupported).
+  * **Python:** 3.11 and above is recommended
+  * **Pygame:** Pygame is 2.6.1 is required.
   * **API Key:** An OpenAI API key is required for dNPC™ functionality (or a local Ollama instance).
 
 ### Installation
@@ -29,6 +59,43 @@ A **Google Maps-style, 2D turn-based grand strategy war simulator** where player
     ```bash
     python engine.py
     ```
+
+-----
+
+## Support of LLM API Providers for dNPC™️(powered by [EbeeEngineAPI](https://github.com/ebee-conquest/engine/llm/api))
+
+- [x] [Graph-based (Recommended)](https://github.com/RyanMMU/ebee-conquest)
+- [ ] [AIHubMix](https://aihubmix.com/?aff=OOiX)
+- [ ] [OpenRouter](https://openrouter.ai/)
+- [ ] [vLLM](https://github.com/vllm-project/vllm)
+- [ ] [SGLang](https://github.com/sgl-project/sglang)
+- [ ] [Ollama](https://github.com/ollama/ollama)
+- [ ] [302.AI (sponsored)](https://share.302.ai/514k2v)
+- [ ] [OpenAI](https://platform.openai.com/docs/guides/gpt/chat-completions-api)
+  - [ ] [Azure OpenAI API](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference)
+- [ ] [Anthropic Claude](https://anthropic.com)
+  - [ ] [AWS Claude](https://docs.anthropic.com/en/api/claude-on-amazon-bedrock) 
+- [ ] [DeepSeek](https://www.deepseek.com/)
+- [ ] [Qwen](https://help.aliyun.com/document_detail/2400395.html)
+- [ ] [Google Gemini](https://developers.generativeai.google)
+- [ ] [xAI](https://x.ai/)
+- [ ] [Groq](https://wow.groq.com/)
+- [ ] [Mistral](https://mistral.ai/)
+- [ ] [Cloudflare Workers AI](https://developers.cloudflare.com/workers-ai/)
+- [ ] [Together.ai](https://www.together.ai/)
+- [ ] [Fireworks.ai](https://www.together.ai/)
+- [ ] [Novita](https://www.novita.ai/)
+- [ ] [Zhipu](https://bigmodel.cn)
+- [ ] [SiliconFlow](https://cloud.siliconflow.cn/i/rKXmRobW)
+- [ ] [Stepfun](https://platform.stepfun.com/)
+- [ ] [Baichuan](https://platform.baichuan-ai.com)
+- [ ] [Minimax](https://api.minimax.chat/)
+- [ ] [Moonshot AI](https://platform.moonshot.cn/)
+- [ ] [ModelScope](https://modelscope.cn/docs/model-service/API-Inference/intro)
+- [ ] [Player2](https://player2.game/)
+- [ ] [Tencent Cloud](https://cloud.tencent.com/document/product/1729)
+- [ ] [Sparks](https://www.xfyun.cn/doc/spark/Web.html)
+- [ ] [Volcano Engine](https://www.volcengine.com/experience/ark?utm_term=202502dsinvite&ac=DSASUQY5&rc=2QXCA1VI)
 
 -----
 

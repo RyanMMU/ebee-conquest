@@ -1,0 +1,271 @@
+ebee engine reference
+attributes and helpers with sample 
+
+Last updated: 2026-04-06
+
+| Runtime attributes
+
+Province dict example:
+{
+  "id": "Malaya_01",
+  "polygons": [...],
+  "rectangle": <pygame.Rect>,
+  "parentstateid": "Malaya",
+  "parentid": "Malaya",
+  "terrain": "plains",
+  "troops": 400,
+  "center": (123.4, 567.8),
+  "ownercountry": "Malaysia",
+  "controllercountry": "Thailand",
+  "country": "Thailand",                # compatibility alias to controllercountry
+  "countrycolor": (88, 157, 216)
+}
+
+State dict example:
+{
+  "id": "Malaya",
+  "polygons": [...],
+  "rectangle": <pygame.Rect>,
+  "ownercountry": "Malaysia",
+  "controllercountry": "Thailand" or None,  # None when mixed control
+  "country": "Thailand" or None,            # compatibility alias
+  "countrycolor": (r, g, b),
+  "subdivisions": [ ... province dicts ... ]
+}
+
+
+| engine helper 
+
+loadsvgshapes(filepath, onprogress=None)
+- purpose: read SVG path elements into shape dicts with polygons + bounding rect
+- Sample output:
+  [
+    {
+      "id": "Malaya",
+      "polygons": [{"points": [(1,2), (3,4), (5,6)], "rectangle": <pygame.Rect>}],
+      "rectangle": <pygame.Rect>
+    }
+  ]
+
+getmapbox(shapelist)
+- purpose: compute global map bounds from shape rectangles
+- Sample output:
+  {"minimumx": 0.0, "maximumx": 4096.0, "minimumy": 0.0, "maximumy": 2048.0, "width": 4096.0, "height": 2048.0}
+
+getscreenpoints(pointlist, zoomvalue, offsetx, offsety)
+- purpose: world points -> screen points transform
+- Sample output:
+  getscreenpoints([(10, 20)], 2.0, 5, -3) -> [(25.0, 37.0)]
+
+getscreenrectangle(rectangle, zoomvalue, offsetx, offsety)
+- purpose: world rect -> screen rect transform
+- Sample output:
+  <pygame.Rect(25, 37, 200, 80)>
+
+getminimumzoomforheight(windowheight, mapbox)
+- purpose: minimum zoom that fits map height in window
+- Sample output:
+  getminimumzoomforheight(720, {"height": 1440}) -> 0.5
+
+clampverticalcamera(cameray, zoomvalue, windowheight, mapbox)
+- purpose: clamp vertical camera to map bounds.
+- Sample output:
+  -> 120.0
+
+wraphorizontalcamera(camerax, zoomvalue, mapbox)
+- purpose: horizontal wrapping behavior helper.
+- Sample output:
+  -> camerax (current implementation returns unchanged when tilewidth is truthy)
+
+getsegmentsamplecount(segment)
+- purpose: decide sampling density for SVG path segment
+- Sample output:
+  Move segment -> 1
+  CubicBezier segment -> e.g. 12
+
+convertpathtopolygons(svgpath)
+- purpose: convert SVG path/subpaths into polygon point lists
+- Sample output:
+  [{"points": [(x1, y1), (x2, y2), ...], "rectangle": <pygame.Rect>}]
+
+ispointinsidepolygon(point, polygon)
+- purpose: point-in-polygon test
+- Sample output:
+  ispointinsidepolygon((5,5), [(0,0), (10,0), (10,10), (0,10)]) -> True
+
+getparentstateidfromprovinceid(provinceid)
+- purpose: split province id to state id; applies typo mapping
+- Sample output:
+  "Malaya_03" -> "Malaya"
+  "Trung_Bo_01" -> "Trong_Bo"
+
+parsecolorvalue(rawcolorvalue)
+- purpose: normalize color from "#RRGGBB" or [r,g,b]/(r,g,b)
+- Sample output:
+  "#c55c5c" -> (197, 92, 92)
+  [300, -5, 128] -> (255, 0, 128)
+  "bad" -> None
+
+loadcountrydata(filepath)
+- purpose: read countries.json into state->country and country->color lookups
+- Sample output:
+  ({"Malaya": "Malaysia"}, {"Malaysia": (197, 92, 92)})
+
+groupsubdivisionsbystate(provincelist, statelist)
+- purpose: attach provinces to parent states; sets province["parentid"]
+- Sample output:
+  {"Malaya": [{"id": "Malaya_01", "parentid": "Malaya"}, ...]}
+
+rectanglesclose(firstrectangle, secondrectangle, padding=1)
+- purpose: broad-phase adjacency overlap check
+- Sample output:
+  rectanglesclose(Rect(0,0,10,10), Rect(10,0,10,10), 1) -> True
+
+getshapecenter(shape)
+- purpose: center point from shape rectangle
+- Sample output:
+  (shape["rectangle"].centerx, shape["rectangle"].centery)
+
+getprovincecontroller(province)
+- purpose: read current controller 
+- Sample output:
+  {"controllercountry": "Thailand", "country": "Malaysia"} -> "Thailand"
+  {"country": "Malaysia"} -> "Malaysia"
+
+getprovinceowner(province)
+- purpose: read legal owner 
+- Sample output:
+  {"ownercountry": "Malaysia", "country": "Thailand"} -> "Malaysia"
+  {"country": "Malaysia"} -> "Malaysia"
+
+setprovincecontroller(province, countryname, countrycolor=None)
+- purpose: write controller + keep compatibility alias in sync
+- Sample output:
+  before: {"ownercountry": "Malaysia", "controllercountry": "Malaysia", "country": "Malaysia"}
+  setprovincecontroller(p, "Thailand", (88, 157, 216))
+  after: {"ownercountry": "Malaysia", "controllercountry": "Thailand", "country": "Thailand", "countrycolor": (88, 157, 216)}
+
+prepareprovincemetadata(provincelist)
+- purpose: enrich raw province shapes with gameplay defaults
+- Sample output:
+  [{
+    "id": "Malaya_01",
+    "parentstateid": "Malaya",
+    "terrain": "plains",
+    "troops": 0,
+    "center": (x, y),
+    "ownercountry": None,
+    "controllercountry": None,
+    "country": None
+  }]
+
+buildprovinceadjacencygraph(provincemap, onprogress=None)
+- purpose: spatial-grid adjacency graph builder
+- Sample output:
+  {"Malaya_01": {"Malaya_02", "Malaya_03"}, "Malaya_02": {"Malaya_01"}}
+
+getterrainmovecost(province)
+- purpose: read terrain move multiplier
+- Sample output:
+  {"terrain": "forest"} -> 1.25
+  {"terrain": "unknown"} -> 1.0
+
+findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph, allowedprovinceidset=None)
+- purpose: A* path over province graph
+- Sample output:
+  ["Malaya_01", "Malaya_02", "Malaya_05"]
+  [] when no path/blocked.
+
+processmovementorders(movementorderlist, provincemap)
+- purpose: advance movement orders, resolve combat-on-entry, apply control changes
+- Sample output:
+  Returns None (mutates movementorderlist and provincemap in place).
+
+drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount)
+- purpose: render loading UI and process quit events
+- Sample output:
+  True (continue) or False (quit requested)
+
+| GUI (gui.py)
+
+gui_lightencolor(colorvalue, amount)
+- purpose: blend color toward white
+- Sample output:
+  gui_lightencolor((100, 120, 140), 0.5) -> (177, 187, 197)
+
+gui_drawbutton(screen, rectangle, textvalue, fontobject, enabled=True, pulse=False)
+- purpose: generic button renderer
+- Sample output:
+  Returns None (draw side effect only).
+
+gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject)
+- purpose: draw troop count badge
+- Sample output:
+  Returns None.
+
+gui_drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountry)
+- purpose: draw choose-country overlay and button
+- Sample output:
+  (<pygame.Rect choose_button>, True/False can_choose_country)
+
+gui_drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetcountry, alreadyatwar)
+- purpose: draw diplomacy menu
+- Sample output:
+  (<pygame.Rect menu_rect>, <pygame.Rect declare_war_button>)
+
+gui_drawgameplayhud(screen, fontobject, smallfontobject, playercountry, currentturnnumber, currentgold, currentpopulation, selectedprovinceid, provincemap, recruitamount, recruitenabled, developmentmode, recruitgoldcost, recruitpopulationcost)
+- purpose: draw gameplay HUD
+- Sample output:
+  (<pygame.Rect recruit_button>, <pygame.Rect end_turn_button>)
+
+
+| console helper (consle.py)
+
+loaddevmodeflag(filepath="dev.txt")
+- purpose: parse dev mode toggle file
+- Sample output:
+  True / False
+
+rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallbackcolor, troopbadgelist)
+- purpose: execute dev console commands
+- Sample output:
+  "empty command"
+  "ok Malaya_01 troops=500"
+  "ok annexed Malaya_03 to Malaysia"
+  "commands: add_troops [province] [amount], remove_troops [province] [amount], annex [province], help, exit"
+  "what??"
+
+Internal helper inside rundevcommand:
+- getprovinceid(rawtext)
+  Sample output:
+  getprovinceid("malaya_01") -> "Malaya_01" (case-insensitive lookup)
+
+| diagnostic helper (diagnostic.py)
+
+getprocessmemoryusage()
+- purpose: read process RSS/private memory (MB) via psutil
+- Sample output:
+  (132.7, 210.4) or (None, None) if unavailable.
+
+logstartupdiagnostics(startuptimestamp, stage, details="")
+- purpose: print startup timing + memory status line
+- Sample output:
+  local@EbeeEngine:~$   1.23s | states loaded | working=132.7MB private=210.4MB | count=26
+
+createloadingprogresscallback(drawprogresscallback, startuptimestamp, stage, logintervalseconds=1.5)
+- purpose: build callback that both draws progress and throttled-logs diagnostics
+- Sample output:
+  returns function loadingprogresscallback(completedcount, totalcount) -> bool
+
+logslowpath(filepath, currentprog, totalcount, shapeid, secondspassed, allowedmaxseconds=1.5)
+- purpose: print warning when shape conversion step is slower than threshold
+- Sample output:
+  local@EbeeEngine:~$ slow path!!!!! | file=provinces.svg was at=32/412 id=Malaya_07 took=1.91s
+
+
+
+
+extra note
+
+"country" remains as a compatibility alias for "controllercountry"
+new model supports separating legal ownership ("ownercountry") from military control ("controllercountry").

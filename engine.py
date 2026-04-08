@@ -10,7 +10,7 @@ from svgelements import Path
 
 
 #Local module
-from console import developmentconsole, loaddevmodeflag # Thank you Mr Neoh for suggesting module-based development during last sem's problem solving
+from console import developmentconsole, loaddevmodeflag 
 from gui import gui_drawchoosecountryoverlay, gui_drawgameplayhud, gui_drawtroopcountbadge, gui_lightencolor, gui_drawcountryinteractionmenu
 from diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
 
@@ -81,6 +81,31 @@ autocountrycolors = [
 
 
 
+#CURRENT ATTRIBUTES:
+# PROVINCE: id, polygons, rectangle, parentid, terrain, troops, ownercountry, controllercountry, country (compat alias to controllercountry), countrycolor
+# Example: {
+#   "id": "Malaya_01",
+#   "polygons": [{"points": [(x1, y1), (x2, y2), ...],
+#   "rectangle": pygame.Rect(...),
+#   "parentid": "Indochina",
+#   "terrain": "plains",
+#   "troops": 100,
+#   "ownercountry": "Malaysia",
+#   "controllercountry": "Malaysia",
+#   "country": "Malaysia",
+#   "countrycolor": (r, g, b),
+# }
+
+# STATE: id, polygons, rectangle, ownercountry, controllercountry, country (compat alias), countrycolor, subdivisions (list of provinces)
+# COUNTRY: name, color (from json or auto assigned)
+
+
+
+
+
+
+
+
 def loadsvgshapes(filepath, onprogress=None):
     # read svg and convert paths into polygons
     tree = elementtree.parse(filepath)
@@ -143,21 +168,22 @@ def loadsvgshapes(filepath, onprogress=None):
 
 
 def getmapbox(shapelist):
-    allxvalues = [shape["rectangle"].left for shape in shapelist] + [shape["rectangle"].right for shape in shapelist]
-    allyvalues = [shape["rectangle"].top for shape in shapelist] + [shape["rectangle"].bottom for shape in shapelist]
-    minimumx = min(allxvalues)
-    maximumx = max(allxvalues)
-    minimumy = min(allyvalues)
-    maximumy = max(allyvalues)
-    #print(f"box |  x={minimumx} to {maximumx}, y={minimumy} to {maximumy}")
-
+    allXValues = [shape["rectangle"].left for shape in shapelist] + [shape["rectangle"].right for shape in shapelist]
+    allYValues = [shape["rectangle"].top for shape in shapelist] + [shape["rectangle"].bottom for shape in shapelist]
+    minX = min(allXValues)
+    maxX = max(allXValues)
+    minY = min(allYValues)
+    maxY = max(allYValues)
+    tempVar = 0 
+    # print("Debug: minX=", minX, "maxX=", maxX)  
+    #print(f"box |  x={minX} to {maxX}, y={minY} to {maxY}")
     return {
-        "minimumx": minimumx,
-        "maximumx": maximumx,
-        "minimumy": minimumy,
-        "maximumy": maximumy,
-        "width": maximumx - minimumx,
-        "height": maximumy - minimumy,
+        "minimumx": minX,
+        "maximumx": maxX,
+        "minimumy": minY,
+        "maximumy": maxY,
+        "width": maxX - minX,
+        "height": maxY - minY,
     }
 # MAP LOADINGG ENDSS
 
@@ -167,10 +193,14 @@ def getmapbox(shapelist):
 # UTILITY FUNCTIONS STARTS
 
 def getscreenpoints(pointlist, zoomvalue, offsetx, offsety):
+    #print(pointlist)
+    #return (pointlist)
     return [(x * zoomvalue + offsetx, y * zoomvalue + offsety) for x, y in pointlist]
 
 
 def getscreenrectangle(rectangle, zoomvalue, offsetx, offsety):
+    # print(rectangle)
+    testrectangle1 = None 
     return pygame.Rect(
         int(rectangle.x * zoomvalue + offsetx),
         int(rectangle.y * zoomvalue + offsety),
@@ -180,16 +210,22 @@ def getscreenrectangle(rectangle, zoomvalue, offsetx, offsety):
 
 
 def getminimumzoomforheight(windowheight, mapbox):
+
     if mapbox["height"] <= 0:
         return min(maximumzoomvalue, minimumzoomvalue)
+    # print("getminmumzoom height", windowheight)
+
     return min(maximumzoomvalue, max(minimumzoomvalue, windowheight / mapbox["height"]))
 
 
 def clampverticalcamera(cameray, zoomvalue, windowheight, mapbox):
+
+    clamptest = 1  
     toplimit = -mapbox["minimumy"] * zoomvalue
     bottomlimit = windowheight - mapbox["maximumy"] * zoomvalue
     if bottomlimit > toplimit:
         return (toplimit + bottomlimit) * 0.5
+    # print(cameray)
     return max(bottomlimit, min(toplimit, cameray))
 
 
@@ -198,7 +234,7 @@ def wraphorizontalcamera(camerax, zoomvalue, mapbox):
 
 
     tilewidth = mapbox["width"] * zoomvalue # map wider than window then allow horizontal wrapping else wrap center
-    if tilewidth <= 1e-6:
+    if tilewidth:
         return camerax
     anchorvalue = mapbox["minimumx"] * zoomvalue
 
@@ -213,7 +249,7 @@ def wraphorizontalcamera(camerax, zoomvalue, mapbox):
 
 # GAME LOGIC AND RENDERING STARTS
 
-# Adapted from Chatgpt
+# a* pathfinding adpated from https://www.redblobgames.com/pathfinding/a-star/introduction
 def getsegmentsamplecount(segment):
     segmenttypename = type(segment).__name__
     if segmenttypename == "Move":
@@ -245,7 +281,7 @@ def convertpathtopolygons(svgpath):
             if segmenttypename == "Move":
                 sampledpoints.append((segment.end.x, segment.end.y))
                 continue
-
+            #print(segment)
             if not sampledpoints and hasattr(segment, "start"):
                 sampledpoints.append((segment.start.x, segment.start.y))
 
@@ -261,8 +297,9 @@ def convertpathtopolygons(svgpath):
 
 
         for pointx, pointy in sampledpoints:
-            if not cleanedpoints or abs(pointx - cleanedpoints[-1][0]) > 1e-6 or abs(pointy - cleanedpoints[-1][1]) > 1e-6: #1e-6 is a threshold to consider points different
+            if not cleanedpoints or abs(pointx - cleanedpoints[-1][0]) or abs(pointy - cleanedpoints[-1][1]) > 1e-6: #1e-6 is a threshold to consider points different
                 cleanedpoints.append((pointx, pointy))
+                #print(cleanedpoints[-1])
 
         #OLD CODE THIS ONE IS TOO SLOW
         #if not pointx, pointy in cleanedpoints:
@@ -348,7 +385,7 @@ def parsecolorvalue(rawcolorvalue):
 
     return None
 
-# adapted from https://stackoverflow.com/a/29643643 with modifications to handle edge cases 
+#  from https://stackoverflow.com/a/29643643  
 
 
 def loadcountrydata(filepath):
@@ -400,8 +437,8 @@ def groupsubdivisionsbystate(provincelist, statelist):
             continue
         province["parentid"] = parentstateid
         groupedlookup[parentstateid].append(province)
-
-
+        #print(province["id"], "parent", parentstateid)
+    #print(groupedlookup)
 
     return groupedlookup # stateid to list of provinces for example ("Malaya" -> [province1, province2])
 
@@ -419,23 +456,44 @@ def getshapecenter(shape):
     return (shape["rectangle"].centerx, shape["rectangle"].centery)
 
 
+def getprovincecontroller(province): # get the current controller
+    return province.get("controllercountry", province.get("country"))
+
+
+def getprovinceowner(province): # get the original owner
+    return province.get("ownercountry", province.get("country"))
+
+
+def setprovincecontroller(province, countryname, countrycolor=None): #set the controller of the provincewhen occupied or annexed
+    province["controllercountry"] = countryname
+    province["country"] = countryname  # compatibility alias
+    if countrycolor is not None:
+        province["countrycolor"] = countrycolor
+
+
 
 # Movement starts
 def prepareprovincemetadata(provincelist):
-    enrichedlist = []
-
+    enrichedList = []
+    testCounter = 0  
     for province in provincelist:
-        enrichedprovince = dict(province)
-        enrichedprovince["parentstateid"] = getparentstateidfromprovinceid(enrichedprovince["id"])
-        enrichedprovince["terrain"] = "plains"
-        enrichedprovince["troops"] = 0
-        enrichedprovince["center"] = getshapecenter(enrichedprovince)
-        enrichedlist.append(enrichedprovince)
+        enrichedProvince = dict(province)
+        enrichedProvince["parentstateid"] = getparentstateidfromprovinceid(enrichedProvince["id"])
+        enrichedProvince["terrain"] = "plains"
+        enrichedProvince["troops"] = 0
+        enrichedProvince["center"] = getshapecenter(enrichedProvince)
+        enrichedProvince["ownercountry"] = None
+        enrichedProvince["controllercountry"] = None
+        enrichedProvince["country"] = None
 
+        
+        # print("Debug: province center =", enrichedProvince["center"])  
+        enrichedList.append(enrichedProvince)
+        testCounter += 1  
 
-    #print(enrichedlist[0])
-
-    return enrichedlist
+    # print("Total provinces:", testCounter)
+    #print(enrichedList[0])
+    return enrichedList
 
 
 def buildprovinceadjacencygraph(provincemap, onprogress=None):
@@ -444,18 +502,19 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
 
 
     # TEST OPTIMIZATION 3 APRIL
-
     totalprogresssteps = max(1, totalprovincecount * 2)
     if onprogress and not onprogress(0, totalprogresssteps):
+        #print("PROGRES", totalprogresssteps)
         return None
 
-    # larger cells reduce grid bookeeping overload
+    # larger cells will = faster but not as accurate
     gridcellsize = 32.0
     adjacencytestpadding = 1
     gridlookup = {}
     provinceentrylist = []
 
     for provinceindex, provinceid in enumerate(provinceidlist):
+        #print(provinceindex, provinceid, provinceidlist[0])
         provincerectangle = provincemap[provinceid]["rectangle"]
         minimumgridx = int(math.floor((provincerectangle.left - adjacencytestpadding) / gridcellsize))
         maximumgridx = int(math.floor((provincerectangle.right + adjacencytestpadding) / gridcellsize))
@@ -468,12 +527,17 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
             for gridy in range(minimumgridy, maximumgridy + 1):
                 gridlookup.setdefault((gridx, gridy), []).append(provinceindex)
 
+        #if onprogress and provinceindex % 100 == 0:
+        #    onprogress(provinceindex, totalprogresssteps)
+        #       if not onprogress(provinceindex, totalprogresssteps):
+        #          return None
+
         if onprogress and (provinceindex == 0 or (provinceindex + 1) % 200 == 0 or (provinceindex + 1) == totalprovincecount):
             if not onprogress(provinceindex + 1, totalprogresssteps):
                 return None
 
     adjacencygraph = {provinceid: set() for provinceid in provinceidlist}
-
+    #print("graph adjacent", adjacencygraph)
     for provinceindex, provinceentry in enumerate(provinceentrylist):
         provinceid, firstrectangle, minimumgridx, maximumgridx, minimumgridy, maximumgridy = provinceentry
         candidateindexset = set()
@@ -488,7 +552,7 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
                         candidateindexset.add(candidateindex)
 
         for candidateindex in candidateindexset:
-            candidateprovinceid, secondrectangle, _, _, _, _ = provinceentrylist[candidateindex]
+            candidateprovinceid, secondrectangle, _, _, _, _ = provinceentrylist[candidateindex] 
             if rectanglesclose(firstrectangle, secondrectangle, padding=adjacencytestpadding):
                 adjacencygraph[provinceid].add(candidateprovinceid)
                 adjacencygraph[candidateprovinceid].add(provinceid)
@@ -522,8 +586,9 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
     costlookup = {startprovinceid: 0.0}
     visitedset = set()
 
+    #  A* 
     while openheap:
-        _, currentprovinceid = heapq.heappop(openheap)
+        _, currentprovinceid = heapq.heappop(openheap) # total province with lowest cost
         if currentprovinceid in visitedset:
             continue
 
@@ -565,26 +630,67 @@ def processmovementorders(movementorderlist, provincemap):
         movementpoints = 1.0 * float(movementorder.get("speedmodifier", 1.0))
         pathlist = movementorder["path"]
         currentpathindex = movementorder["index"]
+        movingcountry = movementorder.get("controllercountry", movementorder.get("country"))
+        movingcountrycolor = movementorder.get("countrycolor")
 
         while currentpathindex < len(pathlist) - 1:
+
+
             nextprovinceid = pathlist[currentpathindex + 1]
-            movecost = getterrainmovecost(provincemap[nextprovinceid])
-            if movementpoints + 1e-9 < movecost:
+            nextprovince = provincemap[nextprovinceid]
+            movecost = getterrainmovecost(nextprovince)
+
+            if movementpoints < movecost: # move next turn if not enough
                 break
+
+            if movingcountry is None: 
+                movingcountry = getprovincecontroller(provincemap[pathlist[currentpathindex]])
+                movementorder["controllercountry"] = movingcountry
+                movementorder["country"] = movingcountry
+
+            nextcountry = getprovincecontroller(nextprovince)
+            if (
+                movingcountry is not None
+                and nextcountry is not None
+                and nextcountry != movingcountry
+                and nextprovince["troops"] > 0
+            ):
+                attackers = movementorder["amount"]
+                defenders = nextprovince["troops"]
+                if attackers <= defenders:
+                    nextprovince["troops"] = defenders - attackers
+                    movementorder["amount"] = 0
+                    break
+
+                movementorder["amount"] = attackers - defenders
+                nextprovince["troops"] = 0
+
+
+
             movementpoints -= movecost
             currentpathindex += 1
+
+            if (
+                movingcountry is not None
+                and nextcountry is not None
+                and nextcountry != movingcountry
+                and nextprovince["troops"] <= 0
+            ):
+                setprovincecontroller(nextprovince, movingcountry, movingcountrycolor)
 
         movementorder["index"] = currentpathindex
         movementorder["current"] = pathlist[currentpathindex]
 
-        if currentpathindex >= len(pathlist) - 1:
+        if movementorder["amount"] <= 0:
+            finishedorderlist.append(movementorder)
+        elif currentpathindex >= len(pathlist) - 1:
             destinationprovinceid = pathlist[-1]
             provincemap[destinationprovinceid]["troops"] += movementorder["amount"]
             finishedorderlist.append(movementorder)
 
     for finishedorder in finishedorderlist:
         movementorderlist.remove(finishedorder)
-# TODO: handle combat when troop move into enemy province, right now the troops cannot move into the enemy province at all.
+# TODO: handle occupation, changing the province ownership when all enemy troops are removed and the player moves into the province, or the npc moves into the province or the players province
 
 
 # Movement ends
@@ -592,7 +698,8 @@ def processmovementorders(movementorderlist, provincemap):
 
 
 
-# Loading screen and main loop starts
+# Loading screen and main loop starts 
+# start after main()
 def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
@@ -601,10 +708,12 @@ def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
     progressvalue = 0.0 if totalcount <= 0 else completedcount / totalcount
     progressvalue = max(0.0, min(1.0, progressvalue))
     screen.fill((18, 18, 22))
-
+    #print("progress", progressvalue, completedcount, totalcount)
     windowwidth, windowheight = screen.get_size()
-    titletextsurface = largefont.render("Loading engine...", True, (240, 240, 240))
-    screen.blit(titletextsurface, titletextsurface.get_rect(center=(windowwidth // 2, windowheight // 2 - 40)))
+
+
+    titletextabovebar = largefont.render("Loading engine...", True, (240, 240, 240))
+    screen.blit(titletextabovebar, titletextabovebar.get_rect(center=(windowwidth // 2, windowheight // 2 - 40)))
 
     barwidth = min(640, windowwidth - 120)
     barheight = 22
@@ -625,6 +734,8 @@ def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
 def main():
     startupbegintimestamp = time.perf_counter()
     pygame.init()
+
+
     logstartupdiagnostics(startupbegintimestamp, "pygame init", f"python={platform.python_version()} pygame={pygame.version.ver}")
     screen = pygame.display.set_mode((defaultwindowwidth, defaultwindowheight), pygame.RESIZABLE)
     logstartupdiagnostics(
@@ -632,6 +743,7 @@ def main():
         "window created",
         f"size={defaultwindowwidth}x{defaultwindowheight} driver={pygame.display.get_driver()}",
     )
+
     if os.path.exists("dev.txt"):
         pygame.display.set_caption("ebee engine playtest apr 1 - dev mode")
     else:
@@ -643,17 +755,24 @@ def main():
     loadingtitlefont = pygame.font.SysFont("Arial", 36, bold=True)
     loadingtextfont = pygame.font.SysFont("Arial", 18)
     developmentmode = loaddevmodeflag("dev.txt")
-    logstartupdiagnostics(startupbegintimestamp, "fonts ready", f"development_mode={developmentmode}")
 
+
+    logstartupdiagnostics(startupbegintimestamp, "fonts ready", f"development_mode={developmentmode}")
     if not drawloadingscreen(screen, loadingtitlefont, loadingtextfont, 0, 1):
         pygame.quit()
         return
+
+    #TODO: make loading screen better, preferably show which file is loading,
+    # current state, it just says provinces and never update
+
 
     stateprogresscallback = createloadingprogresscallback(
         lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
         startupbegintimestamp,
         "loading states.svg",
     )
+
+
     stateshapelist = loadsvgshapes(
         statefilepath,
         onprogress=stateprogresscallback,
@@ -661,18 +780,21 @@ def main():
     if not stateshapelist:
         pygame.quit()
         return
-    logstartupdiagnostics(startupbegintimestamp, "states loaded", f"count={len(stateshapelist)}")
+    
 
+    logstartupdiagnostics(startupbegintimestamp, "states loaded", f"count={len(stateshapelist)}")
     statetocountrylookup, countrytocolorlookup = loadcountrydata(countrydatafilepath)
+
+
     logstartupdiagnostics(
         startupbegintimestamp,
         "countries loaded",
         f"state_links={len(statetocountrylookup)} country_colors={len(countrytocolorlookup)}",
     )
-
-
     for stateshape in stateshapelist: # to prepare to load province data and assign countries to state 
         statecountry = statetocountrylookup.get(stateshape["id"])
+        stateshape["ownercountry"] = statecountry
+        stateshape["controllercountry"] = statecountry
         stateshape["country"] = statecountry
         stateshape["countrycolor"] = countrytocolorlookup.get(statecountry, (85, 85, 85)) 
 
@@ -684,10 +806,16 @@ def main():
         startupbegintimestamp,
         "loading provinces.svg",
     )
+
+
+
     provinceshapelist = loadsvgshapes(
         provincefilepath if False else provincefilepath,
         onprogress=provinceprogresscallback,
     )
+
+
+
     # fix accidental typo safely
     if not provinceshapelist:
         provinceprogresscallback = createloadingprogresscallback(
@@ -702,31 +830,31 @@ def main():
     if not provinceshapelist:
         pygame.quit()
         return
-    logstartupdiagnostics(startupbegintimestamp, "provinces loaded", f"count={len(provinceshapelist)}")
+    
 
+
+    logstartupdiagnostics(startupbegintimestamp, "provinces loaded", f"count={len(provinceshapelist)}")
     provinceenrichedlist = prepareprovincemetadata(provinceshapelist)
     logstartupdiagnostics(startupbegintimestamp, "province metadata ready", f"count={len(provinceenrichedlist)}")
+
+
+
     for province in provinceenrichedlist:
         provincecountry = statetocountrylookup.get(province["parentstateid"])
+        province["ownercountry"] = provincecountry
+        province["controllercountry"] = provincecountry
         province["country"] = provincecountry
         province["countrycolor"] = countrytocolorlookup.get(provincecountry, (85, 85, 85))
-
-
-
 
     provincemap = {province["id"]: province for province in provinceenrichedlist} 
 
 
 
-    #for diagnostics
     graphprogresscallback = createloadingprogresscallback(
         lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
         startupbegintimestamp,
         "building province graph",
     )
-
-
-
     provincegraph = buildprovinceadjacencygraph(
         provincemap,
         # if not graphprogresscallback:
@@ -749,13 +877,19 @@ def main():
         f"nodes={len(provincegraph)} edges={totaledges}",
     )
 
+
+
     groupedsubdivisionlookup = groupsubdivisionsbystate(provinceenrichedlist, stateshapelist)
     for stateshape in stateshapelist:
         subdivisionsforstate = groupedsubdivisionlookup.get(stateshape["id"], [])
         for province in subdivisionsforstate:
-            province["country"] = stateshape.get("country")
-            province["countrycolor"] = stateshape.get("countrycolor", (85, 85, 85))
+            ownercountry = stateshape.get("ownercountry", stateshape.get("country"))
+            controllercountry = stateshape.get("controllercountry", stateshape.get("country"))
+            province["ownercountry"] = ownercountry
+            setprovincecontroller(province, controllercountry, stateshape.get("countrycolor", (85, 85, 85)))
         stateshape["subdivisions"] = subdivisionsforstate
+
+
 
     mapbox = getmapbox(stateshapelist)
     logstartupdiagnostics(
@@ -763,12 +897,17 @@ def main():
         "startup complete",
         f"map_size={mapbox['width']:.1f}x{mapbox['height']:.1f}",
     )
+
+
+    
     windowwidth, windowheight = screen.get_size()
     zoomvalue = getminimumzoomforheight(windowheight, mapbox)
     camerax = (windowwidth - mapbox["width"] * zoomvalue) / 2 - mapbox["minimumx"] * zoomvalue
     cameray = (windowheight - mapbox["height"] * zoomvalue) / 2 - mapbox["minimumy"] * zoomvalue
     cameray = clampverticalcamera(cameray, zoomvalue, windowheight, mapbox)
     camerax = wraphorizontalcamera(camerax, zoomvalue, mapbox)
+
+
 
     clock = pygame.time.Clock()
     expandedstateid = None
@@ -778,12 +917,15 @@ def main():
     pendingcountry = None
     playercountry = None
 
+    # Default test stats
     currentturnnumber = 1
     playergold = 1200
     playerpopulation = 2500
     recruitamount = 100
     recruitgoldcostperunit = 1
     recruitpopulationcostperunit = 1
+
+
     movementorderlist = []
     routepreviewset = set()
     countriesatwarset = set() # track countries at war
@@ -795,18 +937,22 @@ def main():
     while isrunning:
         elapsedseconds = clock.tick(60) / 1000.0
         mouseposition = pygame.mouse.get_pos()
+        #this gives x and y (0 and 1)
         windowwidth, windowheight = screen.get_size()
 
         panpixels = edgepanspeed * elapsedseconds
+        # pan the camera
         if mouseposition[0] <= edgepanmargin:
             camerax += panpixels
         elif mouseposition[0] >= windowwidth - edgepanmargin:
             camerax -= panpixels
 
+        """ disabled for now, because everytime i click any button near the edge the camera will pan and itis getting annoying
         if mouseposition[1] <= edgepanmargin:
             cameray += panpixels
         elif mouseposition[1] >= windowheight - edgepanmargin:
             cameray -= panpixels
+        """
 
         minimumzoom = getminimumzoomforheight(windowheight, mapbox)
         if zoomvalue < minimumzoom:
@@ -827,7 +973,7 @@ def main():
         hoveredstateid = None
         hoveredprovinceid = None
         screenrectangle = screen.get_rect()
-        troopbadgelist = []
+        troopbadgelist = [] # store troop badge info
 
         tilewidth = mapbox["width"] * zoomvalue
         if tilewidth > 1:
@@ -847,10 +993,31 @@ def main():
                 if gamephase == "choosecountry":
                     drawitemlist = [stateshape]
                 else:
-                    if expandedstateid == stateshape["id"] and stateshape["subdivisions"]:
-                        drawitemlist = stateshape["subdivisions"]
+                    subdivisions = stateshape.get("subdivisions", [])
+                    if subdivisions:
+                        controllercountries = {getprovincecontroller(province) for province in subdivisions}
+                        controllercountries.discard(None)
+                        if len(controllercountries) == 1:
+                            statecontroller = next(iter(controllercountries))
+                            stateshape["controllercountry"] = statecontroller
+                            stateshape["country"] = statecontroller
+                            stateshape["countrycolor"] = subdivisions[0].get("countrycolor", stateshape.get("countrycolor", defaultshapecolor))
+                        else:
+                            stateshape["controllercountry"] = None
+                            stateshape["country"] = None
+
+                    hasmixedcontrol = False #contested state 
+                    if subdivisions:
+                        subdivisioncontrollers = {getprovincecontroller(province) for province in subdivisions}
+                        hasmixedcontrol = len(subdivisioncontrollers) > 1
+
+                    if (expandedstateid == stateshape["id"] and subdivisions) or hasmixedcontrol:
+                        drawitemlist = subdivisions
                     else:
                         drawitemlist = [stateshape]
+            # FOR QUICK SEARCH: "mixed control state"
+
+
 
                 for drawitem in drawitemlist:
                     itemhovered = False
@@ -882,19 +1049,43 @@ def main():
                     if gamephase == "choosecountry":
                         if stateshape.get("country"):
                             basefillcolor = stateshape.get("countrycolor", defaultshapecolor)
+
                         else:
                             basefillcolor = (75, 75, 75)
+
                         if pendingcountry and stateshape.get("country") == pendingcountry:
                             pulsevalue = 0.35 + 0.45 * (0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.008))
                             basefillcolor = gui_lightencolor(basefillcolor, pulsevalue)
+
+
                     elif drawitem.get("id") == selectedprovinceid:
                         basefillcolor = (232, 214, 103)
+
+
                     elif drawitem.get("id") in routepreviewset:
                         basefillcolor = (95, 145, 255)
+
+
                     elif any(order["current"] == drawitem.get("id") for order in movementorderlist):
                         basefillcolor = (132, 96, 226)
+
+
+
                     else:
-                        basefillcolor = drawitem.get("countrycolor", stateshape.get("countrycolor", defaultshapecolor))
+                        if drawitem is stateshape and stateshape.get("subdivisions"):
+                            ownercolors = {
+                                province.get("countrycolor")
+                                for province in stateshape["subdivisions"]
+                                if province.get("countrycolor") is not None
+                            }
+                            if len(ownercolors) == 1:
+                                basefillcolor = next(iter(ownercolors))
+                            else:
+                                basefillcolor = drawitem.get("countrycolor", stateshape.get("countrycolor", defaultshapecolor))
+                        else:
+                            basefillcolor = drawitem.get("countrycolor", stateshape.get("countrycolor", defaultshapecolor))
+
+
 
                     finalfillcolor = hovercolor if itemhovered else basefillcolor
                     for drawpolygon in drawpolygonlist:
@@ -902,10 +1093,12 @@ def main():
                         pygame.draw.polygon(screen, (50, 50, 50), drawpolygon, 1)
 
                     if gamephase == "play" and "troops" in drawitem and drawitem["troops"] > 0 and itemrectanglescreen.colliderect(screenrectangle):
-                        troopbadgelist.append((itemrectanglescreen.center, drawitem["troops"]))
+                        troopbadgelist.append((itemrectanglescreen.center, drawitem["troops"])) #store as screen coords, troop count
 
         for badgecenter, badgetroops in troopbadgelist:
             gui_drawtroopcountbadge(screen, badgecenter, badgetroops, smallfont)
+
+
 
         choosebuttonrectangle = None
         recruitbuttonrectangle = None
@@ -915,7 +1108,7 @@ def main():
         if gamephase == "choosecountry":
             choosebuttonrectangle, _ = gui_drawchoosecountryoverlay(screen, titlefont, normalfont, pendingcountry)
         else:
-            canrecruit = selectedprovinceid is not None and provincemap[selectedprovinceid]["country"] == playercountry
+            canrecruit = selectedprovinceid is not None and getprovincecontroller(provincemap[selectedprovinceid]) == playercountry
             recruitgoldcost = recruitamount * recruitgoldcostperunit
             recruitpopulationcost = recruitamount * recruitpopulationcostperunit
 
@@ -956,7 +1149,11 @@ def main():
 
         if hovertext:
             hoverlabel = normalfont.render(hovertext, True, (255, 255, 255))
-            screen.blit(hoverlabel, (10, 10))
+            # follow mouse but with an offset so it doesn't get covered by the cursor
+            screen.blit(hoverlabel, (mouseposition[0] + 16, mouseposition[1] + 16))
+
+        #show the province name when you hover over a province 
+
 
         devconsole.draw(screen, normalfont, smallfont) # draw dev console after hover text so that it appears on top
 
@@ -1002,7 +1199,7 @@ def main():
                     if recruitbuttonrectangle and recruitbuttonrectangle.collidepoint(event.pos):
                         if selectedprovinceid:
                             selectedprovince = provincemap[selectedprovinceid]
-                            if selectedprovince["country"] == playercountry:
+                            if getprovincecontroller(selectedprovince) == playercountry:
                                 requiredgold = recruitamount * recruitgoldcostperunit
                                 requiredpopulation = recruitamount * recruitpopulationcostperunit
                                 if developmentmode or (playergold >= requiredgold and playerpopulation >= requiredpopulation):
@@ -1019,12 +1216,21 @@ def main():
                     if endturnbuttonrectangle and endturnbuttonrectangle.collidepoint(event.pos): # end turn and process movement orders
                         processmovementorders(movementorderlist, provincemap)
                         if playercountry:
-                            ownedprovincecount = sum(1 for province in provincemap.values() if province.get("country") == playercountry)
+                            ownedprovincecount = sum(1 for province in provincemap.values() if getprovincecontroller(province) == playercountry)
                             playergold += max(5, ownedprovincecount // 5)
                             playerpopulation += max(10, ownedprovincecount // 3)
                         currentturnnumber += 1
                         routepreviewset = set()
                         continue
+
+                    if hoveredprovinceid:
+                        selectedprovince = provincemap.get(hoveredprovinceid)
+                        if selectedprovince and getprovincecontroller(selectedprovince) == playercountry:
+                            selectedprovinceid = hoveredprovinceid
+                            expandedstateid = selectedprovince.get("parentid", hoveredstateid)
+                            routepreviewset = set()
+                            countrymenutarget = None
+                            continue
 
                     if hoveredstateid is not None:
                         expandedstateid = hoveredstateid
@@ -1032,11 +1238,6 @@ def main():
                         expandedstateid = None
                         selectedprovinceid = None
                         routepreviewset = set()
-
-                    if hoveredprovinceid:
-                        selectedprovince = provincemap.get(hoveredprovinceid)
-                        if selectedprovince and selectedprovince.get("country") == playercountry:
-                            selectedprovinceid = hoveredprovinceid
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3: # right click for move orders
                 if devconsole.visible or gamephase != "play":
@@ -1047,7 +1248,7 @@ def main():
                     if hoveredstateid is not None:
                         selectedstateobject = next((state for state in stateshapelist if state["id"] == hoveredstateid), None)
                         if selectedstateobject:
-                            destinationcountry = selectedstateobject.get("country")
+                            destinationcountry = selectedstateobject.get("controllercountry", selectedstateobject.get("country"))
                             if playercountry and destinationcountry and destinationcountry != playercountry:
                                 countrymenutarget = destinationcountry
                                 routepreviewset = set()
@@ -1059,11 +1260,12 @@ def main():
                 if not destinationprovince:
                     continue
 
-                destinationcountry = destinationprovince.get("country")
+                destinationcountry = getprovincecontroller(destinationprovince)
                 if playercountry and destinationcountry and destinationcountry != playercountry:
-                    countrymenutarget = destinationcountry
-                    routepreviewset = set() # set() is an empty set to clear route preview
-                    continue
+                    if destinationcountry not in countriesatwarset:
+                        countrymenutarget = destinationcountry
+                        routepreviewset = set() # set() is an empty set to clear route preview
+                        continue
 
                 countrymenutarget = None
 
@@ -1079,7 +1281,7 @@ def main():
                 sourceprovince = provincemap.get(selectedprovinceid)
                 if not sourceprovince:
                     continue
-                if sourceprovince.get("country") != playercountry:
+                if getprovincecontroller(sourceprovince) != playercountry:
                     continue
                 if sourceprovince["troops"] <= 0:
                     continue
@@ -1092,9 +1294,12 @@ def main():
                 allowedcountryset = {playercountry} | countriesatwarset
                 if destinationcountry not in allowedcountryset:
                     continue
+
+
                 allowedprovinceidset = {
-                    provinceid for provinceid, province in provincemap.items() if province.get("country") in allowedcountryset
-                }
+                    provinceid for provinceid, province in provincemap.items() if getprovincecontroller(province) in allowedcountryset
+                } # this allows movement thrugh your own province and supposedly the enemy provinces
+                # TODO: fix the issue that you cannot move through enemy provinces
 
 
 
@@ -1117,14 +1322,11 @@ def main():
 
 
 
-
-
-
-
                 routepreviewset = set(foundpath)
                 if len(foundpath) >= 2:
                     movingtroopcount = sourceprovince["troops"]
                     sourceprovince["troops"] -= movingtroopcount
+
                     movementorderlist.append(
                         {
                             "amount": movingtroopcount,
@@ -1132,8 +1334,12 @@ def main():
                             "index": 0, # the current provincei n the path list
                             "current": foundpath[0],
                             "speedmodifier": 1.0,
+                            "controllercountry": getprovincecontroller(sourceprovince),
+                            "country": getprovincecontroller(sourceprovince),
+                            "countrycolor": sourceprovince.get("countrycolor"),
                         }
                     )
+
 
             elif event.type == pygame.MOUSEWHEEL:
                 if devconsole.visible:
@@ -1153,9 +1359,12 @@ def main():
 
             elif event.type == pygame.KEYDOWN:
 
+            # (for quick ctrl f: developer console)
+                if devconsole.handlekeydown(event, provincemap, playercountry, countrytocolorlookup, defaultshapecolor, troopbadgelist):
+                    continue # handle dev console input
 
-                if devconsole.handlekeydown(event, provincemap, playercountry, countrytocolorlookup, defaultshapecolor):
-                    continue # handle dev console input and skip rest of loop if it was dev console related
+
+
 
             elif event.type == pygame.VIDEORESIZE:
                 oldwindowwidth, oldwindowheight = screen.get_size()
@@ -1185,5 +1394,4 @@ def main():
     pygame.quit()
 # loading screen and main loop ends
 
-if __name__ == "__main__":
-    main() #start engine
+main()
