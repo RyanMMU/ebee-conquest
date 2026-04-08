@@ -3,12 +3,9 @@ import json
 import math
 import time
 import xml.etree.ElementTree as elementtree
-
-os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 import pygame
 from svgelements import Path
-
-from .diagnostics import logslowpath
+from engine.diagnostics import logslowpath
 
 
 minimumzoomvalue = 0.5
