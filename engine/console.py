@@ -3,12 +3,16 @@ import pygame
 
 #dev console will not be included in the final 
 
+
+
 def loaddevmodeflag(filepath="dev.txt"):
     try:
         with open(filepath, "r", encoding="utf-8") as fileobject:
             return fileobject.read().strip().lower() == "true"
     except OSError:
         return False
+
+
 
 
 def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallbackcolor, troopbadgelist, eventbus=None):
@@ -18,6 +22,7 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
 
     commandname = commandparts[0].lower()
     lowercaselookup = {provinceid.lower(): provinceid for provinceid in provincemap.keys()}
+
 
     def getprovinceid(rawtext):
         return lowercaselookup.get(rawtext.lower())
@@ -140,10 +145,13 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
     return "what??"
 
 
+
+
 class developmentconsole:
     # in game console
 
     #init is the only time we can load the dev mode flag
+
     def __init__(self, enabled):
         self.enabled = enabled
         self.visible = False
@@ -152,6 +160,7 @@ class developmentconsole:
         self.buttonrectangle = None
         self.panelrectangle = None
         self.closerectangle = None
+
 
     def drawbutton(self, screen, rectangle, textvalue, fontobject, enabled=True, pulse=False):
         if enabled:
@@ -176,6 +185,7 @@ class developmentconsole:
 
     # the gui render code 
     #TODO: move this to gui.py
+
     def draw(self, screen, fontobject, smallfontobject):
         if not self.enabled:
             self.buttonrectangle = None
@@ -245,6 +255,7 @@ class developmentconsole:
         inputsurface = smallfontobject.render("> " + self.inputtext, True, (230, 230, 230))
         screen.blit(inputsurface, (inputrectangle.x + 6, inputrectangle.y + 8))
 
+
     def handleleftclick(self, mouseposition):
         if not self.enabled:
             return False
@@ -259,6 +270,7 @@ class developmentconsole:
             return True
 
         return False
+
 
     def handlekeydown(self, keyboardevent, provincemap, playercountry, countrytocolor, fallbackcolor, troopbadgelist, eventbus=None):
         if not self.visible:
@@ -291,3 +303,5 @@ class developmentconsole:
                 self.inputtext += keyboardevent.unicode
 
         return True
+
+

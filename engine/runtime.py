@@ -105,9 +105,6 @@ autocountrycolors = [
 
 
 
-
-
-
 def loadsvgshapes(filepath, onprogress=None):
     # read svg and convert paths into polygons
     tree = elementtree.parse(filepath)
@@ -169,6 +166,8 @@ def loadsvgshapes(filepath, onprogress=None):
     return shapelist
 
 
+
+
 def getmapbox(shapelist):
     allXValues = [shape["rectangle"].left for shape in shapelist] + [shape["rectangle"].right for shape in shapelist]
     allYValues = [shape["rectangle"].top for shape in shapelist] + [shape["rectangle"].bottom for shape in shapelist]
@@ -194,10 +193,14 @@ def getmapbox(shapelist):
 
 # UTILITY FUNCTIONS STARTS
 
+
+
 def getscreenpoints(pointlist, zoomvalue, offsetx, offsety):
     #print(pointlist)
     #return (pointlist)
     return [(x * zoomvalue + offsetx, y * zoomvalue + offsety) for x, y in pointlist]
+
+
 
 
 def getscreenrectangle(rectangle, zoomvalue, offsetx, offsety):
@@ -211,6 +214,8 @@ def getscreenrectangle(rectangle, zoomvalue, offsetx, offsety):
     )
 
 
+
+
 def getminimumzoomforheight(windowheight, mapbox):
 
     if mapbox["height"] <= 0:
@@ -218,6 +223,8 @@ def getminimumzoomforheight(windowheight, mapbox):
     # print("getminmumzoom height", windowheight)
 
     return min(maximumzoomvalue, max(minimumzoomvalue, windowheight / mapbox["height"]))
+
+
 
 
 def clampverticalcamera(cameray, zoomvalue, windowheight, mapbox):
@@ -229,6 +236,8 @@ def clampverticalcamera(cameray, zoomvalue, windowheight, mapbox):
         return (toplimit + bottomlimit) * 0.5
     # print(cameray)
     return max(bottomlimit, min(toplimit, cameray))
+
+
 
 
 
@@ -252,6 +261,8 @@ def wraphorizontalcamera(camerax, zoomvalue, mapbox):
 # GAME LOGIC AND RENDERING STARTS
 
 # a* pathfinding adpated from https://www.redblobgames.com/pathfinding/a-star/introduction
+
+
 def getsegmentsamplecount(segment):
     segmenttypename = type(segment).__name__
     if segmenttypename == "Move":
@@ -271,6 +282,8 @@ def getsegmentsamplecount(segment):
 
 
 #TODO: OPTIMIZATION for curve sampling
+
+
 
 def convertpathtopolygons(svgpath):
 
@@ -326,6 +339,8 @@ def convertpathtopolygons(svgpath):
     return polygonlist
 
 
+
+
 def ispointinsidepolygon(point, polygon):
     mousex, mousey = point
     inside = False
@@ -344,12 +359,16 @@ def ispointinsidepolygon(point, polygon):
     return inside
 
 
+
+
 def getparentstateidfromprovinceid(provinceid):
     if "_" not in provinceid:
         return provinceid
     parentname = provinceid.rsplit("_", 1)[0]
     namemismatchlookup = {"Trung_Bo": "Trong_Bo"}
     return namemismatchlookup.get(parentname, parentname)
+
+
 
 
 def parsecolorvalue(rawcolorvalue):
@@ -390,6 +409,8 @@ def parsecolorvalue(rawcolorvalue):
 #  from https://stackoverflow.com/a/29643643  
 
 
+
+
 def loadcountrydata(filepath):
     try:
         with open(filepath, "r", encoding="utf-8") as fileobject:
@@ -427,6 +448,8 @@ def loadcountrydata(filepath):
     return statetocountrylookup, countrytocolorlookup
 
 # group subdivision to their parent state for rendering 
+
+
 def groupsubdivisionsbystate(provincelist, statelist):
 
     stateidset = {state["id"] for state in statelist}
@@ -446,6 +469,8 @@ def groupsubdivisionsbystate(provincelist, statelist):
 
 
 # check if rect are close to be considered adjacent to build provinece graph for path finding
+
+
 def rectanglesclose(firstrectangle, secondrectangle, padding=1):
     return not (
         firstrectangle.right + padding < secondrectangle.left
@@ -454,16 +479,24 @@ def rectanglesclose(firstrectangle, secondrectangle, padding=1):
         or secondrectangle.bottom + padding < firstrectangle.top
     )
 
+
+
 def getshapecenter(shape):
     return (shape["rectangle"].centerx, shape["rectangle"].centery)
+
+
 
 
 def getprovincecontroller(province): # get the current controller
     return province.get("controllercountry", province.get("country"))
 
 
+
+
 def getprovinceowner(province): # get the original owner
     return province.get("ownercountry", province.get("country"))
+
+
 
 
 def setprovincecontroller(province, countryname, countrycolor=None): #set the controller of the provincewhen occupied or annexed
@@ -475,6 +508,8 @@ def setprovincecontroller(province, countryname, countrycolor=None): #set the co
 
 
 # Movement starts
+
+
 def prepareprovincemetadata(provincelist):
     enrichedList = []
     testCounter = 0  
@@ -496,6 +531,8 @@ def prepareprovincemetadata(provincelist):
     # print("Total provinces:", testCounter)
     #print(enrichedList[0])
     return enrichedList
+
+
 
 
 def buildprovinceadjacencygraph(provincemap, onprogress=None):
@@ -569,8 +606,12 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
     
     # optimization issue, cannot run on Benedict's AMD computer, might need to optimize the adjacency graph building 
 
+
+
 def getterrainmovecost(province):
     return terrainmovecostlookup.get(province.get("terrain", "plains"), 1.0)
+
+
 
 
 def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph, allowedprovinceidset=None):
@@ -593,6 +634,8 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
         _, currentprovinceid = heapq.heappop(openheap) # total province with lowest cost
         if currentprovinceid in visitedset:
             continue
+
+
 
         if currentprovinceid == goalprovinceid:
             pathlist = [goalprovinceid]
@@ -626,8 +669,13 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
     return []
 
 
+
+
 def processmovementorders(movementorderlist, provincemap):
     finishedorderlist = []
+
+
+
     for movementorder in movementorderlist:
         movementpoints = 1.0 * float(movementorder.get("speedmodifier", 1.0))
         pathlist = movementorder["path"]
@@ -683,6 +731,9 @@ def processmovementorders(movementorderlist, provincemap):
         movementorder["index"] = currentpathindex
         movementorder["current"] = pathlist[currentpathindex]
 
+
+
+
         if movementorder["amount"] <= 0:
             finishedorderlist.append(movementorder)
         elif currentpathindex >= len(pathlist) - 1:
@@ -702,10 +753,15 @@ def processmovementorders(movementorderlist, provincemap):
 
 # Loading screen and main loop starts 
 # start after main()
+
+
+
+
 def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return False
+
 
     progressvalue = 0.0 if totalcount <= 0 else completedcount / totalcount
     progressvalue = max(0.0, min(1.0, progressvalue))
@@ -714,8 +770,12 @@ def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
     windowwidth, windowheight = screen.get_size()
 
 
+
+
     titletextabovebar = largefont.render("Loading engine...", True, (240, 240, 240))
     screen.blit(titletextabovebar, titletextabovebar.get_rect(center=(windowwidth // 2, windowheight // 2 - 40)))
+
+
 
     barwidth = min(640, windowwidth - 120)
     barheight = 22
@@ -731,6 +791,9 @@ def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
 
     pygame.display.flip()
     return True
+
+
+
 
 
 def main(eventbus=None):
@@ -1178,27 +1241,9 @@ def main(eventbus=None):
 
 
 
-
-
-
-
-
-
-
-
-
         #DRAW GUIS, ON TOP
         devconsole.draw(screen, normalfont, smallfont) # draw dev console after hover text so that it appears on top
         newspopup.draw(screen, (titlefont, normalfont), newssystem.current)
-
-
-
-
-
-
-
-
-
 
 
 
@@ -1281,7 +1326,6 @@ def main(eventbus=None):
 
                         countrymenutarget = None
                         continue
-
 
 
 
@@ -1418,7 +1462,6 @@ def main(eventbus=None):
 
 
 
-
                 allowedcountryset = {playercountry} | countriesatwarset
                 if destinationcountry not in allowedcountryset:
                     continue
@@ -1440,11 +1483,6 @@ def main(eventbus=None):
                     provincegraph,
                     allowedprovinceidset=allowedprovinceidset,
                 )
-
-
-
-
-
 
 
 
@@ -1556,5 +1594,9 @@ getterrainmovecost = gameplaymodule.getterrainmovecost
 findprovincepath = gameplaymodule.findprovincepath
 processmovementorders = gameplaymodule.processmovementorders
 
+
+
 if __name__ == "__main__":
     main()
+
+

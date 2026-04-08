@@ -2,7 +2,10 @@ from . import core, gameplay
 from .events import EngineEventType, EventBus
 
 
+
+
 class EbeeEngine:
+
     def __init__(
         self,
         statefilepath="states.svg",
@@ -26,23 +29,30 @@ class EbeeEngine:
         self.currentturnnumber = 1
         self.countriesatwarset = set()
 
+
     def on(self, eventname, callback):
         return self.eventbus.subscribe(eventname, callback) #susbcribe
+
 
     def subscribe(self, eventname, callback):
         return self.eventbus.subscribe(eventname, callback) #same 
 
+
     def off(self, eventname, callback):
         return self.eventbus.unsubscribe(eventname, callback) # unsubscribe from event
+
 
     def unsubscribe(self, eventname, callback):
         return self.eventbus.unsubscribe(eventname, callback) # same thing
 
+
     def emit(self, eventname, payload):
         self.eventbus.emit(eventname, payload)
 
+
     def onWarDeclaration(self, callback):
         return self.on(EngineEventType.WARDECLARED, callback) # war declaration event
+
 
     def loadworld(self, onprogress=None):
         self.stateshapelist = core.loadsvgshapes(self.statefilepath, onprogress=onprogress)
@@ -107,6 +117,7 @@ class EbeeEngine:
 
         return True
 
+
     def declarewar(self, attackercountry, defendercountry):
         if not attackercountry or not defendercountry or attackercountry == defendercountry:
             return None
@@ -119,6 +130,7 @@ class EbeeEngine:
         }
         self.emit(EngineEventType.WARDECLARED, payload)
         return payload
+
 
     def getcountrydata(self, countryname):
         if not countryname or not self.provincemap:
@@ -155,3 +167,5 @@ class EbeeEngine:
             "atWarWith": sorted(self.countriesatwarset),
             "turn": self.currentturnnumber,
         }
+
+

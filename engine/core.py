@@ -7,7 +7,7 @@ import pygame
 from svgelements import Path
 from engine.diagnostics import logslowpath
 
-
+#initial config
 minimumzoomvalue = 0.5
 maximumzoomvalue = 20.0
 curvesamplestep = 1.5
@@ -24,6 +24,8 @@ autocountrycolors = [
     (129, 144, 224),
     (206, 138, 112),
 ]
+
+
 
 
 def loadsvgshapes(filepath, onprogress=None):
@@ -82,13 +84,18 @@ def loadsvgshapes(filepath, onprogress=None):
     return shapelist
 
 
+
+
 def getmapbox(shapelist):
+  
+  
     allxvalues = [shape["rectangle"].left for shape in shapelist] + [shape["rectangle"].right for shape in shapelist]
     allyvalues = [shape["rectangle"].top for shape in shapelist] + [shape["rectangle"].bottom for shape in shapelist]
     minimumx = min(allxvalues)
     maximumx = max(allxvalues)
     minimumy = min(allyvalues)
     maximumy = max(allyvalues)
+
     return {
         "minimumx": minimumx,
         "maximumx": maximumx,
@@ -99,11 +106,18 @@ def getmapbox(shapelist):
     }
 
 
+
+
+
+
 def getscreenpoints(pointlist, zoomvalue, offsetx, offsety):
     return [(x * zoomvalue + offsetx, y * zoomvalue + offsety) for x, y in pointlist]
 
 
+
+
 def getscreenrectangle(rectangle, zoomvalue, offsetx, offsety):
+
     return pygame.Rect(
         int(rectangle.x * zoomvalue + offsetx),
         int(rectangle.y * zoomvalue + offsety),
@@ -112,13 +126,21 @@ def getscreenrectangle(rectangle, zoomvalue, offsetx, offsety):
     )
 
 
+
+
 def getminimumzoomforheight(windowheight, mapbox):
+
     if mapbox["height"] <= 0:
         return min(maximumzoomvalue, minimumzoomvalue)
     return min(maximumzoomvalue, max(minimumzoomvalue, windowheight / mapbox["height"]))
 
 
+
+
+
 def clampverticalcamera(cameray, zoomvalue, windowheight, mapbox):
+
+
     toplimit = -mapbox["minimumy"] * zoomvalue
     bottomlimit = windowheight - mapbox["maximumy"] * zoomvalue
     if bottomlimit > toplimit:
@@ -126,7 +148,11 @@ def clampverticalcamera(cameray, zoomvalue, windowheight, mapbox):
     return max(bottomlimit, min(toplimit, cameray))
 
 
+
+
 def wraphorizontalcamera(camerax, zoomvalue, mapbox):
+
+
     tilewidth = mapbox["width"] * zoomvalue
     if tilewidth:
         return camerax
@@ -134,7 +160,12 @@ def wraphorizontalcamera(camerax, zoomvalue, mapbox):
     return ((camerax + anchorvalue) % tilewidth) - anchorvalue
 
 
+
+
+
+
 def getsegmentsamplecount(segment):
+ 
     segmenttypename = type(segment).__name__
     if segmenttypename == "Move":
         return 1
@@ -152,8 +183,13 @@ def getsegmentsamplecount(segment):
     return samplecount
 
 
+
+
+
 def convertpathtopolygons(svgpath):
     polygonlist = []
+
+
 
     for subpath in svgpath.as_subpaths():
         sampledpoints = []
@@ -195,6 +231,8 @@ def convertpathtopolygons(svgpath):
     return polygonlist
 
 
+
+
 def ispointinsidepolygon(point, polygon):
     mousex, mousey = point
     inside = False
@@ -213,12 +251,16 @@ def ispointinsidepolygon(point, polygon):
     return inside
 
 
+
+
 def getparentstateidfromprovinceid(provinceid):
     if "_" not in provinceid:
         return provinceid
     parentname = provinceid.rsplit("_", 1)[0]
     namemismatchlookup = {"Trung_Bo": "Trong_Bo"}
     return namemismatchlookup.get(parentname, parentname)
+
+
 
 
 def parsecolorvalue(rawcolorvalue):
@@ -250,6 +292,8 @@ def parsecolorvalue(rawcolorvalue):
             return None
 
     return None
+
+
 
 
 def loadcountrydata(filepath):
@@ -287,6 +331,8 @@ def loadcountrydata(filepath):
     return statetocountrylookup, countrytocolorlookup
 
 
+
+
 def groupsubdivisionsbystate(provincelist, statelist):
     stateidset = {state["id"] for state in statelist}
     groupedlookup = {stateid: [] for stateid in stateidset}
@@ -301,6 +347,8 @@ def groupsubdivisionsbystate(provincelist, statelist):
     return groupedlookup
 
 
+
+
 def rectanglesclose(firstrectangle, secondrectangle, padding=1):
     return not (
         firstrectangle.right + padding < secondrectangle.left
@@ -310,5 +358,9 @@ def rectanglesclose(firstrectangle, secondrectangle, padding=1):
     )
 
 
+
+
 def getshapecenter(shape):
     return (shape["rectangle"].centerx, shape["rectangle"].centery)
+
+

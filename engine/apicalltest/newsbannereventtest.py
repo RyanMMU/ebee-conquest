@@ -9,6 +9,8 @@ from engine import EngineEventType
 
 
 @dataclass
+
+
 class NewsItem:
     title: str
     description: str
@@ -16,7 +18,10 @@ class NewsItem:
     priority: int = 0
 
 
+
+
 class NewsSystem:
+
 
     def __init__(self, eventbus):
         self.bus = eventbus
@@ -25,6 +30,7 @@ class NewsSystem:
         self.subs = []
 
         # print("NewsSystem init", eventbus)
+
 
     def start(self):
 
@@ -37,12 +43,14 @@ class NewsSystem:
         self._sub("countrycollapsed", self.oncountrycollapsed)  # special wrapper
         self._pullnext()
 
+
     def stop(self):
 
         # print("stopping news system")
         for eventname, cb in self.subs:
             self.bus.unsubscribe(eventname, cb)
         self.subs.clear()
+
 
     def _sub(self, eventname, cb):
 
@@ -52,6 +60,7 @@ class NewsSystem:
 
         # print("sub", eventname)
 
+
     def _push(self, item):
 
         # print("push news", item.title)
@@ -60,15 +69,18 @@ class NewsSystem:
         if self.current is None:
             self._pullnext()
 
+
     def _pullnext(self):
 
 
         self.current = self.queue.popleft() if self.queue else None
 
+
     def closecurrent(self):
 
         # print("close current news")
         self._pullnext()
+
 
     def pushnews(self, title, description, imagekey="placeholder", priority=0):
 
@@ -82,6 +94,7 @@ class NewsSystem:
             )
         )
 
+
     def onnewspopup(self, p):
 
         # custom popup from dev console or API
@@ -90,6 +103,7 @@ class NewsSystem:
         imagekey = str(p.get("imagekey", "placeholder"))
         priority = int(p.get("priority", 0))
         self.pushnews(title, description, imagekey=imagekey, priority=priority)
+
 
     def onwardeclared(self, p):
 
@@ -101,6 +115,7 @@ class NewsSystem:
             priority=5,
         )
 
+
     def onprovincecontrolchanged(self, p):
 
         # print("control change", p)
@@ -110,6 +125,7 @@ class NewsSystem:
             imagekey="capture",
             priority=2,
         )
+
 
     def oncountrycollapsed(self, p):
 
@@ -124,11 +140,15 @@ class NewsSystem:
         )
 
 
+
+
 class NewsPopup:
+
 
     def __init__(self):
         self.closerect = pygame.Rect(0, 0, 0, 0)
         # print("popup made")
+
 
     def draw(self, screen, fonts, item):
 
@@ -171,10 +191,13 @@ class NewsPopup:
         screen.blit(txt, txt.get_rect(center=self.closerect.center))
 
 
+
     def handleclick(self, pos):
         # print("click?", pos)
 
         return self.closerect.collidepoint(pos)
+
+
 
 
 def wraptext(text, font, maxwidth):
@@ -195,3 +218,5 @@ def wraptext(text, font, maxwidth):
         lines.append(" ".join(current))
 
     return lines
+
+
