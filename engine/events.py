@@ -6,21 +6,23 @@ from enum import Enum
 
 class EngineEventType(str, Enum):
     WORLDLOADED = "worldloaded"
+
     COUNTRYCANDIDATESELECTED = "countrycandidateselected"
     PLAYERCOUNTRYSELECTED = "playercountryselected"
     STATESELECTED = "stateselected"
     PROVINCESELECTED = "provinceselected"
+
     MOVEORDERCREATED = "moveordercreated"
     MOVEORDERFINISHED = "moveorderfinished"
     COMBATRESOLVED = "combatresolved"
     PROVINCECONTROLCHANGED = "provincecontrolchanged"
+
     TURNADVANCED = "turnadvanced"
     WARDECLARED = "wardeclared"
     TROOPSRECRUITED = "troopsrecruited"
 
 
-# MAIN EVENT HANDLINGGG
-
+# main event handling 
 
 class EventBus:
 
@@ -28,17 +30,19 @@ class EventBus:
         self.subscribers = defaultdict(list)
 
     @staticmethod
-
     def eventkey(eventname):
         if isinstance(eventname, EngineEventType):
             return eventname.value
         return str(eventname)
 
 
+
     def subscribe(self, eventname, callback):
         key = self.eventkey(eventname)
         self.subscribers[key].append(callback)
         return callback
+
+
 
 
     def unsubscribe(self, eventname, callback):
@@ -48,6 +52,7 @@ class EventBus:
             callbacklist.remove(callback)
             return True
         return False
+
 
 
     def emit(self, eventname, payload):

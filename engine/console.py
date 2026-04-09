@@ -176,8 +176,8 @@ class developmentconsole:
         else:
             basecolor = (70, 70, 70)#gray
 
-        pygame.draw.rect(screen, basecolor, rectangle, border_radius=6)
-        pygame.draw.rect(screen, (35, 35, 35), rectangle, width=1, border_radius=6) #dark border
+        pygame.draw.rect(screen, basecolor, rectangle, border_radius=1)
+        pygame.draw.rect(screen, (35, 35, 35), rectangle, width=1, border_radius=1) #dark border
         textcolor = (240, 240, 240) if enabled else (145, 145, 145) # light if enabled dark if not
         labelsurface = fontobject.render(textvalue, True, textcolor)
         screen.blit(labelsurface, labelsurface.get_rect(center=rectangle.center))
