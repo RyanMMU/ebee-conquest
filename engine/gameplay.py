@@ -1,6 +1,7 @@
 import heapq
 import math
 from .core import getparentstateidfromprovinceid, getshapecenter, rectanglesclose
+from .events import EngineEventType
 
 
 terrainmovecostlookup = {
@@ -157,6 +158,8 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
             parentlookup[nextprovinceid] = currentprovinceid
             costlookup[nextprovinceid] = newcost
             estimateddistance = math.hypot(goalcenter[0] - nextcenter[0], goalcenter[1] - nextcenter[1])
+
+            
             heapq.heappush(openheap, (newcost + estimateddistance, nextprovinceid))
 
     return []
@@ -164,12 +167,15 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
 
 
 
-def processmovementorders(movementorderlist, provincemap, emitwarndeclaration=None):
+def processmovementorders(movementorderlist, provincemap):
     finishedorderlist = []
 
 
     
     for movementorder in movementorderlist:
+
+
+
         movementpoints = 1.0 * float(movementorder.get("speedmodifier", 1.0))
         pathlist = movementorder["path"]
         currentpathindex = movementorder["index"]
@@ -199,11 +205,44 @@ def processmovementorders(movementorderlist, provincemap, emitwarndeclaration=No
                 defenders = nextprovince["troops"]
                 if attackers <= defenders:
                     nextprovince["troops"] = defenders - attackers
+
+
+
+                    # combat resolved
+                    if emit is not None:
+                        emit(
+                            EngineEventType.COMBATRESOLVED,
+                            {
+                                "provinceId": nextprovinceid,
+                                "attackersBefore": attackers,
+                                "defendersBefore": defenders,
+                                "attackersAfter": 0,
+                                "defendersAfter": nextprovince["troops"],
+                            },
+                        )
+
+
                     movementorder["amount"] = 0
                     break
 
                 movementorder["amount"] = attackers - defenders
                 nextprovince["troops"] = 0
+
+
+                #comabt resolved
+                if emit is not None:
+                    emit(
+                        EngineEventType.COMBATRESOLVED,
+                        {
+                            "provinceId": nextprovinceid,
+                            "attackersBefore": attackers,
+                            "defendersBefore": defenders,
+                            "attackersAfter": movementorder["amount"],
+                            "defendersAfter": 0,
+                        },
+                    )
+
+
 
             movementpoints -= movecost
             currentpathindex += 1
@@ -214,17 +253,48 @@ def processmovementorders(movementorderlist, provincemap, emitwarndeclaration=No
                 and nextcountry != movingcountry
                 and nextprovince["troops"] <= 0
             ):
+                previouscontroller = nextcountry
                 setprovincecontroller(nextprovince, movingcountry, movingcountrycolor)
+                if emit is not None:
+                    emit(
+                        EngineEventType.PROVINCECONTROLCHANGED,
+                        {
+                            "provinceId": nextprovinceid,
+                            "previousController": previouscontroller,
+                            "newController": movingcountry,
+                        },
+                    )
 
         movementorder["index"] = currentpathindex
         movementorder["current"] = pathlist[currentpathindex]
 
         if movementorder["amount"] <= 0:
             finishedorderlist.append(movementorder)
+            if emit is not None:
+                emit(
+                    EngineEventType.MOVEORDERFINISHED,
+                    {
+                        "path": list(pathlist),
+                        "finalProvinceId": pathlist[currentpathindex],
+                        "remainingTroops": 0,
+                        "reason": "destroyed",
+                    },
+                )
         elif currentpathindex >= len(pathlist) - 1:
             destinationprovinceid = pathlist[-1]
             provincemap[destinationprovinceid]["troops"] += movementorder["amount"]
             finishedorderlist.append(movementorder)
+
+            if emit is not None:
+                emit(
+                    EngineEventType.MOVEORDERFINISHED,
+                    {
+                        "path": list(pathlist),
+                        "finalProvinceId": destinationprovinceid,
+                        "remainingTroops": movementorder["amount"],
+                        "reason": "arrived",
+                    },
+                )
 
     for finishedorder in finishedorderlist:
         movementorderlist.remove(finishedorder)

@@ -1370,6 +1370,7 @@ def main(eventbus=None):
                             playerpopulation += max(10, ownedprovincecount // 3)
                         currentturnnumber += 1
                         routepreviewset = set()
+                        
                         eventbus.emit(
                             EngineEventType.TURNADVANCED,
                             {
