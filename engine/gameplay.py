@@ -159,7 +159,7 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
             costlookup[nextprovinceid] = newcost
             estimateddistance = math.hypot(goalcenter[0] - nextcenter[0], goalcenter[1] - nextcenter[1])
 
-            
+
             heapq.heappush(openheap, (newcost + estimateddistance, nextprovinceid))
 
     return []
@@ -167,7 +167,7 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
 
 
 
-def processmovementorders(movementorderlist, provincemap):
+def processmovementorders(movementorderlist, provincemap, emit):
     finishedorderlist = []
 
 

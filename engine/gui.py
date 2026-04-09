@@ -45,8 +45,8 @@ def gui_drawbutton(screen, rectangle, textvalue, fontobject, enabled=True, pulse
     else:
         basecolor = (70, 70, 70)
 
-    pygame.draw.rect(screen, basecolor, rectangle, border_radius=6)
-    pygame.draw.rect(screen, (35, 35, 35), rectangle, width=1, border_radius=6)
+    pygame.draw.rect(screen, basecolor, rectangle, border_radius=1)
+    pygame.draw.rect(screen, (35, 35, 35), rectangle, width=1, border_radius=1)
     textcolor = (240, 240, 240) if enabled else (145, 145, 145)
     labelsurface = fontobject.render(textvalue, True, textcolor)
     screen.blit(labelsurface, labelsurface.get_rect(center=rectangle.center))
@@ -180,6 +180,7 @@ def gui_drawgameplayhud(
 
     recruitbuttonrectangle = pygame.Rect(windowwidth - 390, windowheight - 56, 170, 38)
     endturnbuttonrectangle = pygame.Rect(windowwidth - 210, windowheight - 56, 190, 38)
+
     gui_drawbutton(screen, recruitbuttonrectangle, f"recruit +{recruitamount}", fontobject, enabled=recruitenabled)
     gui_drawbutton(screen, endturnbuttonrectangle, "end turn", fontobject, enabled=True)
 
