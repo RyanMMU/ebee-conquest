@@ -71,23 +71,24 @@ while run:
    
         
         txt1 = main_font.render('START', True, text)
-        screen.blit(txt1, (button_m+50,165))
-
+        txt1_rect = txt1.get_rect(center=(button_m + button_width // 2, 150 + button_height // 2))
+        screen.blit(txt1, txt1_rect)
       
         color = dark_blue if button_m < mouse[0] < button_m + button_width and 250 < mouse[1] < 310 else h_blue
 
  
         pygame.draw.rect(screen, color,(button_m ,250,button_width,button_height) )
         txt2 = main_font.render('SETTINGS', True, text)
-        screen.blit(txt2,(button_m + 35, 265))
+        txt2_rect = txt2.get_rect(center=(button_m + button_width // 2, 250 + button_height // 2))
+        screen.blit(txt2, txt2_rect)
 
    
        
         color = dark_blue if button_m < mouse[0] < button_m + button_width and 350 < mouse[1] < 410 else h_blue
         pygame.draw.rect(screen, color,(button_m,350,button_width,button_height))
         txt3 = main_font.render('QUIT', True, text)
-        screen.blit(txt3,(button_m + 65,365))
-
+        txt3_rect = txt3.get_rect(center=(button_m + button_width // 2, 350 + button_height // 2))
+        screen.blit(txt3, txt3_rect)
 
     elif menu == 'settings':
         t2 = big_font.render('SETTINGS', True, text)
@@ -98,7 +99,8 @@ while run:
         color = dark_blue if button_m < mouse[0] < button_m + button_width and 450 < mouse[1] < 510 else h_blue
         pygame.draw.rect(screen, color, (button_m, 450, button_width, button_height))
         txt4 = main_font.render('BACK', True, text)
-        screen.blit(txt4, (button_m + 65, 475))
+        txt4_rect = txt4.get_rect(center=(button_m + button_width // 2, 450 + button_height // 2))
+        screen.blit(txt4, txt4_rect)
 
 
 
