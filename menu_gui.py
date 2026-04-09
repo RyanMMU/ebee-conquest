@@ -9,16 +9,15 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
 pygame.display.set_caption('game menu') 
 
-black = (10,10,10)
 dark_blue = (15,25,45)
 h_blue = (30,45,70)
-text= (255, 215, 0)
+text= (245, 200, 0)
 
 hover_color = h_blue
 
 text_color = dark_blue
-main_font = pygame.font.SysFont('georgia', 30)
-big_font = pygame.font.SysFont('georgia', 50)
+main_font = pygame.font.SysFont('BeaufortforLoL-Bold.ttf', 50)
+big_font = pygame.font.SysFont('BeaufortforLoL-Bold.ttf', 50)
 
 menu = 'main' 
 run = True
@@ -70,7 +69,7 @@ while run:
         pygame.draw.rect(screen, color, (button_m ,150,button_width,button_height))
    
         
-        txt1 = main_font.render('START', True, text)
+        txt1 = main_font.render('NEW GAME', True, text)
         txt1_rect = txt1.get_rect(center=(button_m + button_width // 2, 150 + button_height // 2))
         screen.blit(txt1, txt1_rect)
       
