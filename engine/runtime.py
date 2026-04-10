@@ -1279,11 +1279,20 @@ def main(eventbus=None):
 
 
             #GUI INTERACTIONS
+
+           # elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                # if newssystem.current and newspopup.handleclick(event.pos):
+                #     newssystem.closecurrent()
+                #     continue
+                # if newssystem.current:
+                #     continue
+                # 
+                # if devconsole.handleleftclick(event.pos):
+   
+   
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if newssystem.current and newspopup.handleclick(event.pos):
                     newssystem.closecurrent()
-                    continue
-                if newssystem.current:
                     continue
 
                 if devconsole.handleleftclick(event.pos):
