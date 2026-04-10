@@ -220,8 +220,9 @@ class developmentconsole:
             int(windowwidth * 0.72),
             int(windowheight * 0.72),
         )
-        pygame.draw.rect(screen, (18, 18, 18), self.panelrectangle, border_radius=8)
-        pygame.draw.rect(screen, (120, 120, 120), self.panelrectangle, width=1, border_radius=8)
+        #window
+        pygame.draw.rect(screen, (18, 18, 18), self.panelrectangle, border_radius=1)
+        pygame.draw.rect(screen, (120, 120, 120), self.panelrectangle, width=1, border_radius=1)
 
         titletext = fontobject.render("dev console", True, (240, 240, 240))
         screen.blit(titletext, (self.panelrectangle.x + 12, self.panelrectangle.y + 10))
@@ -235,6 +236,8 @@ class developmentconsole:
             self.panelrectangle.width - 24,
             self.panelrectangle.height - 94,
         )
+
+        
         pygame.draw.rect(screen, (10, 10, 10), logviewrectangle)
         pygame.draw.rect(screen, (70, 70, 70), logviewrectangle, width=1)
 

@@ -671,78 +671,82 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
 
 
 
-def processmovementorders(movementorderlist, provincemap):
-    finishedorderlist = []
+# def processmovementorders(movementorderlist, provincemap):
+#     finishedorderlist = []
+# 
+# 
+# 
+#     for movementorder in movementorderlist:
+#         movementpoints = 1.0 * float(movementorder.get("speedmodifier", 1.0))
+#         pathlist = movementorder["path"]
+#         currentpathindex = movementorder["index"]
+#         movingcountry = movementorder.get("controllercountry", movementorder.get("country"))
+#         movingcountrycolor = movementorder.get("countrycolor")
+# 
+#         while currentpathindex < len(pathlist) - 1:
+# 
+# 
+#             nextprovinceid = pathlist[currentpathindex + 1]
+#             nextprovince = provincemap[nextprovinceid]
+#             movecost = getterrainmovecost(nextprovince)
+# 
+#             if movementpoints < movecost: # move next turn if not enough
+#                 break
+# 
+#             if movingcountry is None: 
+#                 movingcountry = getprovincecontroller(provincemap[pathlist[currentpathindex]])
+#                 movementorder["controllercountry"] = movingcountry
+#                 movementorder["country"] = movingcountry
+# 
+#             nextcountry = getprovincecontroller(nextprovince)
+#             if (
+#                 movingcountry is not None
+#                 and nextcountry is not None
+#                 and nextcountry != movingcountry
+#                 and nextprovince["troops"] > 0
+#             ):
+#                 attackers = movementorder["amount"]
+#                 defenders = nextprovince["troops"]
+#                 if attackers <= defenders:
+#                     nextprovince["troops"] = defenders - attackers
+#                     movementorder["amount"] = 0
+#                     break
+# 
+#                 movementorder["amount"] = attackers - defenders
+#                 nextprovince["troops"] = 0
+# 
+# 
+# 
+#             movementpoints -= movecost
+#             currentpathindex += 1
+# 
+#             if (
+#                 movingcountry is not None
+#                 and nextcountry is not None
+#                 and nextcountry != movingcountry
+#                 and nextprovince["troops"] <= 0
+#             ):
+#                 setprovincecontroller(nextprovince, movingcountry, movingcountrycolor)
+# 
+#         movementorder["index"] = currentpathindex
+#         movementorder["current"] = pathlist[currentpathindex]
+# 
+# 
+# 
+# 
+#         if movementorder["amount"] <= 0:
+#             finishedorderlist.append(movementorder)
+#         elif currentpathindex >= len(pathlist) - 1:
+#             destinationprovinceid = pathlist[-1]
+#             provincemap[destinationprovinceid]["troops"] += movementorder["amount"]
+#             finishedorderlist.append(movementorder)
+# 
+#     for finishedorder in finishedorderlist:
+#         movementorderlist.remove(finishedorder)
 
 
 
-    for movementorder in movementorderlist:
-        movementpoints = 1.0 * float(movementorder.get("speedmodifier", 1.0))
-        pathlist = movementorder["path"]
-        currentpathindex = movementorder["index"]
-        movingcountry = movementorder.get("controllercountry", movementorder.get("country"))
-        movingcountrycolor = movementorder.get("countrycolor")
 
-        while currentpathindex < len(pathlist) - 1:
-
-
-            nextprovinceid = pathlist[currentpathindex + 1]
-            nextprovince = provincemap[nextprovinceid]
-            movecost = getterrainmovecost(nextprovince)
-
-            if movementpoints < movecost: # move next turn if not enough
-                break
-
-            if movingcountry is None: 
-                movingcountry = getprovincecontroller(provincemap[pathlist[currentpathindex]])
-                movementorder["controllercountry"] = movingcountry
-                movementorder["country"] = movingcountry
-
-            nextcountry = getprovincecontroller(nextprovince)
-            if (
-                movingcountry is not None
-                and nextcountry is not None
-                and nextcountry != movingcountry
-                and nextprovince["troops"] > 0
-            ):
-                attackers = movementorder["amount"]
-                defenders = nextprovince["troops"]
-                if attackers <= defenders:
-                    nextprovince["troops"] = defenders - attackers
-                    movementorder["amount"] = 0
-                    break
-
-                movementorder["amount"] = attackers - defenders
-                nextprovince["troops"] = 0
-
-
-
-            movementpoints -= movecost
-            currentpathindex += 1
-
-            if (
-                movingcountry is not None
-                and nextcountry is not None
-                and nextcountry != movingcountry
-                and nextprovince["troops"] <= 0
-            ):
-                setprovincecontroller(nextprovince, movingcountry, movingcountrycolor)
-
-        movementorder["index"] = currentpathindex
-        movementorder["current"] = pathlist[currentpathindex]
-
-
-
-
-        if movementorder["amount"] <= 0:
-            finishedorderlist.append(movementorder)
-        elif currentpathindex >= len(pathlist) - 1:
-            destinationprovinceid = pathlist[-1]
-            provincemap[destinationprovinceid]["troops"] += movementorder["amount"]
-            finishedorderlist.append(movementorder)
-
-    for finishedorder in finishedorderlist:
-        movementorderlist.remove(finishedorder)
 # TODO: handle occupation, changing the province ownership when all enemy troops are removed and the player moves into the province, or the npc moves into the province or the players province
 
 
@@ -818,6 +822,8 @@ def main(eventbus=None):
     else:
         pygame.display.set_caption("ebee engine playtest apr 1")
 
+
+
     normalfont = pygame.font.SysFont("Arial", 14)
     smallfont = pygame.font.SysFont("Arial", 12)
     titlefont = pygame.font.SysFont("Arial", 32, bold=True)
@@ -826,7 +832,9 @@ def main(eventbus=None):
     developmentmode = loaddevmodeflag("dev.txt")
 
 
-    logstartupdiagnostics(startupbegintimestamp, "fonts ready", f"development_mode={developmentmode}")
+
+
+    logstartupdiagnostics(startupbegintimestamp, "fonts done", f"development_mode={developmentmode}")
     if not drawloadingscreen(screen, loadingtitlefont, loadingtextfont, 0, 1):
         pygame.quit()
         return
@@ -904,7 +912,7 @@ def main(eventbus=None):
 
     logstartupdiagnostics(startupbegintimestamp, "provinces loaded", f"count={len(provinceshapelist)}")
     provinceenrichedlist = prepareprovincemetadata(provinceshapelist)
-    logstartupdiagnostics(startupbegintimestamp, "province metadata ready", f"count={len(provinceenrichedlist)}")
+    logstartupdiagnostics(startupbegintimestamp, "province metadata done", f"count={len(provinceenrichedlist)}")
 
 
 
@@ -942,7 +950,7 @@ def main(eventbus=None):
     totaledges = sum(len(neighborset) for neighborset in provincegraph.values()) // 2
     logstartupdiagnostics(
         startupbegintimestamp,
-        "province graph ready",
+        "province graph done",
         f"nodes={len(provincegraph)} edges={totaledges}",
     )
 
@@ -989,6 +997,12 @@ def main(eventbus=None):
 
 
 
+
+
+
+
+
+
     clock = pygame.time.Clock()
     expandedstateid = None
     selectedprovinceid = None
@@ -1015,6 +1029,12 @@ def main(eventbus=None):
     newssystem = NewsSystem(eventbus)
     newssystem.start()
     newspopup = NewsPopup()
+
+
+
+
+
+
 
 
     isrunning = True

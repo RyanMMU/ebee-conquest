@@ -163,13 +163,13 @@ class NewsPopup:
         overlay.fill((0, 0, 0, 140))
         screen.blit(overlay, (0, 0))
         panel = pygame.Rect(w // 2 - 260, h // 2 - 180, 520, 360)
-        pygame.draw.rect(screen, (24, 24, 30), panel, border_radius=10)
-        pygame.draw.rect(screen, (90, 90, 110), panel, width=2, border_radius=10)
+        pygame.draw.rect(screen, (24, 24, 30), panel, border_radius=1)
+        pygame.draw.rect(screen, (90, 90, 110), panel, width=2, border_radius=1)
         title = titlefont.render(item.title, True, (240, 240, 240))
         screen.blit(title, (panel.x + 16, panel.y + 14))
         imgrect = pygame.Rect(panel.x + 16, panel.y + 58, panel.width - 32, 140)
-        pygame.draw.rect(screen, (50, 50, 62), imgrect, border_radius=6)
-        pygame.draw.rect(screen, (100, 100, 120), imgrect, width=1, border_radius=6)
+        pygame.draw.rect(screen, (50, 50, 62), imgrect, border_radius=1)
+        pygame.draw.rect(screen, (100, 100, 120), imgrect, width=1, border_radius=1)
         label = bodyfont.render("TO BE IMPLEMENTED", True, (180, 180, 190))
         screen.blit(label, label.get_rect(center=imgrect.center))
         y = imgrect.bottom + 12
@@ -182,8 +182,8 @@ class NewsPopup:
             y += 20
 
         self.closerect = pygame.Rect(panel.right - 116, panel.bottom - 46, 100, 30)
-        pygame.draw.rect(screen, (56, 116, 198), self.closerect, border_radius=6)
-        pygame.draw.rect(screen, (30, 30, 30), self.closerect, width=1, border_radius=6)
+        pygame.draw.rect(screen, (56, 116, 198), self.closerect, border_radius=1)
+        pygame.draw.rect(screen, (30, 30, 30), self.closerect, width=1, border_radius=1)
         txt = bodyfont.render("EXIT DEV MODE", True, (240, 240, 240))
         screen.blit(txt, txt.get_rect(center=self.closerect.center))
 

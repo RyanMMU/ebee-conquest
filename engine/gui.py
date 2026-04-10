@@ -60,8 +60,8 @@ def gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
     labelrectangle.inflate_ip(10, 6)
     labelrectangle.center = (int(centerposition[0]), int(centerposition[1]))
     # this doesnt work as cleanly as i want it tobecause provinces are not always circular or rectang
-    pygame.draw.rect(screen, (0, 0, 0), labelrectangle, border_radius=4)
-    pygame.draw.rect(screen, (165, 165, 165), labelrectangle, width=1, border_radius=4)
+    pygame.draw.rect(screen, (0, 0, 0), labelrectangle, border_radius=1)
+    pygame.draw.rect(screen, (165, 165, 165), labelrectangle, width=1, border_radius=1)
     screen.blit(labelsurface, labelsurface.get_rect(center=labelrectangle.center))
 
 
@@ -107,8 +107,8 @@ def gui_drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetco
     menuy = (windowheight - menuheight) // 2
     menurectangle = pygame.Rect(menux, menuy, menuwidth, menuheight)
 
-    pygame.draw.rect(screen, (26, 26, 35), menurectangle, border_radius=10)
-    pygame.draw.rect(screen, (92, 92, 116), menurectangle, width=2, border_radius=10)
+    pygame.draw.rect(screen, (26, 26, 35), menurectangle, border_radius=1)
+    pygame.draw.rect(screen, (92, 92, 116), menurectangle, width=2, border_radius=1)
 
     titlelabel = fontobject.render("Country actions", True, (240, 240, 240)) #titletext for country meus
     screen.blit(titlelabel, (menurectangle.x + 12, menurectangle.y + 10))
