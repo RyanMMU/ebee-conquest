@@ -27,6 +27,14 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
     def getprovinceid(rawtext):
         return lowercaselookup.get(rawtext.lower())
 
+    def getowner(province):
+        return province.get("ownercountry", province.get("country"))
+
+    def getcontroller(province):
+        return province.get("controllercountry", province.get("country"))
+
+    validterrainset = {"plains", "forest", "hills", "mountains", "desert", "swamp", "urban"}
+
 
 
 
@@ -71,7 +79,154 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
         return f"ok annexed {provinceid} to {playercountry}"
 
 
+    if commandname == "set_troops" and len(commandparts) == 3:
+
+        provinceid = getprovinceid(commandparts[1])
+
+        if provinceid is None:
+            return "province not found"
+        try:
+            amountvalue = max(0, int(commandparts[2]))
+        except ValueError:
+            return "not int"
+        
+
+        provincemap[provinceid]["troops"] = amountvalue
+
+
+        return f"ok {provinceid} troops={provincemap[provinceid]['troops']}"
+
+
+    if commandname == "set_terrain" and len(commandparts) == 3:
+        provinceid = getprovinceid(commandparts[1])
+
+        if provinceid is None:
+            return "province not found"
+        terrainvalue = commandparts[2].lower().strip()
+        if terrainvalue not in validterrainset:
+            return f"invalid terrain. use: {', '.join(sorted(validterrainset))}"
+        
+        
+        provincemap[provinceid]["terrain"] = terrainvalue
+
+
+        return f"ok {provinceid} terrain={terrainvalue}"
+
+
+    if commandname == "set_owner" and len(commandparts) >= 3:
+
+        provinceid = getprovinceid(commandparts[1])
+
+        if provinceid is None:
+            return "province not found"
+        newowner = " ".join(commandparts[2:]).strip()
+        if not newowner:
+            return "owner required"
+        
+
+        provincemap[provinceid]["ownercountry"] = newowner
+
+
+        return f"ok {provinceid} owner={newowner}"
+
+
+    if commandname == "set_controller" and len(commandparts) >= 3:
+        provinceid = getprovinceid(commandparts[1])
+
+
+        if provinceid is None:
+            return "province not found"
+        newcontroller = " ".join(commandparts[2:]).strip()
+        if not newcontroller:
+            return "controller required"
+        
+
+        provincemap[provinceid]["controllercountry"] = newcontroller
+        provincemap[provinceid]["country"] = newcontroller
+        provincemap[provinceid]["countrycolor"] = countrytocolor.get(newcontroller, fallbackcolor)
+
+
+        return f"ok {provinceid} controller={newcontroller}"
+
+
+    if commandname == "province" and len(commandparts) == 2:
+        provinceid = getprovinceid(commandparts[1])
+
+        if provinceid is None:
+            return "province not found"
+
+
+
+        province = provincemap[provinceid]
+        owner = getowner(province)
+        controller = getcontroller(province)
+        troops = province.get("troops", 0)
+        terrain = province.get("terrain", "plains")
+
+
+
+        return f"{provinceid} | owner={owner} controller={controller} troops={troops} terrain={terrain}"
+
+
+
+
+    if commandname == "find" and len(commandparts) >= 2:
+
+        keyword = " ".join(commandparts[1:]).strip().lower()
+
+        if not keyword:
+            return "keyword pls"
+        matches = [provinceid for provinceid in provincemap.keys() if keyword in provinceid.lower()]
+        if not matches:
+            return "no matches"
+        
+
+        return f"matches({len(matches)}): {', '.join(matches[:12])}" + (" ..." if len(matches) > 12 else "")
+
+
+
+
+    if commandname == "stats" and len(commandparts) == 1:
+        totalprovincecount = len(provincemap)
+        totaltroops = sum(max(0, int(province.get("troops", 0))) for province in provincemap.values())
+        controllercountlookup = {}
+
+
+        for province in provincemap.values():
+            controller = getcontroller(province) or "None"
+            controllercountlookup[controller] = controllercountlookup.get(controller, 0) + 1
+        topcontrollers = sorted(controllercountlookup.items(),key=lambda item:item[1],reverse=True)[:6]
+        topcontrollertext = ", ".join(f"{name}:{count}" for name, count in topcontrollers)
+
+
+
+        return f"provinces={totalprovincecount} troops={totaltroops} controllers[{topcontrollertext}]"
+
+
+
+
+
+    if commandname == "country_stats":
+        targetcountry = " ".join(commandparts[1:]).strip() if len(commandparts) >= 2 else (playercountry or "")
+
+
+        if not targetcountry:
+            return "country pls"
+
+        owned = [p for p in provincemap.values() if getowner(p) == targetcountry]
+        controlled = [p for p in provincemap.values() if getcontroller(p) == targetcountry]
+        controlledtroops = sum(max(0, int(p.get("troops", 0))) for p in controlled)
+
+
+
+        return (
+            f"{targetcountry} | owned={len(owned)} controlled={len(controlled)} controlled_troops={controlledtroops}"
+        )
+
+
     if commandname == "news" and len(commandparts) >= 2:
+        if eventbus is None:
+            return "eventbus unavailable"
 
         
         rawtext = commandline.strip()[len(commandparts[0]):].strip()
@@ -130,15 +285,25 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
             return f"eval result: {result}"
         except Exception as e:
             return f"eval error: {e}"
-        """ Example eval:
+        """ example:
         provincemap.keys() = see all province id for debug
         provincemap['provinceid'] = read info about specific province
         playercountry = current country
         fallbackcolor = test color rendering
         """
 
+    if commandname == "help:debug" and len(commandparts) == 1:
+        return (
+            "debug: province [id], find [text], stats, country_stats [country], "
+            "set_troops [id] [n], set_terrain [id] [terrain], set_owner [id] [country], set_controller [id] [country]"
+        )
+
     if commandname == "help" and len(commandparts) == 1:
-        return "commands: add_troops [province] [amount], remove_troops [province] [amount], annex [province], news [title | description], collapse [country] [description], help, exit"
+        return (
+            "commands: add_troops [province] [amount], remove_troops [province] [amount], annex [province], "
+            "province [id], find [text], stats, country_stats [country], news [title | description], "
+            "collapse [country] [description], help:debug, help, exit"
+        )
 
 
 
@@ -183,6 +348,25 @@ class developmentconsole:
         screen.blit(labelsurface, labelsurface.get_rect(center=rectangle.center))
 
 
+
+    def wraptext(text, font, maxwidth):
+
+        # fix clip
+        words = text.split()
+        lines = []
+        current = []
+
+        for word in words:
+            test = " ".join(current + [word])
+            if font.size(test)[0] <= maxwidth:
+                current.append(word)
+            else:
+                lines.append(" ".join(current))
+                current = [word]
+        if current:
+            lines.append(" ".join(current))
+
+        return lines
     # the gui render code 
     #TODO: move this to gui.py
 
@@ -237,15 +421,38 @@ class developmentconsole:
             self.panelrectangle.height - 94,
         )
 
-        
+
         pygame.draw.rect(screen, (10, 10, 10), logviewrectangle)
         pygame.draw.rect(screen, (70, 70, 70), logviewrectangle, width=1)
 
-        maxrows = max(1, (logviewrectangle.height - 8) // 16)
-        visiblelines = self.loglines[-maxrows:]
+
+        lineheight = 16
+        maxtextwidth = logviewrectangle.width - 12
+        wrapped = []
+
+        for linevalue in self.loglines:
+            wrapped.extend(self.wraptext(linevalue, smallfontobject, maxtextwidth))
+
+        maxrows = max(1, (logviewrectangle.height - 8) // lineheight)
+        visiblelines = wrapped[-maxrows:]
+
+
+        #render to console
         for rowindex, linevalue in enumerate(visiblelines):
             linesurface = smallfontobject.render(linevalue, True, (180, 220, 180))
-            screen.blit(linesurface, (logviewrectangle.x + 6, logviewrectangle.y + 4 + rowindex * 16))
+            screen.blit(linesurface, (logviewrectangle.x + 6, logviewrectangle.y + 4 + rowindex * lineheight))
+
+
+        # maxrows = max(1, (logviewrectangle.height - 8) // 16)
+        # visiblelines = self.loglines[-maxrows:]
+
+
+        # #TO render log line into cosole
+        # for rowindex, linevalue in enumerate(visiblelines):
+        #     linesurface = smallfontobject.render(linevalue, True, (180, 220, 180))
+        #     screen.blit(linesurface, (logviewrectangle.x + 6, logviewrectangle.y + 4 + rowindex * 16))
+
+
 
         inputrectangle = pygame.Rect(
             self.panelrectangle.x + 12,
@@ -253,6 +460,8 @@ class developmentconsole:
             self.panelrectangle.width - 24,
             30,
         )
+
+
         pygame.draw.rect(screen, (22, 22, 22), inputrectangle)
         pygame.draw.rect(screen, (110, 110, 110), inputrectangle, width=1)
         inputsurface = smallfontobject.render("> " + self.inputtext, True, (230, 230, 230))
