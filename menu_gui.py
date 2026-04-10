@@ -11,19 +11,20 @@ pygame.display.set_caption('game menu')
 
 dark_blue = (15,25,45)
 h_blue = (30,45,70)
-text= (245, 200, 0)
+text= (254, 243, 198)
 
 hover_color = h_blue
 
 text_color = dark_blue
-main_font = pygame.font.SysFont('BeaufortforLoL-Bold.ttf', 50)
-big_font = pygame.font.SysFont('BeaufortforLoL-Bold.ttf', 50)
+main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 18)
+big_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 32)
 
 menu = 'main' 
 run = True
 
-button_width = 400
-button_height = 80
+percentchange = 0.8
+button_width = 400 * percentchange
+button_height = 80 * percentchange
 button_m=(WIDTH // 2) - (button_width // 2)
 
 bg_image = pygame.image.load('Group 1.png').convert()
