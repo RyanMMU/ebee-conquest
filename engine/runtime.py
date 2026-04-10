@@ -765,6 +765,7 @@ def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
 
     progressvalue = 0.0 if totalcount <= 0 else completedcount / totalcount
     progressvalue = max(0.0, min(1.0, progressvalue))
+
     screen.fill((18, 18, 22))
     #print("progress", progressvalue, completedcount, totalcount)
     windowwidth, windowheight = screen.get_size()
@@ -786,8 +787,8 @@ def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
     pygame.draw.rect(screen, (120, 190, 255), (barx, bary, int(barwidth * progressvalue), barheight), border_radius=1)
     pygame.draw.rect(screen, (120, 120, 130), (barx, bary, barwidth, barheight), 1, border_radius=1)
 
-    progresstext = smallfont.render(f"{completedcount}/{totalcount} provinces", True, (205, 205, 215))
-    screen.blit(progresstext, progresstext.get_rect(center=(windowwidth // 2, bary + 42)))
+    progresstext = smallfont.render(f"{completedcount}/{totalcount} provinces", True, (255, 255, 255))
+    screen.blit(progresstext, progresstext.get_rect(center=(windowwidth // 2, bary + 10)))
 
     pygame.display.flip()
     return True
