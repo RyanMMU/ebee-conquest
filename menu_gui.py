@@ -34,7 +34,7 @@ def glow(screen,x,y,w,h):
     for i in range(1,6):
         lighting = pygame.Surface((w + i*10, h + i*10), pygame.SRCALPHA)
         glow_color =(255,190,0,15)
-        pygame.draw.rect(lighting, glow_color, (0, 0, w + i*10, h + i*10), border_radius=12)
+        pygame.draw.rect(lighting, glow_color, (0, 0, w + i*10, h + i*10))
         
         screen.blit(lighting, (x - i*5, y - i*5))
 
@@ -42,9 +42,8 @@ def glow(screen,x,y,w,h):
 def button(screen,x,y,w,h):
     button_surf = pygame.Surface((w, h),pygame.SRCALPHA)
     button_color = (0,0,200,110)  
-    pygame.draw.rect(button_surf, button_color, (0,0,w,h),border_radius=12)
-    pygame.draw.rect(button_surf, (255,200,120,180),(0,0,w,h),width=2,border_radius=12)
-
+    pygame.draw.rect(button_surf, button_color, (0,0,w,h))
+    pygame.draw.rect(button_surf, (255,200,120,180),(0,0,w,h),width=2)
     screen.blit(button_surf, (x, y))
 
 while run:
