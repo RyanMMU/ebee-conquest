@@ -1079,6 +1079,8 @@ def main(eventbus=None):
         screenrectangle = screen.get_rect()
         troopbadgelist = [] # store troop badge info
 
+
+
         tilewidth = mapbox["width"] * zoomvalue
         if tilewidth > 1:
             copieseachside = int(windowwidth / tilewidth) + 2
@@ -1122,7 +1124,7 @@ def main(eventbus=None):
             # FOR QUICK SEARCH: "mixed control state"
 
 
-
+                # for quick search: "drawitemlist loop"
                 for drawitem in drawitemlist:
                     itemhovered = False
                     drawpolygonlist = []
@@ -1131,16 +1133,22 @@ def main(eventbus=None):
                     if not itemrectanglescreen.colliderect(screenrectangle):
                         continue
 
+
+
                     for polygon in drawitem["polygons"]:
                         polygonrectanglescreen = getscreenrectangle(polygon["rectangle"], zoomvalue, drawcamerax, cameray)
                         if not polygonrectanglescreen.colliderect(screenrectangle):
                             continue
+
+
 
                         polygonpointsscreen = getscreenpoints(polygon["points"], zoomvalue, drawcamerax, cameray)
                         polygonpointsscreenint = [(int(pointx), int(pointy)) for pointx, pointy in polygonpointsscreen]
                         if len(polygonpointsscreenint) < 3:
                             continue
                         drawpolygonlist.append(polygonpointsscreenint)
+
+
 
                         if not itemhovered and polygonrectanglescreen.collidepoint(mouseposition) and ispointinsidepolygon(mouseposition, polygonpointsscreen):
                             if gamephase == "choosecountry" and not stateshape.get("country"):
@@ -1149,6 +1157,10 @@ def main(eventbus=None):
                             hovertext = drawitem["id"]
                             hoveredstateid = drawitem.get("parentid", stateshape["id"])
                             hoveredprovinceid = drawitem["id"] if "parentid" in drawitem else None
+
+
+
+
 
                     if gamephase == "choosecountry":
                         if stateshape.get("country"):
@@ -1252,7 +1264,7 @@ def main(eventbus=None):
 
 
         if hovertext:
-            hoverlabel = normalfont.render(hovertext, True, (255, 255, 255))
+            hoverlabel = normalfont.render("id:" + hovertext, True, (255, 255, 255))
             # follow mouse but with an offset so it doesn't get covered by the cursor
             screen.blit(hoverlabel, (mouseposition[0] + 16, mouseposition[1] + 16))
 
