@@ -31,8 +31,10 @@
             "Sumatra": "Medan",
             "Borneo": "Pontianak",
             "Sulawesi": "Makassar",
-            "Kalimantan": "Banjarmasin",
-            "Interior_Borneo": "Palangkaraya"
+            "Kalimantan": "Palangka_Raya",
+            "Bali_&_Nusa_Tenggara": "Denpasar",
+            "Maluku": "Ambon",
+            "Papua": "Jayapura"
         }
     },
     {
