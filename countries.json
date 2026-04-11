@@ -50,16 +50,18 @@
     {
         "Country" : "Vietnam",
         "States" : {
-            "Tonkin": "Hanoi",
-            "Trong_Bo": "Da_Nang",
-            "Southern_Indochina": "Ho_Chi_Minh_City"
+            "Nothern_Vietnam": "Hanoi",
+            "Central_Vietnam": "Da_Nang",
+            "Southern_Vietnam": "Ho_Chi_Minh_City"
             
         }
     },
     {
         "Country" : "Timor_Leste",
         "States" : {
-            "East_Timor": "Dili"
+            "Western_Timor_Leste": "Maliana",
+            "Central_Timor_Leste": "Dili",
+            "Eastern_Timor_Leste": "Baucau"
         }
     },
     {
