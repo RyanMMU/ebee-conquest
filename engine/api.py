@@ -12,6 +12,8 @@ class EbeeEngine:
         provincefilepath="provinces.svg",
         countrydatafilepath="countries.json",
     ):
+        
+
         self.statefilepath = statefilepath
         self.provincefilepath = provincefilepath
         self.countrydatafilepath = countrydatafilepath
@@ -31,6 +33,7 @@ class EbeeEngine:
 
 
     def on(self, eventname, callback):
+        
         return self.eventbus.subscribe(eventname, callback) #susbcribe
 
 
@@ -47,32 +50,45 @@ class EbeeEngine:
 
 
     def emit(self, eventname, payload):
+
         self.eventbus.emit(eventname, payload)
 
 
     def onWarDeclaration(self, callback):
+
         return self.on(EngineEventType.WARDECLARED, callback) # war declaration event
 
 
     def loadworld(self, onprogress=None):
+
+
         self.stateshapelist = core.loadsvgshapes(self.statefilepath, onprogress=onprogress)
+
         if not self.stateshapelist:
             return False
+
+
 
         self.statetocountrylookup, self.countrytocolorlookup = core.loadcountrydata(self.countrydatafilepath)
 
         for stateshape in self.stateshapelist:
+
+
             statecountry = self.statetocountrylookup.get(stateshape["id"])
             stateshape["ownercountry"] = statecountry
             stateshape["controllercountry"] = statecountry
             stateshape["country"] = statecountry
             stateshape["countrycolor"] = self.countrytocolorlookup.get(statecountry, (85, 85, 85))
 
+
         provinceshapelist = core.loadsvgshapes(self.provincefilepath, onprogress=onprogress)
         if not provinceshapelist:
             return False
 
+
         self.provinceenrichedlist = gameplay.prepareprovincemetadata(provinceshapelist)
+
+
         for province in self.provinceenrichedlist:
             provincecountry = self.statetocountrylookup.get(province["parentstateid"])
             province["ownercountry"] = provincecountry

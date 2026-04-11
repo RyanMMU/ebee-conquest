@@ -23,7 +23,7 @@ autocountrycolors = [
     (191, 196, 84),
     (129, 144, 224),
     (206, 138, 112),
-]
+] #TODO: dynamic color generator based on number of countries and constrast
 
 
 
