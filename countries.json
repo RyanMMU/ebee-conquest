@@ -9,6 +9,9 @@
         }
     },
     {
+        "Country" : "Singapore"
+    },
+    {
         "Country" : "Thailand",
         "States" : {
             "Northern_Malay": "Pattaya",
