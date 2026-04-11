@@ -252,8 +252,8 @@ def wraphorizontalcamera(camerax, zoomvalue, mapbox):
 # a* pathfinding adpated from https://www.redblobgames.com/pathfinding/a-star/introduction
 def getsegmentsamplecount(segment):
     segmenttypename = type(segment).__name__
-    if segmenttypename == "Move":
-        return 1 #no need to sample this
+    if segmenttypename in ("Move", "Line", "Close"):
+        return 1 #no need to sample straight segments
 
     if hasattr(segment, "start") and hasattr(segment, "end"):
         dx = segment.end.x - segment.start.x 
@@ -297,7 +297,7 @@ def convertpathtopolygons(svgpath):
 
 
         for pointx, pointy in sampledpoints:
-            if not cleanedpoints or abs(pointx - cleanedpoints[-1][0]) or abs(pointy - cleanedpoints[-1][1]) > 1e-6: #1e-6 is a threshold to consider points different
+            if not cleanedpoints or abs(pointx - cleanedpoints[-1][0]) > 1e-6 or abs(pointy - cleanedpoints[-1][1]) > 1e-6: #1e-6 is a threshold to consider points different
                 cleanedpoints.append((pointx, pointy))
                 #print(cleanedpoints[-1])
 

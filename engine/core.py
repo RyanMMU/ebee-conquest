@@ -2,7 +2,6 @@ import os
 import json
 import math
 import time
-import hashlib
 import xml.etree.ElementTree as elementtree
 import pygame
 from svgelements import Path
@@ -18,10 +17,9 @@ minimumzoomvalue = 0.5
 maximumzoomvalue = 20.0
 curvesamplestep = 1.5
 maxsegmentsteps = 48
-pointdeduplicationepsilon = 1e-6
 
 # Ebee Super Optimization (ESO) config
-esoversion = 2
+esoversion = 1
 esodirectory = ".ebee_super_optimization"
 
 
@@ -49,90 +47,58 @@ def eso_getpath(sourcefilepath):
     return sourcefilepath.parent / esodirectory / f"{sourcefilepath.stem}.ebeecache_v{esoversion}.pkl"
 
 
-def eso_hashfile(sourcefilepath):
-    hasher = hashlib.sha256()
-    with open(sourcefilepath, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            hasher.update(chunk)
-    return hasher.hexdigest()
-
-
-def _rect_to_tuple(r):
-    return (r.x, r.y, r.width, r.height)
-
-
-def _tuple_to_rect(t):
-    return pygame.Rect(t[0], t[1], t[2], t[3])
-
-
-def _serialize_shapelist(shapelist):
-    result = []
-    for shape in shapelist:
-        result.append({
-            **shape,
-            "rectangle": _rect_to_tuple(shape["rectangle"]),
-            "polygons": [
-                {**p, "rectangle": _rect_to_tuple(p["rectangle"])}
-                for p in shape["polygons"]
-            ],
-        })
-    return result
-
-
-def _deserialize_shapelist(rawlist):
-    result = []
-    for shape in rawlist:
-        result.append({
-            **shape,
-            "rectangle": _tuple_to_rect(shape["rectangle"]),
-            "polygons": [
-                {**p, "rectangle": _tuple_to_rect(p["rectangle"])}
-                for p in shape["polygons"]
-            ],
-        })
-    return result
-
 
 def eso_loadcache(filepath):
     sourcefilepath = filepathpath(filepath).resolve()
     try:
-        sourcefilepath.stat()
+        sourcestat = sourcefilepath.stat()
+        #print(sourcestat, sourcefilepath)
+
     except OSError:
         return None
 
     cachefilepath = eso_getpath(sourcefilepath)
 
+
     try:
         with open(cachefilepath, "rb") as cachefileobject:
             cacheready = pickle.load(cachefileobject)
+            #print(cacheready)
+#   except (OSError, ValueError, TypeError):
+#       return None
     except (OSError, pickle.PickleError, EOFError, AttributeError, ValueError, TypeError):
         return None
+    
+
 
     if not isinstance(cacheready, dict):
         return None
+    
 
     cachemeta = cacheready.get("meta")
+    #print(cachemeta)
     esocachelist = cacheready.get("shapes")
     if not isinstance(cachemeta, dict) or not isinstance(esocachelist, list):
         return None
 
-    try:
-        sourcehash = eso_hashfile(sourcefilepath)
-    except OSError:
-        return None
+
 
     testmeta = {
-        "sourcehash": sourcehash,
+        "sourcepath": str(sourcefilepath),
+        "sourcesize": sourcestat.st_size,
+        "sourcemtime": sourcestat.st_mtime_ns,
         "curvesamplestep": curvesamplestep,
         "maxsegmentsteps": maxsegmentsteps,
         "formatversion": esoversion,
-    }
+    } 
+    #print(testmeta)
+
+
 
     for k, expectedvalue in testmeta.items():
         if cachemeta.get(k) != expectedvalue:
             return None
-
-    return _deserialize_shapelist(esocachelist)
+    return esocachelist
 
 
 
@@ -141,24 +107,33 @@ def eso_loadcache(filepath):
 
 def eso_storecache(filepath, shapelist):
     sourcefilepath = filepathpath(filepath).resolve()
+    #print(sourcefilepath)
+
 
     try:
-        sourcehash = eso_hashfile(sourcefilepath)
+        sourcestat = sourcefilepath.stat()
+        #print(sourcestat, sourcefilepath)
     except OSError:
         return
+
+
 
     cachefilepath = eso_getpath(sourcefilepath)
     temppath = cachefilepath.with_suffix(cachefilepath.suffix + ".ebeetemp")
 
     cacheready = {
         "meta": {
-            "sourcehash": sourcehash,
+            "sourcepath": str(sourcefilepath),
+            "sourcesize": sourcestat.st_size,
+            "sourcemtime": sourcestat.st_mtime_ns,
             "curvesamplestep": curvesamplestep,
             "maxsegmentsteps": maxsegmentsteps,
             "formatversion": esoversion,
         },
-        "shapes": _serialize_shapelist(shapelist),
+        "shapes": shapelist,
     }
+    #print(cacheready)
+
 
     try:
         cachefilepath.parent.mkdir(parents=True, exist_ok=True)
@@ -330,17 +305,10 @@ def wraphorizontalcamera(camerax, zoomvalue, mapbox):
 
 
 
-# def getsegmentsamplecount(segment):
-# 
-#    segmenttypename = type(segment).__name__
-#    if segmenttypename in ("Move", "Line", "Close"):
-#        return 1
-
-
 def getsegmentsamplecount(segment):
  
     segmenttypename = type(segment).__name__
-    if segmenttypename == "Move":
+    if segmenttypename in ("Move", "Line", "Close"):
         return 1
 
     if hasattr(segment, "start") and hasattr(segment, "end"):
@@ -383,7 +351,7 @@ def convertpathtopolygons(svgpath):
 
         cleanedpoints = []
         for pointx, pointy in sampledpoints:
-            if not cleanedpoints or abs(pointx - cleanedpoints[-1][0]) > pointdeduplicationepsilon or abs(pointy - cleanedpoints[-1][1]) > pointdeduplicationepsilon:
+            if not cleanedpoints or abs(pointx - cleanedpoints[-1][0]) > 1e-6 or abs(pointy - cleanedpoints[-1][1]) > 1e-6:
                 cleanedpoints.append((pointx, pointy))
 
         if len(cleanedpoints) >= 3:
