@@ -7,11 +7,22 @@ import pygame
 from svgelements import Path
 from engine.diagnostics import logslowpath
 
+
+# 12 april optimization
+from pathlib import Path as filepathpath
+import pickle
+
 #initial config
 minimumzoomvalue = 0.5
 maximumzoomvalue = 20.0
 curvesamplestep = 1.5
 maxsegmentsteps = 48
+
+# Ebee Super Optimization (ESO) config
+esoversion = 1
+esodirectory = ".ebee_super_optimization"
+
+
 autocountrycolors = [
     (197, 92, 92),
     (88, 157, 216),
@@ -28,7 +39,139 @@ autocountrycolors = [
 
 
 
+
+# EBEE SUPER OPTIMIZATION (ESO) FUNCTIONS 
+
+
+def eso_getpath(sourcefilepath):
+    return sourcefilepath.parent / esodirectory / f"{sourcefilepath.stem}.ebeecache_v{esoversion}.pkl"
+
+
+
+def eso_loadcache(filepath):
+    sourcefilepath = filepathpath(filepath).resolve()
+    try:
+        sourcestat = sourcefilepath.stat()
+        #print(sourcestat, sourcefilepath)
+
+    except OSError:
+        return None
+
+    cachefilepath = eso_getpath(sourcefilepath)
+
+
+    try:
+        with open(cachefilepath, "rb") as cachefileobject:
+            cacheready = pickle.load(cachefileobject)
+            #print(cacheready)
+#   except (OSError, ValueError, TypeError):
+#       return None
+    except (OSError, pickle.PickleError, EOFError, AttributeError, ValueError, TypeError):
+        return None
+    
+
+
+    if not isinstance(cacheready, dict):
+        return None
+    
+
+    cachemeta = cacheready.get("meta")
+    #print(cachemeta)
+    esocachelist = cacheready.get("shapes")
+    if not isinstance(cachemeta, dict) or not isinstance(esocachelist, list):
+        return None
+
+
+
+    testmeta = {
+        "sourcepath": str(sourcefilepath),
+        "sourcesize": sourcestat.st_size,
+        "sourcemtime": sourcestat.st_mtime_ns,
+        "curvesamplestep": curvesamplestep,
+        "maxsegmentsteps": maxsegmentsteps,
+        "formatversion": esoversion,
+    } 
+    #print(testmeta)
+
+
+
+    for k, expectedvalue in testmeta.items():
+        if cachemeta.get(k) != expectedvalue:
+            return None
+    return esocachelist
+
+
+
+
+
+
+def eso_storecache(filepath, shapelist):
+    sourcefilepath = filepathpath(filepath).resolve()
+    #print(sourcefilepath)
+
+
+    try:
+        sourcestat = sourcefilepath.stat()
+        #print(sourcestat, sourcefilepath)
+    except OSError:
+        return
+
+
+
+    cachefilepath = eso_getpath(sourcefilepath)
+    temppath = cachefilepath.with_suffix(cachefilepath.suffix + ".ebeetemp")
+
+    cacheready = {
+        "meta": {
+            "sourcepath": str(sourcefilepath),
+            "sourcesize": sourcestat.st_size,
+            "sourcemtime": sourcestat.st_mtime_ns,
+            "curvesamplestep": curvesamplestep,
+            "maxsegmentsteps": maxsegmentsteps,
+            "formatversion": esoversion,
+        },
+        "shapes": shapelist,
+    }
+    #print(cacheready)
+
+
+    try:
+        cachefilepath.parent.mkdir(parents=True, exist_ok=True)
+
+        with open(temppath, "wb") as cachefileobject:
+            pickle.dump(cacheready, cachefileobject, protocol=pickle.HIGHEST_PROTOCOL)
+
+        os.replace(temppath, cachefilepath)
+
+    except (OSError, pickle.PickleError, TypeError):
+        try:
+            if temppath.exists():
+                temppath.unlink()
+        except OSError:
+            pass
+
+
+
+
 def loadsvgshapes(filepath, onprogress=None):
+    esocachelist = eso_loadcache(filepath)
+
+    if esocachelist is not None:
+        if onprogress and not onprogress(0, 1):
+            return []
+        if onprogress and not onprogress(1, 1):
+            return []
+        #   print(esocachelist)
+        return esocachelist
+    
+
+    #print(esocachelist)
+# EBEE SUPER OPTIMIZATION (ESO) FUNCTIONS END
+
+    #   normal loading starts
+
+
+    #FIRST RUN
     tree = elementtree.parse(filepath)
     root = tree.getroot()
     namespacelookup = {"svg": "http://www.w3.org/2000/svg"}
@@ -57,7 +200,6 @@ def loadsvgshapes(filepath, onprogress=None):
         pathstarttimestamp = time.perf_counter()
         svgpath = Path(pathdata)
         polygonlist = convertpathtopolygons(svgpath)
-
         if polygonlist:
             allxvalues = [x for polygon in polygonlist for x, _ in polygon["points"]]
             allyvalues = [y for polygon in polygonlist for _, y in polygon["points"]]
@@ -81,8 +223,10 @@ def loadsvgshapes(filepath, onprogress=None):
             if not onprogress(currentindex, totalcount):
                 return []
 
+    eso_storecache(filepath, shapelist) #eso
     return shapelist
 
+# svg loading ends
 
 
 
@@ -161,7 +305,11 @@ def wraphorizontalcamera(camerax, zoomvalue, mapbox):
 
 
 
-
+# def getsegmentsamplecount(segment):
+# 
+#    segmenttypename = type(segment).__name__
+#    if segmenttypename in ("Move", "Line", "Close"):
+#        return 1
 
 
 def getsegmentsamplecount(segment):
