@@ -1,4 +1,4 @@
 from engine.runtime import main as start
 
-# THIS IS THE GAME LAUNCHER
+# launch the engine from here
 start()
