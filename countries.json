@@ -41,8 +41,9 @@
         "Country" : "Brunei",
         "States" : {
             "Brunei_Muara": "Bandar_Seri_Begawan",
-            "Temburong": "Temburong",
-            "Belait": "Belait"
+            "Temburong": "Bangar",
+            "Belait": "Kuala_Belait",
+            "Tutong": "Tutong"
         }
     },
     {
