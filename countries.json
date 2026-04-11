@@ -9,7 +9,10 @@
         }
     },
     {
-        "Country" : "Singapore"
+        "Country" : "Singapore",
+        "States" : {
+            "Singapore": "Singapore"
+        }
     },
     {
         "Country" : "Thailand",
