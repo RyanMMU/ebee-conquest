@@ -66,7 +66,7 @@ def eso_loadcache(filepath):
             #print(cacheready)
 #   except (OSError, ValueError, TypeError):
 #       return None
-    except (OSError, pickle.PickleError, EOFError, AttributeError, ValueError, TypeError):
+    except (OSError, ValueError, TypeError):
         return None
     
 
@@ -143,7 +143,7 @@ def eso_storecache(filepath, shapelist):
 
         os.replace(temppath, cachefilepath)
 
-    except (OSError, pickle.PickleError, TypeError):
+    except (OSError, TypeError):
         try:
             if temppath.exists():
                 temppath.unlink()
