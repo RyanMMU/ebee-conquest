@@ -16,7 +16,7 @@ import pickle
 minimumzoomvalue = 0.5
 maximumzoomvalue = 20.0
 curvesamplestep = 1.5
-maxsegmentsteps = 48
+maxsegmentsteps = 32
 
 # Ebee Super Optimization (ESO) config
 esoversion = 1
@@ -66,7 +66,7 @@ def eso_loadcache(filepath):
             #print(cacheready)
 #   except (OSError, ValueError, TypeError):
 #       return None
-    except (OSError, ValueError, TypeError):
+    except (OSError):
         return None
     
 
@@ -84,7 +84,7 @@ def eso_loadcache(filepath):
 
 
     testmeta = {
-        "sourcepath": str(sourcefilepath),
+#            "sourcepath": str(sourcefilepath),
         "sourcesize": sourcestat.st_size,
         "sourcemtime": sourcestat.st_mtime_ns,
         "curvesamplestep": curvesamplestep,
@@ -123,7 +123,7 @@ def eso_storecache(filepath, shapelist):
 
     cacheready = {
         "meta": {
-            "sourcepath": str(sourcefilepath),
+#            "sourcepath": str(sourcefilepath),
             "sourcesize": sourcestat.st_size,
             "sourcemtime": sourcestat.st_mtime_ns,
             "curvesamplestep": curvesamplestep,
@@ -143,7 +143,7 @@ def eso_storecache(filepath, shapelist):
 
         os.replace(temppath, cachefilepath)
 
-    except (OSError, TypeError):
+    except (OSError):
         try:
             if temppath.exists():
                 temppath.unlink()
