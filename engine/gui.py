@@ -21,6 +21,8 @@ import pygame
 
 #TODO: Generic gui functions for drawing buttons, windows, country menus, event popup etccc
 
+
+
 def gui_lightencolor(colorvalue, amount):
     amount = max(0.0, min(1.0, amount))
     red, green, blue = colorvalue
@@ -29,6 +31,8 @@ def gui_lightencolor(colorvalue, amount):
         int(green + (255 - green) * amount),
         int(blue + (255 - blue) * amount),
     )
+
+
 
 
 def gui_drawbutton(screen, rectangle, textvalue, fontobject, enabled=True, pulse=False):
@@ -41,11 +45,13 @@ def gui_drawbutton(screen, rectangle, textvalue, fontobject, enabled=True, pulse
     else:
         basecolor = (70, 70, 70)
 
-    pygame.draw.rect(screen, basecolor, rectangle, border_radius=6)
-    pygame.draw.rect(screen, (35, 35, 35), rectangle, width=1, border_radius=6)
+    pygame.draw.rect(screen, basecolor, rectangle, border_radius=1)
+    pygame.draw.rect(screen, (35, 35, 35), rectangle, width=1, border_radius=1)
     textcolor = (240, 240, 240) if enabled else (145, 145, 145)
     labelsurface = fontobject.render(textvalue, True, textcolor)
     screen.blit(labelsurface, labelsurface.get_rect(center=rectangle.center))
+
+
 
 
 def gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
@@ -54,9 +60,11 @@ def gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
     labelrectangle.inflate_ip(10, 6)
     labelrectangle.center = (int(centerposition[0]), int(centerposition[1]))
     # this doesnt work as cleanly as i want it tobecause provinces are not always circular or rectang
-    pygame.draw.rect(screen, (0, 0, 0), labelrectangle, border_radius=4)
-    pygame.draw.rect(screen, (165, 165, 165), labelrectangle, width=1, border_radius=4)
+    pygame.draw.rect(screen, (0, 0, 0), labelrectangle, border_radius=1)
+    pygame.draw.rect(screen, (165, 165, 165), labelrectangle, width=1, border_radius=1)
     screen.blit(labelsurface, labelsurface.get_rect(center=labelrectangle.center))
+
+
 
 
 def gui_drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountry):
@@ -89,6 +97,8 @@ def gui_drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedco
     return choosebuttonrectangle, canchoosecountry
 
 
+
+
 def gui_drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetcountry, alreadyatwar):
     placehldr, windowheight = screen.get_size()
     menuwidth = 280
@@ -97,8 +107,8 @@ def gui_drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetco
     menuy = (windowheight - menuheight) // 2
     menurectangle = pygame.Rect(menux, menuy, menuwidth, menuheight)
 
-    pygame.draw.rect(screen, (26, 26, 35), menurectangle, border_radius=10)
-    pygame.draw.rect(screen, (92, 92, 116), menurectangle, width=2, border_radius=10)
+    pygame.draw.rect(screen, (26, 26, 35), menurectangle, border_radius=1)
+    pygame.draw.rect(screen, (92, 92, 116), menurectangle, width=2, border_radius=1)
 
     titlelabel = fontobject.render("Country actions", True, (240, 240, 240)) #titletext for country meus
     screen.blit(titlelabel, (menurectangle.x + 12, menurectangle.y + 10))
@@ -128,6 +138,8 @@ def gui_drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetco
 
 # GAMEPLAY HUD starts here, renders every frame during play phase
 # might need to simplify this later its getting confusing
+
+
 def gui_drawgameplayhud(
     screen,
     fontobject,
@@ -168,6 +180,7 @@ def gui_drawgameplayhud(
 
     recruitbuttonrectangle = pygame.Rect(windowwidth - 390, windowheight - 56, 170, 38)
     endturnbuttonrectangle = pygame.Rect(windowwidth - 210, windowheight - 56, 190, 38)
+
     gui_drawbutton(screen, recruitbuttonrectangle, f"recruit +{recruitamount}", fontobject, enabled=recruitenabled)
     gui_drawbutton(screen, endturnbuttonrectangle, "end turn", fontobject, enabled=True)
 
@@ -180,3 +193,5 @@ def gui_drawgameplayhud(
         screen.blit(costtext, (windowwidth - 390, windowheight - 72))
 
     return recruitbuttonrectangle, endturnbuttonrectangle
+
+

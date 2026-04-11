@@ -10,9 +10,9 @@ from svgelements import Path
 
 
 #Local module
-from console import developmentconsole, loaddevmodeflag 
-from gui import gui_drawchoosecountryoverlay, gui_drawgameplayhud, gui_drawtroopcountbadge, gui_lightencolor, gui_drawcountryinteractionmenu
-from diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
+from engine.console import developmentconsole, loaddevmodeflag 
+from engine.gui import gui_drawchoosecountryoverlay, gui_drawgameplayhud, gui_drawtroopcountbadge, gui_lightencolor, gui_drawcountryinteractionmenu
+from engine.diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
 
 
 print("CURRENT VERSION - APRIL 3 2024")

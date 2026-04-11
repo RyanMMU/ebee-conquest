@@ -3,6 +3,8 @@ import time
 
 # i separated diagnostics into its own module because its getting too complicated
 
+
+
 def getprocessmemoryusage():
     try:
         import psutil # hardware info
@@ -12,8 +14,12 @@ def getprocessmemoryusage():
         workingsetmb = memoryinfo.rss / megabyte
         privatememorymb = getattr(memoryinfo, "private", memoryinfo.vms) / megabyte
         return workingsetmb, privatememorymb
+    
+
     except Exception:
-        return None, None
+        return None, None #imortant, if psutil is not available memory will just say cannot find
+
+
 
 
 def logstartupdiagnostics(startuptimestamp, stage, details=""):
@@ -33,8 +39,11 @@ def logstartupdiagnostics(startuptimestamp, stage, details=""):
     )
 
 
+
+
 def createloadingprogresscallback(drawprogresscallback, startuptimestamp, stage, logintervalseconds=1.5):
     callbackstate = {"lastlogtimestamp": 0.0}
+
 
     def loadingprogresscallback(completedcount, totalcount):
         shouldcontinue = drawprogresscallback(completedcount, totalcount)
@@ -52,10 +61,15 @@ def createloadingprogresscallback(drawprogresscallback, startuptimestamp, stage,
     return loadingprogresscallback
 
 
+
+
 def logslowpath(filepath, currentprog, totalcount, shapeid, secondspassed, allowedmaxseconds=1.5):
     if secondspassed < allowedmaxseconds:
         return
+    
     print(
         f"local@EbeeEngine:~$ slow path!!!!! | file={os.path.basename(filepath)} was at={currentprog}/{totalcount} id={shapeid} took={secondspassed:.2f}s",
         flush=True,
     )
+
+
