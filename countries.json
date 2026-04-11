@@ -9,18 +9,16 @@
         }
     },
     {
-        "Country" : "Singapore",
-        "States" : {
-            "Singapore": "Singapore"
-        }
+        "Country" : "Singapore"
     },
     {
         "Country" : "Thailand",
         "States" : {
-            "Northern_Malay": "Pattaya",
-            "Siam": "Bangkok",
-            "Lanna": "Chiang_Rai",
-            "Isan": "Khon_Kean"
+            "Northern_Thailand": "Chiang_Mai",
+            "Northeastern_Thailand": "Khon_kaen",
+            "Central_Thailand": "Bangkok",
+            "Western_Thailand": "Kanchanaburi",
+            "Southern_Thailand": "Surat_Thani"
         }
     },
     {

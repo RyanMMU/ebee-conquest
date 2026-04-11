@@ -16,7 +16,11 @@ import pickle
 minimumzoomvalue = 0.5
 maximumzoomvalue = 20.0
 curvesamplestep = 1.5
+<<<<<<< HEAD
 maxsegmentsteps = 48
+=======
+maxsegmentsteps = 32
+>>>>>>> db351d6bd916595930a3f072776af553fe6545a4
 
 # Ebee Super Optimization (ESO) config
 esoversion = 1
@@ -66,7 +70,11 @@ def eso_loadcache(filepath):
             #print(cacheready)
 #   except (OSError, ValueError, TypeError):
 #       return None
+<<<<<<< HEAD
     except (OSError, pickle.PickleError, EOFError, AttributeError, ValueError, TypeError):
+=======
+    except (OSError):
+>>>>>>> db351d6bd916595930a3f072776af553fe6545a4
         return None
     
 
@@ -84,9 +92,15 @@ def eso_loadcache(filepath):
 
 
     testmeta = {
+<<<<<<< HEAD
         "sourcepath": str(sourcefilepath),
         "sourcesize": sourcestat.st_size,
         "sourcemtime": sourcestat.st_mtime_ns,
+=======
+#            "sourcepath": str(sourcefilepath),
+#        "sourcesize": sourcestat.st_size,
+#        "sourcemtime": sourcestat.st_mtime_ns,
+>>>>>>> db351d6bd916595930a3f072776af553fe6545a4
         "curvesamplestep": curvesamplestep,
         "maxsegmentsteps": maxsegmentsteps,
         "formatversion": esoversion,
@@ -123,9 +137,15 @@ def eso_storecache(filepath, shapelist):
 
     cacheready = {
         "meta": {
+<<<<<<< HEAD
             "sourcepath": str(sourcefilepath),
             "sourcesize": sourcestat.st_size,
             "sourcemtime": sourcestat.st_mtime_ns,
+=======
+#            "sourcepath": str(sourcefilepath),
+#            "sourcesize": sourcestat.st_size,
+#            "sourcemtime": sourcestat.st_mtime_ns,
+>>>>>>> db351d6bd916595930a3f072776af553fe6545a4
             "curvesamplestep": curvesamplestep,
             "maxsegmentsteps": maxsegmentsteps,
             "formatversion": esoversion,
@@ -143,7 +163,11 @@ def eso_storecache(filepath, shapelist):
 
         os.replace(temppath, cachefilepath)
 
+<<<<<<< HEAD
     except (OSError, pickle.PickleError, TypeError):
+=======
+    except (OSError):
+>>>>>>> db351d6bd916595930a3f072776af553fe6545a4
         try:
             if temppath.exists():
                 temppath.unlink()
@@ -157,6 +181,10 @@ def loadsvgshapes(filepath, onprogress=None):
     esocachelist = eso_loadcache(filepath)
 
     if esocachelist is not None:
+<<<<<<< HEAD
+=======
+        print(f"local@EbeeEngine:~$ ESO cache hit for {os.path.basename(filepath)} with {len(esocachelist)} shapes!", flush=True)
+>>>>>>> db351d6bd916595930a3f072776af553fe6545a4
         if onprogress and not onprogress(0, 1):
             return []
         if onprogress and not onprogress(1, 1):
