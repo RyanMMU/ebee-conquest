@@ -349,7 +349,7 @@ class developmentconsole:
 
 
 
-    def wraptext(text, font, maxwidth):
+    def wraptext(self, text, font, maxwidth):
 
         # fix clip
         words = text.split()
