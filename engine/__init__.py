@@ -2,7 +2,7 @@ import sys
 from pathlib import Path
 
 if sys.version_info[:3] == (3, 9, 0):
-    # Python 3.9.0 has a typing bug where collections.abc.Callable[[]] is unhashable.
+    # python 3.9.0 has a typing bug where collections.abc.Callable[[]] is unhashable
     # pygame imports that form during module import, so patch it before any pygame import.
     # from https://bugs.python.org/issue43004
     # from https://github.com/python/cpython/issues/87170
