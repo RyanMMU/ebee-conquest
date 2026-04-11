@@ -36,7 +36,7 @@ class NewsSystem:
 
 
         self._sub(EngineEventType.WARDECLARED, self.onwardeclared)
-        self._sub(EngineEventType.PROVINCECONTROLCHANGED, self.onprovincecontrolchanged)
+        #self._sub(EngineEventType.PROVINCECONTROLCHANGED, self.onprovincecontrolchanged)
         self._sub("newspopup", self.onnewspopup)  # generic one
         self._sub("countrycollapsed", self.oncountrycollapsed)  # special wrapper
         self._pullnext()
@@ -67,10 +67,7 @@ class NewsSystem:
         if self.current is None:
             self._pullnext()
 
-
     def _pullnext(self):
-
-
         self.current = self.queue.popleft() if self.queue else None
 
 
@@ -114,15 +111,14 @@ class NewsSystem:
         )
 
 
-    def onprovincecontrolchanged(self, p):
-
-        # print("control change", p)
-        self.pushnews(
-            title="PROVINCE CAPTURED",
-            description=f"{p['provinceId']} changed control from {p['previousController']} to {p['newController']}.",
-            imagekey="capture",
-            priority=2,
-        )
+    # def onprovincecontrolchanged(self, p):
+        # # print("control change", p)
+        # self.pushnews(
+        #     title="PROVINCE CAPTURED",
+        #     description=f"{p['provinceId']} changed control from {p['previousController']} to {p['newController']}.",
+        #     imagekey="capture",
+        #     priority=2,
+        # )
 
 
     def oncountrycollapsed(self, p):
@@ -141,11 +137,10 @@ class NewsSystem:
 
 
 class NewsPopup:
-
-
     def __init__(self):
         self.closerect = pygame.Rect(0, 0, 0, 0)
         # print("popup made")
+
 
 
     def draw(self, screen, fonts, item):
@@ -203,6 +198,8 @@ def wraptext(text, font, maxwidth):
     words = text.split()
     lines = []
     current = []
+
+
 
     for word in words:
         test = " ".join(current + [word])

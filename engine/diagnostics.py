@@ -14,8 +14,10 @@ def getprocessmemoryusage():
         workingsetmb = memoryinfo.rss / megabyte
         privatememorymb = getattr(memoryinfo, "private", memoryinfo.vms) / megabyte
         return workingsetmb, privatememorymb
+    
+
     except Exception:
-        return None, None
+        return None, None #imortant, if psutil is not available memory will just say cannot find
 
 
 
@@ -64,6 +66,7 @@ def createloadingprogresscallback(drawprogresscallback, startuptimestamp, stage,
 def logslowpath(filepath, currentprog, totalcount, shapeid, secondspassed, allowedmaxseconds=1.5):
     if secondspassed < allowedmaxseconds:
         return
+    
     print(
         f"local@EbeeEngine:~$ slow path!!!!! | file={os.path.basename(filepath)} was at={currentprog}/{totalcount} id={shapeid} took={secondspassed:.2f}s",
         flush=True,
