@@ -73,7 +73,13 @@
     {
         "Country" : "Cambodia",
         "States" : {
-            "Cambodia": "Phnom_Penh"
+            "Northwestern_Cambodia": "Siem_Reap",
+            "Northern_Cambodia": "Kampong_Thom",
+            "Northeastern_Cambodia": "Stung_Treng",
+            "Central_Cambodia": "Phnom_Penh",
+            "Eastern_Cambodia": "Kampong_Cham",
+            "Southern_Cambodia": "Kampot",
+            "Western_Cambodia": "Battambang" 
         }
     },
     {
