@@ -85,8 +85,8 @@ def eso_loadcache(filepath):
 
     testmeta = {
 #            "sourcepath": str(sourcefilepath),
-        "sourcesize": sourcestat.st_size,
-        "sourcemtime": sourcestat.st_mtime_ns,
+#        "sourcesize": sourcestat.st_size,
+#        "sourcemtime": sourcestat.st_mtime_ns,
         "curvesamplestep": curvesamplestep,
         "maxsegmentsteps": maxsegmentsteps,
         "formatversion": esoversion,
@@ -124,8 +124,8 @@ def eso_storecache(filepath, shapelist):
     cacheready = {
         "meta": {
 #            "sourcepath": str(sourcefilepath),
-            "sourcesize": sourcestat.st_size,
-            "sourcemtime": sourcestat.st_mtime_ns,
+#            "sourcesize": sourcestat.st_size,
+#            "sourcemtime": sourcestat.st_mtime_ns,
             "curvesamplestep": curvesamplestep,
             "maxsegmentsteps": maxsegmentsteps,
             "formatversion": esoversion,
