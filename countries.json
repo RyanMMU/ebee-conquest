@@ -83,8 +83,11 @@
     {
         "Country" : "Myanmar",
         "States" : {
-            "Burma": "Yangon",
-            "Upper_Burma": "Mandalay"
+            "Upper_Myanmar": "Mandalay",
+            "Lower_Myanmar": "Yangon",
+            "Shan_Plateau": "Taunggyi",
+            "Arakan": "Sittwe",
+            "Tenasserim": "Dawei"
         }
     }
 ]
