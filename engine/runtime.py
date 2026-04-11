@@ -1161,7 +1161,7 @@ def main(eventbus=None):
 
 
 
-
+                    # determine fill color based on game state and interactions
                     if gamephase == "choosecountry":
                         if stateshape.get("country"):
                             basefillcolor = stateshape.get("countrycolor", defaultshapecolor)
