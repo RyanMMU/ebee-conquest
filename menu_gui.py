@@ -16,15 +16,15 @@ text= (255, 215, 0)
 
 
 
-main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 25)
-big_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 25)
+main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 20)
+big_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 20)
 
 menu = 'main' 
 run = True
 
-percentchange = 0.8
-button_width = int(400 * percentchange)
-button_height = int(80 * percentchange)
+
+button_width = 450
+button_height = 50
 button_m=(WIDTH // 2) - (button_width // 2)
 
 bg_image = pygame.image.load('Group 1.png').convert()
@@ -32,11 +32,11 @@ bg_image = pygame.transform.scale(bg_image,(WIDTH, HEIGHT))
 
 def glow(screen,x,y,w,h):
     for i in range(1,6):
-        glow_surf = pygame.Surface((w + i*10, h + i*10), pygame.SRCALPHA)
+        lighting = pygame.Surface((w + i*10, h + i*10), pygame.SRCALPHA)
         glow_color =(255,190,0,15)
-        pygame.draw.rect(glow_surf, glow_color, (0, 0, w + i*10, h + i*10), border_radius=12)
+        pygame.draw.rect(lighting, glow_color, (0, 0, w + i*10, h + i*10), border_radius=12)
         
-        screen.blit(glow_surf, (x - i*5, y - i*5))
+        screen.blit(lighting, (x - i*5, y - i*5))
 
 
 def button(screen,x,y,w,h):
@@ -65,11 +65,14 @@ while run:
                 if button_m < mouse[0] < button_m + button_width and 150 < mouse[1] < 210:
                         print('starting the game....')
                
-                elif button_m < mouse[0] < button_m+button_width and 250 < mouse[1] < 310:
+                elif button_m < mouse[0] < button_m+button_width and 350 < mouse[1] < 410:
                         menu = 'settings'
                 
-                elif button_m < mouse[0] < button_m + button_width and 350 < mouse[1] < 410:
+                elif button_m < mouse[0] < button_m + button_width and 450 < mouse[1] < 510:
                             run = False
+
+                elif button_m < mouse[0] < button_m + button_width and 250 < mouse[1] < 310:
+                        print('loading game....')
             
             elif menu == 'settings':
 
@@ -90,24 +93,34 @@ while run:
         txt1_rect = txt1.get_rect(center=(button_m + button_width // 2, 150 + button_height // 2))
         screen.blit(txt1, txt1_rect)
 
-        hover = button_m < mouse[0] < button_m + button_width and 250 < mouse[1] < 310
-        if hover:
-            glow(screen, button_m, 250, button_width, button_height)
-        button(screen, button_m, 250, button_width, button_height)
-
-        txt2 = main_font.render('SETTINGS',True,text)
-        txt2_rect = txt2.get_rect(center=(button_m + button_width // 2, 250 + button_height // 2))
-        screen.blit(txt2, txt2_rect)
-
-        
         hover = button_m < mouse[0] < button_m + button_width and 350 < mouse[1] < 410
         if hover:
             glow(screen, button_m, 350, button_width, button_height)
         button(screen, button_m, 350, button_width, button_height)
 
+        txt2 = main_font.render('SETTINGS',True,text)
+        txt2_rect = txt2.get_rect(center=(button_m + button_width // 2, 350 + button_height // 2))
+        screen.blit(txt2, txt2_rect)
+
+        
+        hover = button_m < mouse[0] < button_m + button_width and 450 < mouse[1] < 510
+        if hover:
+            glow(screen, button_m, 450, button_width, button_height)
+        button(screen, button_m, 450, button_width, button_height)
+
         txt3 = main_font.render('QUIT', True, text)
-        txt3_rect = txt3.get_rect(center=(button_m + button_width // 2, 350 + button_height // 2))
+        txt3_rect = txt3.get_rect(center=(button_m + button_width // 2, 450 + button_height // 2))
         screen.blit(txt3, txt3_rect)
+
+        hover = button_m < mouse[0] < button_m + button_width and 250 < mouse[1] < 310
+        if hover:
+            glow(screen, button_m, 250, button_width, button_height)
+        button(screen, button_m, 250, button_width, button_height)
+
+        txt5 = main_font.render('LOAD GAME', True, text)
+        txt5_rect = txt5.get_rect(center=(button_m + button_width // 2, 250 + button_height // 2))
+        screen.blit(txt5, txt5_rect)
+
 
     elif menu == 'settings':
         t2 = big_font.render('SETTINGS',True,text)
