@@ -17,11 +17,10 @@
     {
         "Country" : "Thailand",
         "States" : {
-            "Northern_Thailand": "Chiang_Mai",
-            "Northeastern_Thailand": "Khon_kaen",
-            "Central_Thailand": "Bangkok",
-            "Western_Thailand": "Kanchanaburi",
-            "Southern_Thailand": "Surat_Thani"
+            "Lanna": "Chiang_Mai",
+            "Siam": "Bangkok",
+            "Isan": "Bangkok",
+            "Northern_Malay": "Phuket"
         }
     },
     {
@@ -29,37 +28,40 @@
         "States" : {
             "Java": "Jakarta",
             "Sumatra": "Medan",
-            "Borneo": "Pontianak",
+            "Interior_Borneo": "Singkawang",
             "Sulawesi": "Makassar",
             "Kalimantan": "Palangka_Raya",
-            "Bali_&_Nusa_Tenggara": "Denpasar",
-            "Maluku": "Ambon",
-            "Papua": "Jayapura"
+            "West_Papua": "Jayapura",
+            "Lesser_Sunda_Islands": "Surabaya",
+            "The_Moluccas": "Maluku"
         }
     },
     {
         "Country" : "Brunei",
         "States" : {
-            "Brunei_Muara": "Bandar_Seri_Begawan",
-            "Temburong": "Bangar",
-            "Belait": "Kuala_Belait",
-            "Tutong": "Tutong"
+            "Brunei": "Bandar_Seri_Begawan"
         }
     },
     {
         "Country" : "Philippines",
         "States" : {
-            "Luzon": "Manila",
-            "Visayas": "Cebu_City",
-            "Mindanao": "Davao_City"
+            "Luzon": "Luzon",
+            "Manila": "Manila",
+            "Bataan": "Bataan",
+            "Palawan": "Puerto_Princesa",
+            "Western_Visayas": "Iloilo",
+            "Northern_Mindanao": "Cagayan_de_Oro",
+            "Zamboanga": "Zamboanga",
+            "Davao": "Davao_City",
+            "Central_Islands": "Naga_City",
+            "Eastern_Visayas": "Legazpi_City"
         }
     },
     {
         "Country" : "Vietnam",
         "States" : {
-            "Nothern_Vietnam": "Hanoi",
-            "Central_Vietnam": "Da_Nang",
-            "Southern_Vietnam": "Ho_Chi_Minh_City"
+            "Trong_Bo": "Hanoi",
+            "Southern_Indochina": "Ho_Chi_Minh_City"
             
         }
     },
@@ -74,31 +76,19 @@
     {
         "Country" : "Cambodia",
         "States" : {
-            "Northwestern_Cambodia": "Siem_Reap",
-            "Northern_Cambodia": "Kampong_Thom",
-            "Northeastern_Cambodia": "Stung_Treng",
-            "Central_Cambodia": "Phnom_Penh",
-            "Eastern_Cambodia": "Kampong_Cham",
-            "Southern_Cambodia": "Kampot",
-            "Western_Cambodia": "Battambang" 
+           "Cambodia": "Phnom_Penh"
         }
     },
     {
         "Country" : "Laos",
         "States" : {
-            "Nothern_Laos": "Luang_Prabang",
-            "Central_Laos": "Vientiane",
-            "Southern_Laos": "Pakse"
+            "Laos": "Vientiane"
         }
     },
     {
         "Country" : "Myanmar",
         "States" : {
-            "Upper_Myanmar": "Mandalay",
-            "Lower_Myanmar": "Yangon",
-            "Shan_Plateau": "Taunggyi",
-            "Arakan": "Sittwe",
-            "Tenasserim": "Dawei"
+            "Tenasserim": "Yangon"
         }
     }
 ]
