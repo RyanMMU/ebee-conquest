@@ -1618,6 +1618,34 @@ def main(eventbus=None):
 # loading screen and main loop ends
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 # DEFINITIONS
 loadsvgshapes = coremodule.loadsvgshapes
 getmapbox = coremodule.getmapbox
