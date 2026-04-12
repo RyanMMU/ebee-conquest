@@ -779,7 +779,7 @@ def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
 
 
 
-    titletextabovebar = largefont.render("Loading engine...", True, (240, 240, 240))
+    titletextabovebar = largefont.render("Precompiling map data...", True, (240, 240, 240))
     screen.blit(titletextabovebar, titletextabovebar.get_rect(center=(windowwidth // 2, windowheight // 2 - 40)))
 
 
