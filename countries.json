@@ -19,8 +19,8 @@
         "States" : {
             "Lanna": "Chiang_Mai",
             "Siam": "Bangkok",
-            "Isan": "Bangkok",
-            "Northern_Malay": "Phuket"
+            "Isan": "Isan",
+            "Northern_Malay": "Koh_Samui"
         }
     },
     {
@@ -28,12 +28,12 @@
         "States" : {
             "Java": "Jakarta",
             "Sumatra": "Medan",
-            "Interior_Borneo": "Singkawang",
+            "Interior_Borneo": "Borneo",
             "Sulawesi": "Makassar",
-            "Kalimantan": "Palangka_Raya",
+            "Kalimantan": "Kalimantan",
             "West_Papua": "Jayapura",
-            "Lesser_Sunda_Islands": "Surabaya",
-            "The_Moluccas": "Maluku"
+            "Lesser_Sunda_Islands": "Kupang",
+            "The_Moluccas": "Telok_Ambon"
         }
     },
     {
@@ -46,21 +46,22 @@
         "Country" : "Philippines",
         "States" : {
             "Luzon": "Luzon",
-            "Manila": "Manila",
-            "Bataan": "Bataan",
+            "Manila": "Angeles",
+            "Bataan": "Baguio",
             "Palawan": "Puerto_Princesa",
-            "Western_Visayas": "Iloilo",
+            "Western_Visayas": "Bacolod",
             "Northern_Mindanao": "Cagayan_de_Oro",
-            "Zamboanga": "Zamboanga",
-            "Davao": "Davao_City",
-            "Central_Islands": "Naga_City",
-            "Eastern_Visayas": "Legazpi_City"
+            "Zamboanga": "Pagadian",
+            "Davao": "Davao",
+            "Central_Islands": "Legazpi",
+            "Eastern_Visayas": "Calbayog"
         }
     },
     {
         "Country" : "Vietnam",
         "States" : {
-            "Trong_Bo": "Hanoi",
+            "Tonkin": "Hanoi",
+            "Trong_Bo": "Da_Nang",
             "Southern_Indochina": "Ho_Chi_Minh_City"
             
         }
@@ -68,9 +69,7 @@
     {
         "Country" : "Timor_Leste",
         "States" : {
-            "Western_Timor_Leste": "Maliana",
-            "Central_Timor_Leste": "Dili",
-            "Eastern_Timor_Leste": "Baucau"
+            "Portuguese_Timor": "Dili"
         }
     },
     {
@@ -88,7 +87,15 @@
     {
         "Country" : "Myanmar",
         "States" : {
-            "Tenasserim": "Yangon"
+            "Tenasserim": "Naypyidaw",
+            "Pegu": "Yangon",
+            "Irrawaddy": "Pathein",
+            "Arakan": "Pyay",
+            "Magwe": "Monywa",
+            "Mandalay": "Mandalay",
+            "Federated_Shan_States": "Lashio",
+            "Kentung_and_Yawnghwe": "Kyaing_Tong",
+            "Sagaing": "MyitkyinaS"
         }
     }
 ]
