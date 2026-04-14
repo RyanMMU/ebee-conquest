@@ -60,13 +60,13 @@ A **Google Maps-style, 2D turn-based grand strategy war simulator** where player
     python main.py
     ```
 
-### Notes
-
-  * If you previously installed `pygame`, uninstall it first to avoid runtime conflicts with `pygame-ce`:
-    ```bash
-    pip uninstall pygame
-    pip install -r requirements.txt
-    ```
+>[!WARNING]
+> If you previously installed `pygame`, uninstall it first to avoid runtime conflicts with `pygame-ce`.
+>
+> ```bash
+> pip uninstall pygame
+> pip install -r requirements.txt
+> ```
 
 -----
 
