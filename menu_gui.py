@@ -23,8 +23,8 @@ menu = 'main'
 run = True
 
 
-button_width = 330
-button_height = 55
+button_width = 297
+button_height = 49.5
 button_m=(WIDTH // 2) - (button_width // 2)
 
 bg_image = pygame.image.load('Game Menu UI Design (1).png').convert()
