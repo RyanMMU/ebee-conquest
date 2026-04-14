@@ -9,10 +9,7 @@ screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
 pygame.display.set_caption('game menu') 
 
-dark_blue = (15,25,45)
-
 text= (255, 244, 200)
-
 
 
 
@@ -41,7 +38,7 @@ def glow(screen,x,y,w,h):
 
 def button(screen,x,y,w,h):
     button_surf = pygame.Surface((w, h),pygame.SRCALPHA)
-    button_color = (10,10,60,200)  
+    button_color = (17,18,59,200)  
     pygame.draw.rect(button_surf, button_color, (0,0,w,h))
     pygame.draw.rect(button_surf,(187,77,0,255),(0,0,w,h),width=2)
     screen.blit(button_surf, (x, y))
