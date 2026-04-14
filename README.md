@@ -40,8 +40,8 @@ A **Google Maps-style, 2D turn-based grand strategy war simulator** where player
 
 ### Prerequisites
 
-  * **Python:** 3.11 and above is recommended
-  * **Pygame:** Pygame is 2.6.1 is required.
+  * **Python:** 3.9+ (Windows)
+  * **Dependencies:** See `requirements.txt` (uses `pygame-ce` and `pygame-gui`)
   * **API Key:** An OpenAI API key is required for dNPC™ functionality (or a local Ollama instance).
 
 ### Installation
@@ -57,20 +57,28 @@ A **Google Maps-style, 2D turn-based grand strategy war simulator** where player
     ```
 3.  **Test the Engine:**
     ```bash
-    python engine.py
+    python main.py
+    ```
+
+### Notes
+
+  * If you previously installed `pygame`, uninstall it first to avoid runtime conflicts with `pygame-ce`:
+    ```bash
+    pip uninstall pygame
+    pip install -r requirements.txt
     ```
 
 -----
 
 ## Support of LLM API Providers for dNPC™️(powered by [EbeeEngineAPI](https://github.com/ebee-conquest/engine/llm/api))
 
-- [x] [Graph-based (Recommended)](https://github.com/RyanMMU/ebee-conquest)
+- [ ] [Graph-based (Recommended)](https://github.com/RyanMMU/ebee-conquest)
 - [ ] [AIHubMix](https://aihubmix.com/?aff=OOiX)
 - [ ] [OpenRouter](https://openrouter.ai/)
 - [ ] [vLLM](https://github.com/vllm-project/vllm)
 - [ ] [SGLang](https://github.com/sgl-project/sglang)
 - [ ] [Ollama](https://github.com/ollama/ollama)
-- [ ] [302.AI (sponsored)](https://share.302.ai/514k2v)
+- [ ] [302.AI](https://share.302.ai/514k2v)
 - [ ] [OpenAI](https://platform.openai.com/docs/guides/gpt/chat-completions-api)
   - [ ] [Azure OpenAI API](https://learn.microsoft.com/en-us/azure/ai-services/openai/reference)
 - [ ] [Anthropic Claude](https://anthropic.com)
@@ -122,6 +130,12 @@ The **Ebee Engine** is the project's main engine, converting static SVG data int
 
   * **Adjacency Graph:** Built dynamically to allow AI and players to navigate provinces.
   * \**A* Pathfinding:\*\* Implements optimal routing with terrain-based cost modifiers (Mountains, Urban, Plains).
+
+### Ebee Super Optimization (ESO)
+
+  * **Geometry Cache:** Preprocessed SVG map geometry is cached to reduce startup parsing cost.
+  * **Fast Reloads:** Subsequent runs can skip heavy reprocessing when cache is valid (you will see `ESO cache hit ...` logs).
+  * **Large Map Ready:** Helps keep startup responsive even with high province counts.
 
 -----
 
