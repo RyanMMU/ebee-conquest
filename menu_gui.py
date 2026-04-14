@@ -24,6 +24,8 @@ button_width = 297
 button_height = 53
 button_m=(WIDTH // 2) - (button_width // 2)
 
+
+#TODO: put your images inside the image folder pls
 bg_image = pygame.image.load('Game Menu UI Design (1).png').convert()
 bg_image = pygame.transform.smoothscale(bg_image,(WIDTH, HEIGHT))
 
