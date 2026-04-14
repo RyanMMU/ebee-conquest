@@ -23,11 +23,11 @@ menu = 'main'
 run = True
 
 
-button_width = 350
-button_height = 60
+button_width = 330
+button_height = 55
 button_m=(WIDTH // 2) - (button_width // 2)
 
-bg_image = pygame.image.load('Group 1.png').convert()
+bg_image = pygame.image.load('Game Menu UI Design (1).png').convert()
 bg_image = pygame.transform.scale(bg_image,(WIDTH, HEIGHT))
 
 def glow(screen,x,y,w,h):
