@@ -9,10 +9,12 @@ import xml.etree.ElementTree as elementtree
 from svgelements import Path
 #Local module
 from engine.console import developmentconsole, loaddevmodeflag 
-from engine.gui import gui_drawchoosecountryoverlay, gui_drawgameplayhud, gui_drawtroopcountbadge, gui_lightencolor, gui_drawcountryinteractionmenu
+from engine.gui import EngineUI, gui_lightencolor
 from engine.diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
 from . import core as coremodule
 from . import gameplay as gameplaymodule
+from . import economy as economymodule
+from . import api as apimodule
 from .events import EventBus, EngineEventType
 
 
@@ -208,6 +210,7 @@ def getscreenpoints(pointlist, zoomvalue, offsetx, offsety):
 def getscreenrectangle(rectangle, zoomvalue, offsetx, offsety):
     # print(rectangle)
     testrectangle1 = None 
+    # screen rectangle to screen coordinates
     return pygame.Rect(
         int(rectangle.x * zoomvalue + offsetx),
         int(rectangle.y * zoomvalue + offsety),
@@ -756,6 +759,10 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
 # GAME LOGIC AND RENDERING ENDSS
 
 
+# get the current province at mouse position
+def getprovinceatmouse(mouseposition, provincelist, zoomvalue, camerax, cameray, screenrectangle=None):
+    # Delegate to API module to keep runtime thin.
+    return apimodule.getprovinceatmouse(mouseposition, provincelist, zoomvalue, camerax, cameray, screenrectangle)
 
 # Loading screen and main loop starts 
 # start after main()
@@ -770,6 +777,8 @@ def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
 
 
     progressvalue = 0.0 if totalcount <= 0 else completedcount / totalcount
+
+
     progressvalue = max(0.0, min(1.0, progressvalue))
 
     screen.fill((18, 18, 22))
@@ -1013,13 +1022,16 @@ def main(eventbus=None):
     pendingcountry = None
     playercountry = None
 
-    # Default test stats
+    # Economy defaults come from economy module
     currentturnnumber = 1
-    playergold = 1200
-    playerpopulation = 2500
-    recruitamount = 100
-    recruitgoldcostperunit = 1
-    recruitpopulationcostperunit = 1
+    economyconfig = getdefaulteconomyconfig()
+    (
+        playergold,
+        playerpopulation,
+        recruitamount,
+        recruitgoldcostperunit,
+        recruitpopulationcostperunit,
+    ) = initializeplayereconomy(economyconfig)
 
 
     movementorderlist = []
@@ -1031,6 +1043,7 @@ def main(eventbus=None):
     newssystem = NewsSystem(eventbus)
     newssystem.start()
     newspopup = NewsPopup()
+    runtimeui = EngineUI((windowwidth, windowheight))
 
 
 
@@ -1213,71 +1226,49 @@ def main(eventbus=None):
                     if gamephase == "play" and "troops" in drawitem and drawitem["troops"] > 0 and itemrectanglescreen.colliderect(screenrectangle):
                         troopbadgelist.append((itemrectanglescreen.center, drawitem["troops"])) #store as screen coords, troop count
 
-        for badgecenter, badgetroops in troopbadgelist:
-            gui_drawtroopcountbadge(screen, badgecenter, badgetroops, smallfont)
+        canrecruit = selectedprovinceid is not None and getprovincecontroller(provincemap[selectedprovinceid]) == playercountry
+        recruitgoldcost, recruitpopulationcost = getrecruitcosts(
+            recruitamount,
+            recruitgoldcostperunit,
+            recruitpopulationcostperunit,
+        )
+        recruitenabled = canrecruit and canrecruittroops(
+            playergold,
+            playerpopulation,
+            recruitgoldcost,
+            recruitpopulationcost,
+            developmentmode=developmentmode,
+        )
 
-
-
-        choosebuttonrectangle = None
-        recruitbuttonrectangle = None
-        endturnbuttonrectangle = None
-        declarewarbuttonrectangle = None
-
-        if gamephase == "choosecountry":
-            choosebuttonrectangle, _ = gui_drawchoosecountryoverlay(screen, titlefont, normalfont, pendingcountry)
-        else:
-            canrecruit = selectedprovinceid is not None and getprovincecontroller(provincemap[selectedprovinceid]) == playercountry
-            recruitgoldcost = recruitamount * recruitgoldcostperunit
-            recruitpopulationcost = recruitamount * recruitpopulationcostperunit
-
-            recruitenabled = canrecruit and (developmentmode or (playergold >= recruitgoldcost and playerpopulation >= recruitpopulationcost))
-            recruitbuttonrectangle, endturnbuttonrectangle = gui_drawgameplayhud(
-                screen,
-                normalfont,
-                smallfont,
-                playercountry,
-                currentturnnumber,
-                playergold,
-                playerpopulation,
-                selectedprovinceid,
-                provincemap,
-                recruitamount,
-                recruitenabled,
-                developmentmode,
-                recruitgoldcost,
-                recruitpopulationcost,
-            ) # draw hud after press
-
-
-
-
-            # TODO: REFACTOR TO SEPARATE STATE AND PROVINCE SELLECTION, right now you can only open country menu when you left click on enemy state and then right click on enemy province
-            if countrymenutarget:
-                placehldr, declarewarbuttonrectangle = gui_drawcountryinteractionmenu(
-                    screen, # screen is the display surface, value from main loop
-                    normalfont,
-                    smallfont,
-                    countrymenutarget,
-                    countrymenutarget in countriesatwarset,
-                )
-
-
-
-
-
-        if hovertext:
-            hoverlabel = normalfont.render("id:" + hovertext, True, (255, 255, 255))
-            # follow mouse but with an offset so it doesn't get covered by the cursor
-            screen.blit(hoverlabel, (mouseposition[0] + 16, mouseposition[1] + 16))
-
-        #show the province name when you hover over a province 
+        runtimeui.sync(
+            gamephase,
+            pendingcountry,
+            playercountry,
+            currentturnnumber,
+            playergold,
+            playerpopulation,
+            selectedprovinceid,
+            provincemap,
+            recruitamount,
+            recruitenabled,
+            developmentmode,
+            recruitgoldcost,
+            recruitpopulationcost,
+            countrymenutarget,
+            countriesatwarset,
+            hovertext,
+            mouseposition,
+            troopbadgelist,
+        )
+        runtimeui.update(elapsedseconds)
+        runtimeui.draw(screen)
 
 
 
 
 
         #DRAW GUIS, ON TOP
-        devconsole.draw(screen, normalfont, smallfont) # draw dev console after hover text so that it appears on top
+        devconsole.draw(screen, normalfont, smallfont) # draw dev console after ui so that it appears on top
         newspopup.draw(screen, (titlefont, normalfont), newssystem.current)
 
 
@@ -1285,6 +1276,74 @@ def main(eventbus=None):
 
 
         for event in pygame.event.get():
+            uiaction = runtimeui.process_event(event)
+
+            if uiaction == EngineUI.actiondeclarewar and gamephase == "play":
+                if countrymenutarget and countrymenutarget != playercountry:
+                    countriesatwarset.add(countrymenutarget)
+                    eventbus.emit(
+                        EngineEventType.WARDECLARED,
+                        {
+                            "attacker": playercountry,
+                            "defender": countrymenutarget,
+                            "turn": currentturnnumber,
+                        },
+                    )
+                countrymenutarget = None
+                continue
+
+            if uiaction == EngineUI.actionrecruit and gamephase == "play":
+                if selectedprovinceid:
+                    selectedprovince = provincemap[selectedprovinceid]
+                    if getprovincecontroller(selectedprovince) == playercountry:
+                        requiredgold, requiredpopulation = getrecruitcosts(
+                            recruitamount,
+                            recruitgoldcostperunit,
+                            recruitpopulationcostperunit,
+                        )
+                        if canrecruittroops(
+                            playergold,
+                            playerpopulation,
+                            requiredgold,
+                            requiredpopulation,
+                            developmentmode=developmentmode,
+                        ):
+                            selectedprovince["troops"] += recruitamount
+                            if not developmentmode:
+                                playergold -= requiredgold
+                                playerpopulation -= requiredpopulation
+                            eventbus.emit(
+                                EngineEventType.TROOPSRECRUITED,
+                                {
+                                    "country": playercountry,
+                                    "provinceId": selectedprovinceid,
+                                    "amount": recruitamount,
+                                    "turn": currentturnnumber,
+                                },
+                            )
+                continue
+
+            if uiaction == EngineUI.actionendturn and gamephase == "play":
+                processmovementorders(movementorderlist, provincemap, emit=eventbus.emit)
+                playergold,playerpopulation = applyendturneconomy(
+                    playercountry,
+                    provincemap,
+                    playergold,
+                    playerpopulation,
+                )
+                currentturnnumber += 1
+                routepreviewset = set()
+                eventbus.emit(
+                    EngineEventType.NEXTTURN,
+                    {
+                        "turn": currentturnnumber,
+                        "playerCountry": playercountry,
+                        "playerGold": playergold,
+                        "playerPopulation": playerpopulation,
+                    },
+                )
+                continue
+
             if event.type == pygame.QUIT:
                 isrunning = False
 
@@ -1312,6 +1371,9 @@ def main(eventbus=None):
                 if devconsole.handleleftclick(event.pos):
                     continue
 
+                if runtimeui.ispointeroverui(event.pos):
+                    continue
+
                 if gamephase == "choosecountry":
 
                     if hoveredstateid:
@@ -1329,15 +1391,14 @@ def main(eventbus=None):
                                 },
                             )
 
-
-                    if choosebuttonrectangle and choosebuttonrectangle.collidepoint(event.pos) and pendingcountry:
+                    if runtimeui.clickchoosebutton(event.pos) and pendingcountry:
                         playercountry = pendingcountry
                         gamephase = "play"
                         expandedstateid = None
                         selectedprovinceid = None
                         routepreviewset = set()
                         countriesatwarset = set()
-                        countrymenutarget = None # default var
+                        countrymenutarget = None
                         eventbus.emit(
                             EngineEventType.PLAYERCOUNTRYSELECTED,
                             {
@@ -1353,78 +1414,12 @@ def main(eventbus=None):
                 # collidepoint checks button and country menu interacts
                 if gamephase == "play":
                     if countrymenutarget:
-                        if declarewarbuttonrectangle and declarewarbuttonrectangle.collidepoint(event.pos):
-                            if countrymenutarget != playercountry:
-                                countriesatwarset.add(countrymenutarget)
-
-
-                                eventbus.emit(
-                                    EngineEventType.WARDECLARED,
-                                    {
-                                        "attacker": playercountry,
-                                        "defender": countrymenutarget,
-                                        "turn": currentturnnumber,
-                                    },
-                                )
-
-
                         countrymenutarget = None
                         continue
 
 
 
 
-
-                    if recruitbuttonrectangle and recruitbuttonrectangle.collidepoint(event.pos):
-                        if selectedprovinceid:
-                            selectedprovince = provincemap[selectedprovinceid]
-                            if getprovincecontroller(selectedprovince) == playercountry:
-                                requiredgold = recruitamount * recruitgoldcostperunit
-                                requiredpopulation = recruitamount * recruitpopulationcostperunit
-                                if developmentmode or (playergold >= requiredgold and playerpopulation >= requiredpopulation):
-                                    selectedprovince["troops"] += recruitamount
-                                    if not developmentmode:
-                                        playergold -= requiredgold
-                                        playerpopulation -= requiredpopulation
-                                    eventbus.emit(
-                                        EngineEventType.TROOPSRECRUITED,
-                                        {
-                                            "country": playercountry,
-                                            "provinceId": selectedprovinceid,
-                                            "amount": recruitamount,
-                                            "turn": currentturnnumber,
-                                        },
-                                    )
-                        continue
-
-
-
-
-
-                    if endturnbuttonrectangle and endturnbuttonrectangle.collidepoint(event.pos): # end turn and process movement orders
-
-                        #TODO: fix this, theres a problem with the argument, eventbus is not being passed on
-                        processmovementorders(movementorderlist, provincemap, emit=eventbus.emit)
-                        
-
-
-                        if playercountry:
-                            ownedprovincecount = sum(1 for province in provincemap.values() if getprovincecontroller(province) == playercountry)
-                            playergold += max(5, ownedprovincecount // 5)
-                            playerpopulation += max(10, ownedprovincecount // 3)
-                        currentturnnumber += 1
-                        routepreviewset = set()
-                        
-                        eventbus.emit(
-                            EngineEventType.TURNADVANCED,
-                            {
-                                "turn": currentturnnumber,
-                                "playerCountry": playercountry,
-                                "playerGold": playergold,
-                                "playerPopulation": playerpopulation,
-                            },
-                        )
-                        continue
 
                     if hoveredprovinceid:
                         selectedprovince = provincemap.get(hoveredprovinceid)
@@ -1608,6 +1603,7 @@ def main(eventbus=None):
 
                 cameray = clampverticalcamera(cameray, zoomvalue, newwindowheight, mapbox)
                 camerax = wraphorizontalcamera(camerax, zoomvalue, mapbox)
+                runtimeui.setwindowsize((newwindowwidth, newwindowheight))
 
 
 
@@ -1666,6 +1662,12 @@ buildprovinceadjacencygraph = gameplaymodule.buildprovinceadjacencygraph
 getterrainmovecost = gameplaymodule.getterrainmovecost
 findprovincepath = gameplaymodule.findprovincepath
 processmovementorders = gameplaymodule.processmovementorders
+
+getrecruitcosts = economymodule.getrecruitcosts
+canrecruittroops = economymodule.canrecruittroops
+applyendturneconomy = economymodule.applyendturneconomy
+getdefaulteconomyconfig = economymodule.getdefaulteconomyconfig
+initializeplayereconomy = economymodule.initializeplayereconomy
 
 
 

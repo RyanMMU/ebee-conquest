@@ -1,2 +1,3 @@
-pygame==2.6.1
+pygame-ce==2.5.2
+pygame-gui==0.6.13
 svgelements==1.9.6

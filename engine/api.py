@@ -2,6 +2,28 @@ from . import core, gameplay
 from .events import EngineEventType, EventBus
 
 
+def getprovinceatmouse(mouseposition, provincelist, zoomvalue, camerax, cameray, screenrectangle=None):
+    # return the province table under mouse position
+
+    
+    for province in provincelist:
+        provincerectscreen = core.getscreenrectangle(province["rectangle"], zoomvalue, camerax, cameray)
+        if screenrectangle is not None and not provincerectscreen.colliderect(screenrectangle):
+            continue
+        if not provincerectscreen.collidepoint(mouseposition):
+            continue
+
+        for polygon in province["polygons"]:
+            polygonrectscreen = core.getscreenrectangle(polygon["rectangle"], zoomvalue, camerax, cameray)
+            if not polygonrectscreen.collidepoint(mouseposition):
+                continue
+
+            polygonpointsscreen = core.getscreenpoints(polygon["points"], zoomvalue, camerax, cameray)
+            if len(polygonpointsscreen) >= 3 and core.ispointinsidepolygon(mouseposition, polygonpointsscreen):
+                return province
+
+    return None
+
 
 
 class EbeeEngine:
@@ -184,4 +206,15 @@ class EbeeEngine:
             "turn": self.currentturnnumber,
         }
 
+    def getprovinceatmouse(self, mouseposition, zoomvalue, camerax, cameray, screenrectangle=None, provincelist=None):
+        # api for province at mouse location
 
+        activeprovincelist = self.provinceenrichedlist if provincelist is None else provincelist
+        return getprovinceatmouse(
+            mouseposition,
+            activeprovincelist,
+            zoomvalue,
+            camerax,
+            cameray,
+            screenrectangle,
+        )

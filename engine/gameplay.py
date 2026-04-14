@@ -264,7 +264,10 @@ def processmovementorders(movementorderlist, provincemap, emit):
                             "previousController": previouscontroller,
                             "newController": movingcountry,
                         },
-                    )
+                    ) #link to event 
+
+
+
 
         movementorder["index"] = currentpathindex
         movementorder["current"] = pathlist[currentpathindex]

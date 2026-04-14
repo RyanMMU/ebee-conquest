@@ -16,7 +16,7 @@ class EngineEventType(str, Enum):
     COMBATRESOLVED = "combatresolved"
     PROVINCECONTROLCHANGED = "provincecontrolchanged"
 
-    TURNADVANCED = "turnadvanced"
+    NEXTTURN = "nextturn"
     WARDECLARED = "wardeclared"
     TROOPSRECRUITED = "troopsrecruited"
 
