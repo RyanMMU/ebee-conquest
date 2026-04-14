@@ -30,7 +30,7 @@ A **Google Maps-style, 2D turn-based grand strategy war simulator** where player
 > **Note:** This project was developed as a Mini IT Project. The main focus is modular architecture and the integration of modern AI agents into a war scenario game.
 
 > [!WARNING]
-> **Attention:** This game currently only **supports windows** and is still under **active development**. Please check the documentation below and proceed with caution.
+> **Attention:** This game currently only **supports Windows** and is still under **active development**. Please check the documentation below and proceed with caution.
 
 
 ![Current Progress for Ebee Engine](images/engineprogresschart.png)
