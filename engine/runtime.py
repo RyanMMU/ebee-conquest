@@ -1371,7 +1371,9 @@ def main(eventbus=None):
                 if devconsole.handleleftclick(event.pos):
                     continue
 
-                if runtimeui.ispointeroverui(event.pos):
+
+                #fix issue where choose country button is blocked
+                if gamephase != "choosecountry" and runtimeui.ispointeroverui(event.pos):
                     continue
 
                 if gamephase == "choosecountry":

@@ -52,6 +52,7 @@ class EngineUI:
     actionendturn = "endturn"
     actiondeclarewar = "declarewar"
 
+
     def __init__(self, window_size):
         #print("EngineUI init start", window_size)
         self.window_size = window_size
@@ -78,6 +79,13 @@ class EngineUI:
         #print("layout")
         self.applylayout()
 
+
+
+
+
+
+
+
     def buildelements(self):
         #print("function element")
         self.choose_title = pygame_gui.elements.UILabel(
@@ -85,11 +93,14 @@ class EngineUI:
             text="choose your country",
             manager=self.manager,
         )
+
+
         self.choose_help = pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(0, 0, 620, 24),
             text="click on any province to select the country",
             manager=self.manager,
         )
+
         self.choose_selected = pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(0, 0, 520, 24),
             text="selected: none",
@@ -100,6 +111,8 @@ class EngineUI:
             text="choose country",
             manager=self.manager,
         )
+
+
 
         self.hud_panel = pygame_gui.elements.UIPanel(
             relative_rect=pygame.Rect(0, 0, 100, 74),
@@ -130,6 +143,10 @@ class EngineUI:
         self.hud_detail.hide()
         self.hud_controls.hide()
 
+
+
+
+
         self.recruit_button = pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(0, 0, 170, 38),
             text="recruit",
@@ -146,6 +163,7 @@ class EngineUI:
             manager=self.manager,
             object_id="#recruitcost",
         )
+
 
         self.country_panel = pygame_gui.elements.UIPanel(
             relative_rect=pygame.Rect(0, 0, 280, 154),
@@ -169,6 +187,10 @@ class EngineUI:
             manager=self.manager,
             container=self.country_panel,
         )
+
+
+
+
         self.declare_war_button = pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(12, 82, 256, 38),
             text="declare war",
@@ -181,6 +203,8 @@ class EngineUI:
             manager=self.manager,
             container=self.country_panel,
         )
+
+
 
         self.hideplayelements()
         self.hidechooseelements()
@@ -198,6 +222,8 @@ class EngineUI:
         #self.hud_panel.set_dimensions((window_width, 74))
 
     def applylayout(self):
+
+
         #print("applylayout running")
         window_width, window_height = self.window_size
 
@@ -207,24 +233,35 @@ class EngineUI:
         self.choose_button.set_relative_position((window_width - 210, window_height - 56))
         self.choosebuttonrect = pygame.Rect(window_width - 210, window_height - 56, 190, 38)
 
+
         self.hud_panel.set_dimensions((window_width, 74))
         self.hud_panel.set_relative_position((0, 0))
+
 
         self.recruit_button.set_relative_position((window_width - 390, window_height - 56))
         self.end_turn_button.set_relative_position((window_width - 210, window_height - 56))
         self.recruit_cost_label.set_relative_position((window_width - 390, window_height - 72))
 
+
         self.country_panel.set_relative_position((0, (window_height - 154) // 2))
 
+
+
     def showchooseelements(self):
+
+
         #print("showchooseelements")
+
         self.choose_title.show()
         self.choose_help.show()
         self.choose_selected.show()
         self.choose_button.show()
 
     def hidechooseelements(self):
+
+
         #print("hidechooseelements")
+
         self.choose_title.hide()
         self.choose_help.hide()
         self.choose_selected.hide()
@@ -232,12 +269,17 @@ class EngineUI:
 
     def showplayelements(self):
         #print("showplayelements")
+
+
         self.hud_panel.show()
         self.recruit_button.show()
         self.end_turn_button.show()
 
     def hideplayelements(self):
+
         #print("hideplayelements")
+
+
         self.hud_panel.hide()
         self.hud_header.hide()
         self.hud_detail.hide()
@@ -247,11 +289,19 @@ class EngineUI:
         self.recruit_cost_label.hide()
 
     def setwindowsize(self, window_size):
+
         #print("setwindowsize", window_size)
         self.window_size = window_size
         self.manager.set_window_resolution(window_size)
         self.applylayout()
 
+
+
+
+
+
+
+    # FUNCITON TO UPDATE EVERY TIME SYNC IS CALLED, UPDATE UI WITH NEW DATA
     def sync(
         self,
         gamephase,
@@ -273,7 +323,8 @@ class EngineUI:
         mouseposition,
         troopbadgelist,
     ):
-        #print("sync called", gamephase, pendingcountry)
+        
+        #print("sync", gamephase, pendingcountry)
         self.applylayout()
         self.gamephase = gamephase
         self.pendingcountry = pendingcountry
@@ -285,16 +336,21 @@ class EngineUI:
             self.country_panel.hide()
             self.hidechooseelements()
             
+
+
         else:
             #print("sync play phase")
 
             self.hidechooseelements()
             self.showplayelements()
 
+
             headertext = (
                 f"{playercountry} | turn {currentturnnumber} | gold {playergold} | population {playerpopulation}"
             )
             self.hudheadertext = headertext
+
+
 
             if selectedprovinceid:
                 #print("selected province", selectedprovinceid)
@@ -305,26 +361,37 @@ class EngineUI:
                 )
 
 
+
             else:
                 #print("no selected province")
                 detailtext = "select a province in your country"
             self.huddetailtext = detailtext
 
+
+
             self.hudcontrolstext = (
                 "left click: open state/select province | right click foreign province: country actions"
             )
 
+
+
             self.recruit_button.set_text(f"recruit +{recruitamount}")
+
+
             if recruitenabled:
+
                 #print("recruit enabled")
                 self.recruit_button.enable()
             else:
                 #print("recruit disabled")
                 self.recruit_button.disable()
 
+
+
             if developmentmode:
                 #print("dev mode on")
                 self.recruit_cost_label.hide()
+
             else:
                 #print("dev mode off show cost")
                 self.recruit_cost_label.set_text(
@@ -332,13 +399,19 @@ class EngineUI:
                 )
                 self.recruit_cost_label.show()
 
+
+
+
             if countrymenutarget:
+
                 #print("country menu target", countrymenutarget)
                 self.country_panel.show()
                 self.country_name.set_text(countrymenutarget)
                 alreadyatwar = countrymenutarget in countriesatwarset
                 self.country_status.set_text("status: at war" if alreadyatwar else "status: peace")
                 self.declare_war_button.set_text("already at war" if alreadyatwar else "declare war")
+
+
                 if alreadyatwar:
                     self.declare_war_button.disable()
                 else:
@@ -347,14 +420,20 @@ class EngineUI:
                 #print("hide country menu")
                 self.country_panel.hide()
 
+
+
         self.hovertextcurrent = hovertext
         self.hovermousepos = mouseposition
 
         self.troopbadgelist = list(troopbadgelist)  
 
+
     def process_event(self, event):
+
         #print("process_event", event)
         self.manager.process_events(event)
+
+
 
         if event.type == pygame.USEREVENT and event.user_type == pygame_gui.UI_BUTTON_PRESSED:
             if event.ui_element == self.recruit_button:
@@ -364,16 +443,28 @@ class EngineUI:
             if event.ui_element == self.declare_war_button:
                 return self.actiondeclarewar
 
+
         return None
 
+
     def update(self, elapsedseconds):
+
         #print("update", elapsedseconds)
         self.manager.update(elapsedseconds)
 
+
+
+    # RENDER FUNCTION
     def draw(self, screen):
         #print("draw")
+
+
+        # this is for choose country overlay
         if self.gamephase == "choosecountry":
             self.drawchooseoverlay(screen)
+
+
+        # this is for main gameplay 
         self.manager.draw_ui(screen)
         if self.gamephase != "choosecountry":
             screen.blit(self.hudfont.render(self.hudheadertext, True, (242, 242, 242)), (10, 8))
@@ -388,7 +479,13 @@ class EngineUI:
             drawy = min(mousey + 16, max(0, self.window_size[1] - hoverlabel.get_height()))
             screen.blit(hoverlabel, (drawx, drawy))
 
+
+
+
+
+
     def drawchooseoverlay(self, screen):
+
         #print("drawchooseoverlay")
         window_width, window_height = self.window_size
 
@@ -412,6 +509,10 @@ class EngineUI:
         buttontext = self.choosetextfont.render("choose country", True, (240, 240, 240))
         screen.blit(buttontext, buttontext.get_rect(center=self.choosebuttonrect.center))
 
+
+
+
+
     def clickchoosebutton(self, mouseposition):
         #print("clickchoosebutton", mouseposition)
         if self.gamephase != "choosecountry":
@@ -420,15 +521,25 @@ class EngineUI:
             return False
         return self.choosebuttonrect.collidepoint(mouseposition)
 
+
+
+
+
+
     def ispointeroverui(self, mouseposition):
         #print("ispointeroverui", mouseposition)
+
+        # choosecountry button is drawn manually, so check its rect directly
+        if self.gamephase == "choosecountry":
+            if self.choosebuttonrect.collidepoint(mouseposition):
+                return True
+            return False
+
+        # in play phase, only block map clicks for actual clickable UI controls
         hittestelements = [
-            self.choose_button,
             self.recruit_button,
             self.end_turn_button,
             self.declare_war_button,
-            self.country_panel,
-            self.hud_panel,
         ]
 
         for element in hittestelements:
@@ -437,14 +548,37 @@ class EngineUI:
             if element.get_abs_rect().collidepoint(mouseposition):
                 return True
 
+        # country menu panel should block map clicks while visible
+        if getattr(self.country_panel, "visible", True) and self.country_panel.get_abs_rect().collidepoint(mouseposition):
+            return True
+
         return False
 
 
-def randomemptyhelperaaa():
-    pass
+#def helperAaa():
+#    pass
 
 
-# Legacy compatibility helpers for old_engine.py.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# for old_engien | IGNORE!
 def gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
     labelsurface = fontobject.render(str(troopcount), True, (255, 255, 255))
     labelrectangle = labelsurface.get_rect()
