@@ -1,7 +1,7 @@
 from .gameplay import getprovincecontroller
 #PLEASE PUT ANYTHING RLEATED TO ECONOMY IN HERE
 
-
+#PLACEHOLDER, EACH COUNTRY WILL HAVE THEIR OWN ECONOMY CONFIG LATER
 defaulteconomy = {
     "startinggold": 1200,
     "startingpopulation": 2500,
@@ -74,5 +74,5 @@ def applyendturneconomy(playercountry, provincemap, playergold, playerpopulation
     goldincome, populationgrowth = getendturneconomydelta(ownedprovincecount)
     playergold += goldincome
     playerpopulation += populationgrowth
-    
+
     return playergold, playerpopulation
