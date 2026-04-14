@@ -7,6 +7,9 @@ import platform
 import pygame
 import xml.etree.ElementTree as elementtree
 from svgelements import Path
+import ctypes
+ctypes.windll.user32.SetProcessDPIAware()
+
 #Local module
 from engine.console import developmentconsole, loaddevmodeflag 
 from engine.gui import EngineUI, gui_lightencolor
@@ -31,8 +34,8 @@ print("CURRENT VERSION - APRIL 8 2024")
 statefilepath = "states.svg"
 provincefilepath = "provinces.svg"
 countrydatafilepath = "countries.json"
-defaultwindowwidth = 1280
-defaultwindowheight = 720
+defaultwindowwidth = 1280 
+defaultwindowheight = 720 
 backgroundcolor = (30, 30, 30)
 defaultshapecolor = (200, 200, 200)
 hovercolor = (255, 100, 100)
