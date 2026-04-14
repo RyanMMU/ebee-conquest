@@ -1674,7 +1674,3 @@ applyendturneconomy = economymodule.applyendturneconomy
 getdefaulteconomyconfig = economymodule.getdefaulteconomyconfig
 initializeplayereconomy = economymodule.initializeplayereconomy
 
-
-
-main()
-

@@ -500,7 +500,9 @@ class EngineUI:
         screen.blit(helptext, helptext.get_rect(midtop=(window_width // 2, 60)))
 
         selectedtext = f"selected: {self.pendingcountry}" if self.pendingcountry else "selected: none"
+
         selectedlabel = self.choosetextfont.render(selectedtext, True, (240, 240, 240))
+
         screen.blit(selectedlabel, (20, window_height - 48))
 
         buttoncolor = (56, 116, 198) if self.choosebuttonenabled else (70, 70, 70)
@@ -585,7 +587,7 @@ def gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
     labelrectangle.inflate_ip(10, 6)
     labelrectangle.center = (int(centerposition[0]), int(centerposition[1]))
     pygame.draw.rect(screen, (0, 0, 0), labelrectangle, border_radius=1)
-    pygame.draw.rect(screen, (165, 165, 165), labelrectangle, width=1, border_radius=1)
+    pygame.draw.rect(screen, (165, 165, 165), labelrectangle, width=1, border_radius=1) # this is the border for the troop badge
     screen.blit(labelsurface, labelsurface.get_rect(center=labelrectangle.center))
 
 
