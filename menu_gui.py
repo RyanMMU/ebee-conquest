@@ -28,7 +28,7 @@ button_height = 55
 button_m=(WIDTH // 2) - (button_width // 2)
 
 bg_image = pygame.image.load('Game Menu UI Design (1).png').convert()
-bg_image = pygame.transform.scale(bg_image,(WIDTH, HEIGHT))
+bg_image = pygame.transform.smoothscale(bg_image,(WIDTH, HEIGHT))
 
 def glow(screen,x,y,w,h):
     for i in range(1,6):
