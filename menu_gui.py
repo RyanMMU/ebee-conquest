@@ -43,7 +43,7 @@ def button(screen,x,y,w,h):
     button_surf = pygame.Surface((w, h),pygame.SRCALPHA)
     button_color = (10,10,60,200)  
     pygame.draw.rect(button_surf, button_color, (0,0,w,h))
-    pygame.draw.rect(button_surf,(255, 120, 0, 255),(0,0,w,h),width=2)
+    pygame.draw.rect(button_surf,(187,77,0,255),(0,0,w,h),width=2)
     screen.blit(button_surf, (x, y))
 
 while run:
