@@ -20,8 +20,6 @@ from pathlib import Path as filepathpath
 import pickle
 
 #initial config
-minimumzoomvalue = 0.5
-maximumzoomvalue = 20.0
 curvesamplestep = 1.5
 maxsegmentsteps = 32
 

@@ -18,6 +18,7 @@ from . import core as coremodule
 from . import gameplay as gameplaymodule
 from . import economy as economymodule
 from . import api as apimodule
+from . import camera as cameramodule
 from .events import EventBus, EngineEventType
 
 
@@ -34,16 +35,16 @@ print("CURRENT VERSION - APRIL 8 2024")
 statefilepath = "states.svg"
 provincefilepath = "provinces.svg"
 countrydatafilepath = "countries.json"
-defaultwindowwidth = 1280 
-defaultwindowheight = 720 
+defaultwindowwidth = 1280
+defaultwindowheight = 720
 backgroundcolor = (30, 30, 30)
 defaultshapecolor = (200, 200, 200)
 hovercolor = (255, 100, 100)
-minimumzoomvalue = 0.5
-maximumzoomvalue = 20.0
-zoomstepvalue = 1.15
-edgepanmargin = 40
-edgepanspeed = 600
+minimumzoomvalue = cameramodule.minimumzoomvalue
+maximumzoomvalue = cameramodule.maximumzoomvalue
+zoomstepvalue = cameramodule.zoomstepvalue
+edgepanmargin = cameramodule.defaultpanconfig.margin
+edgepanspeed = cameramodule.defaultpanconfig.speed
 curvesamplestep = 1.5
 maxsegmentsteps = 48
 terrainmovecostlookup = {
@@ -66,202 +67,7 @@ autocountrycolors = [
     (191, 196, 84),
     (129, 144, 224),
     (206, 138, 112),
-] # placeholder colors, will make a dynamic color generator later 
-# TODO: dynamic color generation
-
-
-# MAP LOADINGG STARTS
-
-#def loadhexagonmap(filepath):
-#   shapelist = []
-#   with open(filepath, "r") as fileobject:
-#       for line in fileobject:
-#           parts = line.strip().split()
-#           if len(parts) >= 3:
-#               shapeid = parts[0]
-#               try:
-#                   x = float(parts[1])
-#                   y = float(parts[2])
-#                   shapelist.append({"id": shapeid, "points": [(x, y)]})
-#               except ValueError:
-#                   continue
-#   return shapelist
-#ignore code, hexagon not used
-
-
-
-#CURRENT ATTRIBUTES:
-# PROVINCE: id, polygons, rectangle, parentid, terrain, troops, ownercountry, controllercountry, country (compat alias to controllercountry), countrycolor
-# Example: {
-#   "id": "Malaya_01",
-#   "polygons": [{"points": [(x1, y1), (x2, y2), ...],
-#   "rectangle": pygame.Rect(...),
-#   "parentid": "Indochina",
-#   "terrain": "plains",
-#   "troops": 100,
-#   "ownercountry": "Malaysia",
-#   "controllercountry": "Malaysia",
-#   "country": "Malaysia",
-#   "countrycolor": (r, g, b),
-# }
-
-# STATE: id, polygons, rectangle, ownercountry, controllercountry, country (compat alias), countrycolor, subdivisions (list of provinces)
-# COUNTRY: name, color (from json or auto assigned)
-
-
-
-
-
-def loadsvgshapes(filepath, onprogress=None):
-    # read svg and convert paths into polygons
-    tree = elementtree.parse(filepath)
-    root = tree.getroot()
-    namespacelookup = {"svg": "http://www.w3.org/2000/svg"}
-    shapelist = []
-
-    mapnode = root.find(".//svg:svg[@id='map']", namespacelookup)
-
-    if mapnode is not None:
-        pathelementlist = mapnode.findall("svg:path", namespacelookup)
-    else:
-        pathelementlist = root.findall(".//svg:path", namespacelookup)
-
-    totalcount = len(pathelementlist)
-
-    if onprogress and not onprogress(0, totalcount):
-        return []
-
-    for currentindex, pathelement in enumerate(pathelementlist, start=1):
-        shapeid = pathelement.get("id", "Unknown")
-        pathdata = pathelement.get("d")
-
-        if not pathdata:
-            if onprogress and (currentindex == 1 or currentindex % 20 == 0 or currentindex == totalcount):
-                if not onprogress(currentindex, totalcount):
-                    return []
-            continue
-
-        pathstarttimestamp = time.perf_counter()
-        svgpath = Path(pathdata)
-        polygonlist = convertpathtopolygons(svgpath)
-
-
-        if polygonlist:
-            allxvalues = [x for polygon in polygonlist for x, _ in polygon["points"]]
-            allyvalues = [y for polygon in polygonlist for _, y in polygon["points"]]
-            shapelist.append(
-                {
-                    "id": shapeid,
-                    "polygons": polygonlist,
-                    "rectangle": pygame.Rect(
-                        min(allxvalues),
-                        min(allyvalues),
-                        max(allxvalues) - min(allxvalues),
-                        max(allyvalues) - min(allyvalues),
-                    ),
-                }
-            )
-
-        pathelapsedseconds = time.perf_counter() - pathstarttimestamp
-        logslowpath(filepath, currentindex, totalcount, shapeid, pathelapsedseconds)
-
-        if onprogress and (currentindex == 1 or currentindex % 20 == 0 or currentindex == totalcount):
-            if not onprogress(currentindex, totalcount):
-
-                return []
-    #print(shapelist[0]) 
-    return shapelist
-
-
-
-
-def getmapbox(shapelist):
-    allXValues = [shape["rectangle"].left for shape in shapelist] + [shape["rectangle"].right for shape in shapelist]
-    allYValues = [shape["rectangle"].top for shape in shapelist] + [shape["rectangle"].bottom for shape in shapelist]
-    minX = min(allXValues)
-    maxX = max(allXValues)
-    minY = min(allYValues)
-    maxY = max(allYValues)
-    tempVar = 0 
-    # print("Debug: minX=", minX, "maxX=", maxX)  
-    #print(f"box |  x={minX} to {maxX}, y={minY} to {maxY}")
-    return {
-        "minimumx": minX,
-        "maximumx": maxX,
-        "minimumy": minY,
-        "maximumy": maxY,
-        "width": maxX - minX,
-        "height": maxY - minY,
-    }
-# MAP LOADINGG ENDSS
-
-
-
-
-# UTILITY FUNCTIONS STARTS
-
-
-
-def getscreenpoints(pointlist, zoomvalue, offsetx, offsety):
-    #print(pointlist)
-    #return (pointlist)
-    return [(x * zoomvalue + offsetx, y * zoomvalue + offsety) for x, y in pointlist]
-
-
-
-
-def getscreenrectangle(rectangle, zoomvalue, offsetx, offsety):
-    # print(rectangle)
-    testrectangle1 = None 
-    # screen rectangle to screen coordinates
-    return pygame.Rect(
-        int(rectangle.x * zoomvalue + offsetx),
-        int(rectangle.y * zoomvalue + offsety),
-        max(1, int(rectangle.width * zoomvalue)),
-        max(1, int(rectangle.height * zoomvalue)),
-    )
-
-
-
-
-def getminimumzoomforheight(windowheight, mapbox):
-
-    if mapbox["height"] <= 0:
-        return min(maximumzoomvalue, minimumzoomvalue)
-    # print("getminmumzoom height", windowheight)
-
-    return min(maximumzoomvalue, max(minimumzoomvalue, windowheight / mapbox["height"]))
-
-
-
-
-def clampverticalcamera(cameray, zoomvalue, windowheight, mapbox):
-
-    clamptest = 1  
-    toplimit = -mapbox["minimumy"] * zoomvalue
-    bottomlimit = windowheight - mapbox["maximumy"] * zoomvalue
-    if bottomlimit > toplimit:
-        return (toplimit + bottomlimit) * 0.5
-    # print(cameray)
-    return max(bottomlimit, min(toplimit, cameray))
-
-
-
-
-
-def wraphorizontalcamera(camerax, zoomvalue, mapbox):
-
-
-    tilewidth = mapbox["width"] * zoomvalue # map wider than window then allow horizontal wrapping else wrap center
-    if tilewidth:
-        return camerax
-    anchorvalue = mapbox["minimumx"] * zoomvalue
-
-
-
-    return ((camerax + anchorvalue) % tilewidth) - anchorvalue
-
-# UTILITY FUNCTIONS ENDSS
+]
 
 
 
@@ -1003,11 +809,7 @@ def main(eventbus=None):
 
     
     windowwidth, windowheight = screen.get_size()
-    zoomvalue = getminimumzoomforheight(windowheight, mapbox)
-    camerax = (windowwidth - mapbox["width"] * zoomvalue) / 2 - mapbox["minimumx"] * zoomvalue
-    cameray = (windowheight - mapbox["height"] * zoomvalue) / 2 - mapbox["minimumy"] * zoomvalue
-    cameray = clampverticalcamera(cameray, zoomvalue, windowheight, mapbox)
-    camerax = wraphorizontalcamera(camerax, zoomvalue, mapbox)
+    camerastate = cameramodule.createcamerastate(windowwidth, windowheight, mapbox)
 
 
 
@@ -1062,12 +864,14 @@ def main(eventbus=None):
         #this gives x and y (0 and 1)
         windowwidth, windowheight = screen.get_size()
 
-        panpixels = edgepanspeed * elapsedseconds
-        # pan the camera
-        if mouseposition[0] <= edgepanmargin:
-            camerax += panpixels
-        elif mouseposition[0] >= windowwidth - edgepanmargin:
-            camerax -= panpixels
+        cameramodule.applyedgepan(
+            camerastate,
+            mouseposition[0],
+            windowwidth,
+            elapsedseconds,
+            edgepanmargin,
+            edgepanspeed,
+        )
 
         """ disabled for now, because everytime i click any button near the edge the camera will pan and itis getting annoying
         if mouseposition[1] <= edgepanmargin:
@@ -1076,18 +880,12 @@ def main(eventbus=None):
             cameray -= panpixels
         """
 
-        minimumzoom = getminimumzoomforheight(windowheight, mapbox)
-        if zoomvalue < minimumzoom:
-            oldzoomvalue = zoomvalue
-            zoomvalue = minimumzoom
-            centerx, centery = windowwidth * 0.5, windowheight * 0.5
-            centerworldx = (centerx - camerax) / oldzoomvalue
-            centerworldy = (centery - cameray) / oldzoomvalue
-            camerax = centerx - centerworldx * zoomvalue
-            cameray = centery - centerworldy * zoomvalue
+        cameramodule.enforceminimumzoom(camerastate, windowwidth, windowheight, mapbox)
+        cameramodule.clampcamerastate(camerastate, windowheight, mapbox)
 
-        cameray = clampverticalcamera(cameray, zoomvalue, windowheight, mapbox)
-        camerax = wraphorizontalcamera(camerax, zoomvalue, mapbox)
+        zoomvalue = camerastate.zoom
+        camerax = camerastate.x
+        cameray = camerastate.y
 
         screen.fill(backgroundcolor)
 
@@ -1566,18 +1364,12 @@ def main(eventbus=None):
             elif event.type == pygame.MOUSEWHEEL:
                 if devconsole.visible:
                     continue
-                oldzoomvalue = zoomvalue
-                zoomvalue *= zoomstepvalue ** event.y
-                minimumzoom = getminimumzoomforheight(windowheight, mapbox)
-                zoomvalue = max(minimumzoom, min(maximumzoomvalue, zoomvalue))
-                if zoomvalue != oldzoomvalue:
-                    mousex, mousey = pygame.mouse.get_pos()
-                    mouseworldx = (mousex - camerax) / oldzoomvalue
-                    mouseworldy = (mousey - cameray) / oldzoomvalue
-                    camerax = mousex - mouseworldx * zoomvalue
-                    cameray = mousey - mouseworldy * zoomvalue
-                    cameray = clampverticalcamera(cameray, zoomvalue, windowheight, mapbox)
-                    camerax = wraphorizontalcamera(camerax, zoomvalue, mapbox)
+                mousex, mousey = pygame.mouse.get_pos()
+                cameramodule.applywheelzoom(camerastate, event.y, windowheight, mapbox, mousex, mousey)
+                cameramodule.clampcamerastate(camerastate, windowheight, mapbox)
+                zoomvalue = camerastate.zoom
+                camerax = camerastate.x
+                cameray = camerastate.y
 
             elif event.type == pygame.KEYDOWN:
 
@@ -1593,21 +1385,19 @@ def main(eventbus=None):
                 newwindowwidth = max(400, event.w)
                 newwindowheight = max(300, event.h)
 
-                centerworldx = (oldwindowwidth * 0.5 - camerax) / zoomvalue
-                centerworldy = (oldwindowheight * 0.5 - cameray) / zoomvalue
-
                 screen = pygame.display.set_mode((newwindowwidth, newwindowheight), pygame.RESIZABLE)
-                camerax = newwindowwidth * 0.5 - centerworldx * zoomvalue
-                cameray = newwindowheight * 0.5 - centerworldy * zoomvalue
-
-                minimumzoom = getminimumzoomforheight(newwindowheight, mapbox)
-                if zoomvalue < minimumzoom:
-                    zoomvalue = minimumzoom
-                    camerax = newwindowwidth * 0.5 - centerworldx * zoomvalue
-                    cameray = newwindowheight * 0.5 - centerworldy * zoomvalue
-
-                cameray = clampverticalcamera(cameray, zoomvalue, newwindowheight, mapbox)
-                camerax = wraphorizontalcamera(camerax, zoomvalue, mapbox)
+                cameramodule.resizecamerastate(
+                    camerastate,
+                    oldwindowwidth,
+                    oldwindowheight,
+                    newwindowwidth,
+                    newwindowheight,
+                    mapbox,
+                )
+                cameramodule.clampcamerastate(camerastate, newwindowheight, mapbox)
+                zoomvalue = camerastate.zoom
+                camerax = camerastate.x
+                cameray = camerastate.y
                 runtimeui.setwindowsize((newwindowwidth, newwindowheight))
 
 
@@ -1650,11 +1440,11 @@ def main(eventbus=None):
 # DEFINITIONS
 loadsvgshapes = coremodule.loadsvgshapes
 getmapbox = coremodule.getmapbox
-getscreenpoints = coremodule.getscreenpoints
-getscreenrectangle = coremodule.getscreenrectangle
-getminimumzoomforheight = coremodule.getminimumzoomforheight
-clampverticalcamera = coremodule.clampverticalcamera
-wraphorizontalcamera = coremodule.wraphorizontalcamera
+getscreenpoints = cameramodule.getscreenpoints
+getscreenrectangle = cameramodule.getscreenrectangle
+getminimumzoomforheight = cameramodule.getminimumzoomforheight
+clampverticalcamera = cameramodule.clampverticalcamera
+wraphorizontalcamera = cameramodule.wraphorizontalcamera
 ispointinsidepolygon = coremodule.ispointinsidepolygon
 loadcountrydata = coremodule.loadcountrydata
 groupsubdivisionsbystate = coremodule.groupsubdivisionsbystate
