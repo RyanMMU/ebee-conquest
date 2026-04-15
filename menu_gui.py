@@ -1,6 +1,8 @@
 import pygame
 import sys
 
+from engine.runtime import main
+
 pygame.init()
 
 WIDTH,HEIGHT = 1280,720
@@ -25,7 +27,6 @@ button_height = 53
 button_m=(WIDTH // 2) - (button_width // 2)
 
 
-#TODO: put your images inside the image folder pls
 bg_image = pygame.image.load('Game Menu UI Design (1).png').convert()
 bg_image = pygame.transform.smoothscale(bg_image,(WIDTH, HEIGHT))
 
@@ -61,7 +62,7 @@ while run:
             
                 
                 if button_m < mouse[0] < button_m + button_width and 170 < mouse[1] < 230:
-                        print('starting the game....')
+                        main()
                
                 elif button_m < mouse[0] < button_m+button_width and 345 < mouse[1] < 390:
                         menu = 'settings'
