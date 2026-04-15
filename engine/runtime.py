@@ -74,7 +74,6 @@ autocountrycolors = [
 
 # GAME LOGIC AND RENDERING STARTS
 
-# a* pathfinding adpated from https://www.redblobgames.com/pathfinding/a-star/introduction
 
 
 def getsegmentsamplecount(segment):
@@ -428,6 +427,10 @@ def getterrainmovecost(province):
 
 
 
+
+
+# A* PATHFINDING ADAPTED FROM https://medium.com/@nicholas.w.swift/easy-a-star-pathfinding-7e6689c7f7b2
+
 def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph, allowedprovinceidset=None):
     if startprovinceid not in provincemap or goalprovinceid not in provincemap:
         return []
@@ -436,6 +439,10 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
             return []
     if startprovinceid == goalprovinceid:
         return [startprovinceid]
+
+
+
+
 
     goalcenter = provincemap[goalprovinceid]["center"]
     openheap = [(0.0, startprovinceid)]
@@ -1124,6 +1131,11 @@ def main(eventbus=None):
                             )
                 continue
 
+
+
+
+            # for quick search: "end turn button"
+            # ON END TURN, process movement orders, apply economy, increment turn, emit next turn event
             if uiaction == EngineUI.actionendturn and gamephase == "play":
                 processmovementorders(movementorderlist, provincemap, emit=eventbus.emit)
                 playergold,playerpopulation = applyendturneconomy(

@@ -167,7 +167,7 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
 
 
 
-
+# MOVEMENT processing 
 def processmovementorders(movementorderlist, provincemap, emit):
     finishedorderlist = []
 
