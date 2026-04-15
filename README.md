@@ -70,7 +70,7 @@ A **Google Maps-style, 2D turn-based grand strategy war simulator** where player
 
 -----
 
-## Support of LLM API Providers for dNPC™️(powered by [EbeeEngineAPI](https://github.com/ebee-conquest/engine/llm/api))
+## Support of LLM API Providers for dNPC™️(powered by [EbeeEngineAPI](https://github.com/ebee-conquest/engine/api.py))
 
 - [ ] [Graph-based (Recommended)](https://github.com/RyanMMU/ebee-conquest)
 - [ ] [AIHubMix](https://aihubmix.com/?aff=OOiX)
