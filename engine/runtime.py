@@ -1376,6 +1376,8 @@ def main(eventbus=None):
             elif event.type == pygame.MOUSEWHEEL:
                 if devconsole.visible:
                     continue
+
+                
                 mousex, mousey = pygame.mouse.get_pos()
                 cameramodule.applywheelzoom(camerastate, event.y, windowheight, mapbox, mousex, mousey)
                 cameramodule.clampcamerastate(camerastate, windowheight, mapbox)
