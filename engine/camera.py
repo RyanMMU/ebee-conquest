@@ -106,7 +106,7 @@ def createcamerastate(windowwidth, windowheight, mapbox):
     cameray = (windowheight - mapbox["height"] * zoomvalue) / 2 - mapbox["minimumy"] * zoomvalue
     cameray = clampverticalcamera(cameray, zoomvalue, windowheight, mapbox)
     camerax = wraphorizontalcamera(camerax, zoomvalue, mapbox)
-    return CameraState(camerax, cameray, zoomvalue)
+    return CameraState(camerax, cameray, zoomvalue, zoomvalue)
 
 
 def applyedgepan(camerastate, mousex, windowwidth, elapsedseconds, panmargin, panspeed):
