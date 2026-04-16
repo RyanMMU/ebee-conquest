@@ -15,6 +15,7 @@ class CameraState:
     x: float
     y: float
     zoom: float
+    targetzoom: float
 
 
 
