@@ -145,16 +145,8 @@ def applywheelzoom(camerastate, wheeldelta, windowheight, mapbox, anchorx, ancho
     newzoomvalue = clampzoomvalue(newzoomvalue, minimumzoom)
     if newzoomvalue == oldzoomvalue:
         return
-    camerastate.x, camerastate.y = zoomcameratoanchor(
-        camerastate.x,
-        camerastate.y,
-        oldzoomvalue,
-        newzoomvalue,
-        anchorx,
-        anchory,
-    )
-    camerastate.zoom = newzoomvalue
-
+    camerastate.targetzoom = newzoomvalue
+    
 
 def resizecamerastate(camerastate, oldwindowwidth, oldwindowheight, newwindowwidth, newwindowheight, mapbox):
     centerworldx = (oldwindowwidth * 0.5 - camerastate.x) / camerastate.zoom
