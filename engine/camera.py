@@ -146,7 +146,7 @@ def applywheelzoom(camerastate, wheeldelta, windowheight, mapbox, anchorx, ancho
     if newzoomvalue == oldzoomvalue:
         return
     camerastate.targetzoom = newzoomvalue
-    
+
 
 def resizecamerastate(camerastate, oldwindowwidth, oldwindowheight, newwindowwidth, newwindowheight, mapbox):
     centerworldx = (oldwindowwidth * 0.5 - camerastate.x) / camerastate.zoom
@@ -160,3 +160,26 @@ def resizecamerastate(camerastate, oldwindowwidth, oldwindowheight, newwindowwid
         camerastate.zoom = minimumzoom
         camerastate.x = newwindowwidth * 0.5 - centerworldx * camerastate.zoom
         camerastate.y = newwindowheight * 0.5 - centerworldy * camerastate.zoom
+
+def updatesmoothzoom(camerastate, anchorx, anchory):
+    speed = 0.1  # boleh adjust kalau nak
+
+    oldzoom = camerastate.zoom
+    target = camerastate.targetzoom
+
+    newzoom = oldzoom + (target - oldzoom) * speed
+
+    # stop if it is too close
+    if abs(newzoom - target) < 0.001:
+        newzoom = target
+
+    camerastate.x, camerastate.y = zoomcameratoanchor(
+        camerastate.x,
+        camerastate.y,
+        oldzoom,
+        newzoom,
+        anchorx,
+        anchory,
+    )
+
+    camerastate.zoom = newzoom
