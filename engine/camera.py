@@ -143,8 +143,7 @@ def applywheelzoom(camerastate, wheeldelta, windowheight, mapbox, anchorx, ancho
     newzoomvalue = oldzoomvalue * (zoomstepvalue ** wheeldelta)
     minimumzoom = getminimumzoomforheight(windowheight, mapbox)
     newzoomvalue = clampzoomvalue(newzoomvalue, minimumzoom)
-    if newzoomvalue == oldzoomvalue:
-        return
+    
     camerastate.targetzoom = newzoomvalue
 
 
