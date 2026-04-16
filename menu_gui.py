@@ -31,12 +31,12 @@ bg_image = pygame.image.load('Game Menu UI Design (1).png').convert()
 bg_image = pygame.transform.smoothscale(bg_image,(WIDTH, HEIGHT))
 
 def glow(screen,x,y,w,h):
-    for i in range(1,6):
-        lighting = pygame.Surface((w + i*10, h + i*10), pygame.SRCALPHA)
-        glow_color =(255,190,0,15)
-        pygame.draw.rect(lighting, glow_color, (0, 0, w + i*10, h + i*10))
+    for i in range(1,4):
+        lighting = pygame.Surface((w + i*4, h + i*4), pygame.SRCALPHA)
+        glow_color =(255,195,0,17)
+        pygame.draw.rect(lighting, glow_color, (0, 0, w + i*4, h + i*4))
         
-        screen.blit(lighting, (x - i*5, y - i*5))
+        screen.blit(lighting, (x - i*2, y - i*2))
 
 
 def button(screen,x,y,w,h):
