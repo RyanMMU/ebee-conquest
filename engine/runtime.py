@@ -12,7 +12,7 @@ ctypes.windll.user32.SetProcessDPIAware()
 
 #Local module
 from engine.console import developmentconsole, loaddevmodeflag 
-from engine.gui import EngineUI, gui_lightencolor
+from engine.gui import EngineUI, gui_lightencolor, gui_gettroopbadgerect
 from engine.diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
 from . import core as coremodule
 from . import gameplay as gameplaymodule
@@ -68,8 +68,6 @@ autocountrycolors = [
     (129, 144, 224),
     (206, 138, 112),
 ]
-
-
 
 
 # GAME LOGIC AND RENDERING STARTS
@@ -218,6 +216,40 @@ def parsecolorvalue(rawcolorvalue):
             return None
 
     return None
+
+
+
+# TROOP BADGE MULTISELECT
+
+def makerectfrompoints(startposition, endposition):
+    startx, starty = startposition
+    endx, endy = endposition
+    left = min(startx, endx)
+    top = min(starty, endy)
+    width = abs(endx - startx)
+    height = abs(endy - starty)
+    return pygame.Rect(left, top, width, height)
+
+
+def getbadgehitprovinceid(mouseposition, badgehitlist):
+    for badgeentry in reversed(badgehitlist):
+        if badgeentry["rect"].collidepoint(mouseposition):
+            return badgeentry["provinceid"]
+    return None
+
+
+def getdragselectedprovinceids(selectionrect, badgehitlist, provincemap, playercountry):
+    selectedids = []
+    for badgeentry in badgehitlist:
+        provinceid = badgeentry["provinceid"]
+        province = provincemap.get(provinceid)
+        if not province:
+            continue
+        if getprovincecontroller(province) != playercountry:
+            continue
+        if badgeentry["rect"].colliderect(selectionrect):
+            selectedids.append(provinceid)
+    return selectedids
 
 #  from https://stackoverflow.com/a/29643643  
 
@@ -829,6 +861,7 @@ def main(eventbus=None):
     clock = pygame.time.Clock()
     expandedstateid = None
     selectedprovinceid = None
+    selectedprovinceidset = set()
 
     gamephase = "choosecountry"
     pendingcountry = None
@@ -856,6 +889,11 @@ def main(eventbus=None):
     newssystem.start()
     newspopup = NewsPopup()
     runtimeui = EngineUI((windowwidth, windowheight))
+
+    dragselectstart = None
+    dragselectcurrent = None
+    isdragselecting = False
+    dragminimumdistance = 8
 
 
 
@@ -901,6 +939,7 @@ def main(eventbus=None):
         hoveredprovinceid = None
         screenrectangle = screen.get_rect()
         troopbadgelist = [] # store troop badge info
+        troopbadgehitlist = []
 
 
 
@@ -985,6 +1024,7 @@ def main(eventbus=None):
 
 
                     # determine fill color based on game state and interactions
+                    # province color
                     if gamephase == "choosecountry":
                         if stateshape.get("country"):
                             basefillcolor = stateshape.get("countrycolor", defaultshapecolor)
@@ -997,7 +1037,7 @@ def main(eventbus=None):
                             basefillcolor = gui_lightencolor(basefillcolor, pulsevalue)
 
 
-                    elif drawitem.get("id") == selectedprovinceid:
+                    elif drawitem.get("id") in selectedprovinceidset:
                         basefillcolor = (232, 214, 103)
 
 
@@ -1033,6 +1073,15 @@ def main(eventbus=None):
 
                     if gamephase == "play" and "troops" in drawitem and drawitem["troops"] > 0 and itemrectanglescreen.colliderect(screenrectangle):
                         troopbadgelist.append((itemrectanglescreen.center, drawitem["troops"])) #store as screen coords, troop count
+
+                        # for quick search: "troop badge hitbox"
+                        troopbadgerect = gui_gettroopbadgerect(itemrectanglescreen.center, drawitem["troops"], runtimeui.troopbadgefont)
+                        troopbadgehitlist.append(
+                            {
+                                "provinceid": drawitem["id"],
+                                "rect": troopbadgerect,
+                            }
+                        )
 
         canrecruit = selectedprovinceid is not None and getprovincecontroller(provincemap[selectedprovinceid]) == playercountry
         recruitgoldcost, recruitpopulationcost = getrecruitcosts(
@@ -1070,6 +1119,19 @@ def main(eventbus=None):
         )
         runtimeui.update(elapsedseconds)
         runtimeui.draw(screen)
+
+
+
+
+
+        # DRAG SELECT RECTANGLE
+        if gamephase == "play" and isdragselecting and dragselectstart and dragselectcurrent:
+            selectionrect = makerectfrompoints(dragselectstart, dragselectcurrent)
+            if selectionrect.width > 0 or selectionrect.height > 0:
+                overlaysurface = pygame.Surface((selectionrect.width or 1, selectionrect.height or 1), pygame.SRCALPHA)
+                overlaysurface.fill((95, 145, 255, 45))
+                screen.blit(overlaysurface, selectionrect.topleft)
+                pygame.draw.rect(screen, (95, 145, 255), selectionrect, width=1)
 
 
 
@@ -1211,6 +1273,7 @@ def main(eventbus=None):
                         gamephase = "play"
                         expandedstateid = None
                         selectedprovinceid = None
+                        selectedprovinceidset = set()
                         routepreviewset = set()
                         countriesatwarset = set()
                         countrymenutarget = None
@@ -1232,17 +1295,34 @@ def main(eventbus=None):
                         countrymenutarget = None
                         continue
 
+                    dragselectstart = event.pos
+                    dragselectcurrent = event.pos
+                    isdragselecting = True
 
+            elif event.type == pygame.MOUSEMOTION:
+                if isdragselecting:
+                    dragselectcurrent = event.pos
 
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if gamephase != "play" or not isdragselecting:
+                    continue
 
+                dragselectcurrent = event.pos
+                selectionrect = makerectfrompoints(dragselectstart, dragselectcurrent)
+                isdragselecting = False
 
-                    if hoveredprovinceid:
-                        selectedprovince = provincemap.get(hoveredprovinceid)
-                        if selectedprovince and getprovincecontroller(selectedprovince) == playercountry:
-                            selectedprovinceid = hoveredprovinceid
-                            expandedstateid = selectedprovince.get("parentid", hoveredstateid)
-                            routepreviewset = set()
-                            countrymenutarget = None
+                hasdragdistance = max(selectionrect.width, selectionrect.height) >= dragminimumdistance
+                if hasdragdistance:
+                    selectedids = getdragselectedprovinceids(selectionrect, troopbadgehitlist, provincemap, playercountry)
+                    selectedprovinceidset = set(selectedids)
+
+                    if selectedids:
+                        selectedprovinceid = selectedids[0]
+                        selectedprovince = provincemap.get(selectedprovinceid)
+                        expandedstateid = selectedprovince.get("parentid") if selectedprovince else expandedstateid
+                        routepreviewset = set()
+                        countrymenutarget = None
+                        if selectedprovince:
                             eventbus.emit(
                                 EngineEventType.PROVINCESELECTED,
                                 {
@@ -1251,20 +1331,72 @@ def main(eventbus=None):
                                     "country": getprovincecontroller(selectedprovince),
                                 },
                             )
-                            continue
+                    else:
+                        selectedprovinceid = None
+                        selectedprovinceidset = set()
+                        routepreviewset = set()
 
-                    if hoveredstateid is not None:
-                        expandedstateid = hoveredstateid
+                    dragselectstart = None
+                    dragselectcurrent = None
+                    continue
+
+                clickedbadgeprovinceid = getbadgehitprovinceid(event.pos, troopbadgehitlist)
+                if clickedbadgeprovinceid:
+                    selectedprovince = provincemap.get(clickedbadgeprovinceid)
+                    if selectedprovince and getprovincecontroller(selectedprovince) == playercountry:
+                        selectedprovinceid = clickedbadgeprovinceid
+                        selectedprovinceidset = {clickedbadgeprovinceid}
+                        expandedstateid = selectedprovince.get("parentid", hoveredstateid)
+                        routepreviewset = set()
+                        countrymenutarget = None
                         eventbus.emit(
-                            EngineEventType.STATESELECTED,
+                            EngineEventType.PROVINCESELECTED,
                             {
-                                "stateId": expandedstateid,
+                                "provinceId": selectedprovinceid,
+                                "stateId": selectedprovince.get("parentid"),
+                                "country": getprovincecontroller(selectedprovince),
                             },
                         )
-                    else:
-                        expandedstateid = None
-                        selectedprovinceid = None
+                        dragselectstart = None
+                        dragselectcurrent = None
+                        continue
+
+                if hoveredprovinceid:
+                    selectedprovince = provincemap.get(hoveredprovinceid)
+                    if selectedprovince and getprovincecontroller(selectedprovince) == playercountry:
+                        selectedprovinceid = hoveredprovinceid
+                        selectedprovinceidset = {hoveredprovinceid}
+                        expandedstateid = selectedprovince.get("parentid", hoveredstateid)
                         routepreviewset = set()
+                        countrymenutarget = None
+                        eventbus.emit(
+                            EngineEventType.PROVINCESELECTED,
+                            {
+                                "provinceId": selectedprovinceid,
+                                "stateId": selectedprovince.get("parentid"),
+                                "country": getprovincecontroller(selectedprovince),
+                            },
+                        )
+                        dragselectstart = None
+                        dragselectcurrent = None
+                        continue
+
+                if hoveredstateid is not None:
+                    expandedstateid = hoveredstateid
+                    eventbus.emit(
+                        EngineEventType.STATESELECTED,
+                        {
+                            "stateId": expandedstateid,
+                        },
+                    )
+                else:
+                    expandedstateid = None
+                    selectedprovinceid = None
+                    selectedprovinceidset = set()
+                    routepreviewset = set()
+
+                dragselectstart = None
+                dragselectcurrent = None
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3: # right click for move orders
                 if devconsole.visible or gamephase != "play":
@@ -1328,23 +1460,43 @@ def main(eventbus=None):
                 # TODO: fix the issue that you cannot move through enemy provinces
 
 
+                # allows for multiple source provinces if you have multiple selected, prioritizes the hovered province if it is in the selection, then prioritizes the order of selection, then just goes through them in id order
+                sourceprovinceidlist = []
+                if selectedprovinceidset:
+                    sourceprovinceidlist.extend(sorted(provinceid for provinceid in selectedprovinceidset if provinceid in provincemap))
+                    if selectedprovinceid in sourceprovinceidlist:
+                        sourceprovinceidlist.remove(selectedprovinceid)
+                        sourceprovinceidlist.insert(0, selectedprovinceid)
+                elif selectedprovinceid:
+                    sourceprovinceidlist.append(selectedprovinceid)
+                else:
+                    continue
 
-                #Path findign
+                routepreviewset = set()
+                for sourceprovinceid in sourceprovinceidlist:
+                    if sourceprovinceid == hoveredprovinceid:
+                        continue
 
-                foundpath = findprovincepath(
-                    selectedprovinceid,
-                    hoveredprovinceid,
-                    provincemap,
-                    provincegraph,
-                    allowedprovinceidset=allowedprovinceidset,
-                )
+                    sourceprovince = provincemap.get(sourceprovinceid)
+                    if not sourceprovince:
+                        continue
+                    if getprovincecontroller(sourceprovince) != playercountry:
+                        continue
+                    if sourceprovince["troops"] <= 0:
+                        continue
 
+                    foundpath = findprovincepath(
+                        sourceprovinceid,
+                        hoveredprovinceid,
+                        provincemap,
+                        provincegraph,
+                        allowedprovinceidset=allowedprovinceidset,
+                    )
 
+                    routepreviewset.update(foundpath)
+                    if len(foundpath) < 2:
+                        continue
 
-
-
-                routepreviewset = set(foundpath)
-                if len(foundpath) >= 2:
                     movingtroopcount = sourceprovince["troops"]
                     sourceprovince["troops"] -= movingtroopcount
 
@@ -1363,7 +1515,7 @@ def main(eventbus=None):
                     eventbus.emit(
                         EngineEventType.MOVEORDERCREATED,
                         {
-                            "sourceProvinceId": selectedprovinceid,
+                            "sourceProvinceId": sourceprovinceid,
                             "destinationProvinceId": hoveredprovinceid,
                             "path": list(foundpath),
                             "troops": movingtroopcount,

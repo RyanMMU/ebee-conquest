@@ -25,6 +25,16 @@ import pygame_gui
 # troopbadgelist: a list of (centerposition, troopcount) tuples for rendering troop count badges on provinces
 
 
+def gui_gettroopbadgerect(centerposition, troopcount, fontobject):
+
+    labelsurface = fontobject.render(str(troopcount), True, (255, 255, 255))
+    labelrectangle = labelsurface.get_rect()
+    labelrectangle.inflate_ip(10, 6)
+    labelrectangle.center = (int(centerposition[0]), int(centerposition[1]))
+    
+    return labelrectangle
+
+
 #def DEBUG():
 #    pass
 
@@ -370,7 +380,7 @@ class EngineUI:
 
 
             self.hudcontrolstext = (
-                "left click: open state/select province | right click foreign province: country actions"
+                "left click troop badge: select | drag: multi-select troops | right click: move/order country actions"
             )
 
 
@@ -583,9 +593,7 @@ class EngineUI:
 # for old_engien | IGNORE!
 def gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
     labelsurface = fontobject.render(str(troopcount), True, (255, 255, 255))
-    labelrectangle = labelsurface.get_rect()
-    labelrectangle.inflate_ip(10, 6)
-    labelrectangle.center = (int(centerposition[0]), int(centerposition[1]))
+    labelrectangle = gui_gettroopbadgerect(centerposition, troopcount, fontobject)
     pygame.draw.rect(screen, (0, 0, 0), labelrectangle, border_radius=1)
     pygame.draw.rect(screen, (165, 165, 165), labelrectangle, width=1, border_radius=1) # this is the border for the troop badge
     screen.blit(labelsurface, labelsurface.get_rect(center=labelrectangle.center))
