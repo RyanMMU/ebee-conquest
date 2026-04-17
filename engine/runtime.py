@@ -1227,7 +1227,12 @@ def main(eventbus=None):
                             routepreviewset = frontlinepathpreviewset
                             countrymenutarget = None
                             frontlineplacementmode = False
-                    continue
+                        continue
+                    
+                    #fix click handlin
+                    # clicking away from a valid border cancels frontline placement mode,
+                    # then falls through to normal province click handling.
+                    frontlineplacementmode = False
 
 
 
