@@ -20,6 +20,8 @@ import pygame_gui
 # recruitpopulationcost: the current population cost to recruit based on recruit amount and economy config
 # countrymenutarget: the country currently targeted by the country interaction menu, or None if no menu
 # countriesatwarset: a set of country names that the player country is currently at war with
+# selectedtroopentries: list of selected troop rows, each row includes provinceid and troops
+# frontlineplacementmode: whether frontline border placement mode is currently active
 # hovertext: the current hover text to display based on hovered province, or None if no hover
 # mouseposition: the current mouse position in screen coordinates, used for hover text positioning
 # troopbadgelist: a list of (centerposition, troopcount) tuples for rendering troop count badges on provinces
@@ -61,6 +63,9 @@ class EngineUI:
     actionrecruit = "recruit"
     actionendturn = "endturn"
     actiondeclarewar = "declarewar"
+    actionsplit = "split"
+    actionmerge = "merge"
+    actionfrontline = "frontline"
 
 
     def __init__(self, window_size):
@@ -83,6 +88,9 @@ class EngineUI:
         self.hudheadertext = ""
         self.huddetailtext = ""
         self.hudcontrolstext = ""
+        self.selectionpanelwidth = 356
+        self.selectionpanelheight = 308
+        self.selectionrowlabels = []
 
         #print("build elementstest")
         self.buildelements()
@@ -214,11 +222,64 @@ class EngineUI:
             container=self.country_panel,
         )
 
+        self.selection_panel = pygame_gui.elements.UIPanel(
+            relative_rect=pygame.Rect(0, 0, self.selectionpanelwidth, self.selectionpanelheight),
+            manager=self.manager,
+        )
+        self.selection_title = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(10, 8, self.selectionpanelwidth - 20, 22),
+            text="selected troops",
+            manager=self.manager,
+            container=self.selection_panel,
+        )
+        self.selection_summary = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(10, 30, self.selectionpanelwidth - 20, 22),
+            text="",
+            manager=self.manager,
+            container=self.selection_panel,
+        )
+        self.selection_status = pygame_gui.elements.UILabel(
+            relative_rect=pygame.Rect(10, 214, self.selectionpanelwidth - 20, 22),
+            text="",
+            manager=self.manager,
+            container=self.selection_panel,
+        )
+        rowwidth = self.selectionpanelwidth - 20
+        for rowindex in range(7):
+            rowlabel = pygame_gui.elements.UILabel(
+                relative_rect=pygame.Rect(10, 58 + rowindex * 22, rowwidth, 20),
+                text="",
+                manager=self.manager,
+                container=self.selection_panel,
+            )
+            self.selectionrowlabels.append(rowlabel)
+
+        buttonwidth = 106
+        self.split_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(10, 254, buttonwidth, 40),
+            text="split",
+            manager=self.manager,
+            container=self.selection_panel,
+        )
+        self.merge_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(124, 254, buttonwidth, 40),
+            text="merge",
+            manager=self.manager,
+            container=self.selection_panel,
+        )
+        self.frontline_button = pygame_gui.elements.UIButton(
+            relative_rect=pygame.Rect(238, 254, buttonwidth, 40),
+            text="frontline",
+            manager=self.manager,
+            container=self.selection_panel,
+        )
+
 
 
         self.hideplayelements()
         self.hidechooseelements()
         self.country_panel.hide()
+        self.selection_panel.hide()
 
 
     #def applylayout(self):
@@ -254,6 +315,9 @@ class EngineUI:
 
 
         self.country_panel.set_relative_position((0, (window_height - 154) // 2))
+        self.selection_panel.set_relative_position(
+            (window_width - self.selectionpanelwidth - 16, max(90, (window_height - self.selectionpanelheight) // 2))
+        )
 
 
 
@@ -297,6 +361,7 @@ class EngineUI:
         self.recruit_button.hide()
         self.end_turn_button.hide()
         self.recruit_cost_label.hide()
+        self.selection_panel.hide()
 
     def setwindowsize(self, window_size):
 
@@ -329,6 +394,8 @@ class EngineUI:
         recruitpopulationcost,
         countrymenutarget,
         countriesatwarset,
+        selectedtroopentries,
+        frontlineplacementmode,
         hovertext,
         mouseposition,
         troopbadgelist,
@@ -344,6 +411,7 @@ class EngineUI:
             #print("sync choosecountry phase")
             self.hideplayelements()
             self.country_panel.hide()
+            self.selection_panel.hide()
             self.hidechooseelements()
             
 
@@ -379,9 +447,14 @@ class EngineUI:
 
 
 
-            self.hudcontrolstext = (
-                "left click troop badge: select | drag: multi-select troops | right click: move/order country actions"
-            )
+            if frontlineplacementmode:
+                self.hudcontrolstext = (
+                    "frontline mode: hover highlighted border and left click to place line"
+                )
+            else:
+                self.hudcontrolstext = (
+                    "left click troop badge: select | drag: multi-select troops | right click: move/order country actions"
+                )
 
 
 
@@ -430,6 +503,55 @@ class EngineUI:
                 #print("hide country menu")
                 self.country_panel.hide()
 
+            selectedentries = list(selectedtroopentries or [])
+            totaltroops = sum(max(0, int(entry.get("troops", 0))) for entry in selectedentries)
+            if selectedentries:
+                self.selection_panel.show()
+                self.selection_summary.set_text(
+                    f"{len(selectedentries)} selected | total troops: {totaltroops}"
+                )
+
+                maxrows = len(self.selectionrowlabels)
+                for rowindex, rowlabel in enumerate(self.selectionrowlabels):
+                    if rowindex < maxrows and rowindex < len(selectedentries):
+                        rowentry = selectedentries[rowindex]
+                        provinceid = rowentry.get("provinceid", "unknown")
+                        troopcount = int(rowentry.get("troops", 0))
+                        rowlabel.set_text(f"{provinceid}: {troopcount} troops")
+                        rowlabel.show()
+                    else:
+                        rowlabel.set_text("")
+                        rowlabel.hide()
+
+                if len(selectedentries) > maxrows:
+                    overflowcount = len(selectedentries) - maxrows
+                    self.selectionrowlabels[-1].set_text(f"... and {overflowcount} more provinces")
+                    self.selectionrowlabels[-1].show()
+
+                if frontlineplacementmode:
+                    self.selection_status.set_text("frontline: click highlighted border")
+                    self.frontline_button.set_text("cancel frontline")
+                else:
+                    self.selection_status.set_text("")
+                    self.frontline_button.set_text("frontline")
+
+                if totaltroops > 1:
+                    self.split_button.enable()
+                else:
+                    self.split_button.disable()
+
+                if len(selectedentries) > 1:
+                    self.merge_button.enable()
+                else:
+                    self.merge_button.disable()
+
+                if totaltroops > 0:
+                    self.frontline_button.enable()
+                else:
+                    self.frontline_button.disable()
+            else:
+                self.selection_panel.hide()
+
 
 
         self.hovertextcurrent = hovertext
@@ -452,6 +574,12 @@ class EngineUI:
                 return self.actionendturn
             if event.ui_element == self.declare_war_button:
                 return self.actiondeclarewar
+            if event.ui_element == self.split_button:
+                return self.actionsplit
+            if event.ui_element == self.merge_button:
+                return self.actionmerge
+            if event.ui_element == self.frontline_button:
+                return self.actionfrontline
 
 
         return None
@@ -552,6 +680,9 @@ class EngineUI:
             self.recruit_button,
             self.end_turn_button,
             self.declare_war_button,
+            self.split_button,
+            self.merge_button,
+            self.frontline_button,
         ]
 
         for element in hittestelements:
@@ -562,6 +693,8 @@ class EngineUI:
 
         # country menu panel should block map clicks while visible
         if getattr(self.country_panel, "visible", True) and self.country_panel.get_abs_rect().collidepoint(mouseposition):
+            return True
+        if getattr(self.selection_panel, "visible", True) and self.selection_panel.get_abs_rect().collidepoint(mouseposition):
             return True
 
         return False

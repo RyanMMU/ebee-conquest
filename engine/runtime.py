@@ -244,6 +244,33 @@ def getdragselectedprovinceids(selectionrect, badgehitlist, provincemap, playerc
             selectedids.append(provinceid)
     return selectedids
 
+
+def getselectedtroopentries(selectedprovinceidset, selectedprovinceid, provincemap, playercountry):
+    selectedids = []
+    if selectedprovinceidset:
+        selectedids.extend(sorted(selectedprovinceidset))
+    elif selectedprovinceid:
+        selectedids.append(selectedprovinceid)
+
+    entries = []
+    for provinceid in selectedids:
+        province = provincemap.get(provinceid)
+        if not province:
+            continue
+        if playercountry and getprovincecontroller(province) != playercountry:
+            continue
+        entries.append(
+            {
+                "provinceid": provinceid,
+                "troops": int(province.get("troops", 0)),
+                "stateid": province.get("parentid"),
+            }
+        )
+
+    entries.sort(key=lambda entry: (entry["provinceid"]))
+    return entries
+
+
 #  from https://stackoverflow.com/a/29643643  
 
 
@@ -599,6 +626,10 @@ def main(eventbus=None):
 
     movementorderlist = []
     routepreviewset = set()
+    frontlineplacementmode = False
+    activefrontlineedgekeyset = set()
+    frontlineassignmentlist = []
+    frontlinebordersegmentcache = {}
     countriesatwarset = set() # track countries at war
     countrymenutarget = None
 
@@ -801,6 +832,73 @@ def main(eventbus=None):
                             }
                         )
 
+        frontlineborderedgelist = []
+        frontlineedgebykey = {}
+        hoveredfrontlineedgekey = None
+        if gamephase == "play" and playercountry and (frontlineplacementmode or activefrontlineedgekeyset):
+            frontlineborderedgelist = getcountryborderedges(provincemap, provincegraph, playercountry)
+            frontlineedgebykey = {edge["edgekey"]: edge for edge in frontlineborderedgelist}
+            currentfrontlineedgekeyset = set(frontlineedgebykey.keys())
+            activefrontlineedgekeyset.intersection_update(currentfrontlineedgekeyset)
+
+            frontlineoverlaysegments = []
+            nearesthoverdistance = float("inf")
+            for copyshift in copyshiftlist:
+                drawcamerax = camerax + copyshift
+                for borderedge in frontlineborderedgelist:
+                    edgekey = borderedge["edgekey"]
+                    if not frontlineplacementmode and edgekey not in activefrontlineedgekeyset:
+                        continue
+
+                    worldsegmentlist = frontlinebordersegmentcache.get(edgekey)
+                    if worldsegmentlist is None:
+                        worldsegmentlist = getborderworldsegments(provincemap, borderedge)
+                        frontlinebordersegmentcache[edgekey] = worldsegmentlist
+
+                    for worldsegmentstart, worldsegmentend in worldsegmentlist:
+                        segmentstart, segmentend = getscreenpoints(
+                            [worldsegmentstart, worldsegmentend],
+                            zoomvalue,
+                            drawcamerax,
+                            cameray,
+                        )
+
+                        segmentleft = int(min(segmentstart[0], segmentend[0])) - 8
+                        segmenttop = int(min(segmentstart[1], segmentend[1])) - 8
+                        segmentwidth = int(abs(segmentend[0] - segmentstart[0])) + 16
+                        segmentheight = int(abs(segmentend[1] - segmentstart[1])) + 16
+                        segmentrect = pygame.Rect(segmentleft, segmenttop, max(1, segmentwidth), max(1, segmentheight))
+                        if not segmentrect.colliderect(screenrectangle):
+                            continue
+
+                        frontlineoverlaysegments.append((edgekey, segmentstart, segmentend))
+
+                        if frontlineplacementmode:
+                            hoverdistance = pointtosegmentdistance(mouseposition, segmentstart, segmentend)
+                            if hoverdistance <= 10.0 and hoverdistance < nearesthoverdistance:
+                                nearesthoverdistance = hoverdistance
+                                hoveredfrontlineedgekey = edgekey
+
+            for edgekey, segmentstart, segmentend in frontlineoverlaysegments:
+                isactivefrontline = edgekey in activefrontlineedgekeyset
+                ishoveredborder = frontlineplacementmode and edgekey == hoveredfrontlineedgekey
+
+                if frontlineplacementmode:
+                    bordercolor = (255, 236, 145) if ishoveredborder else (235, 205, 92)
+                    borderwidth = 4 if ishoveredborder else 2
+                    pygame.draw.line(screen, bordercolor, segmentstart, segmentend, borderwidth)
+
+                if isactivefrontline:
+                    pygame.draw.line(screen, (215, 40, 40), segmentstart, segmentend, 4)
+                    pygame.draw.line(screen, (255, 86, 86), segmentstart, segmentend, 2)
+
+        selectedtroopentries = getselectedtroopentries(
+            selectedprovinceidset,
+            selectedprovinceid,
+            provincemap,
+            playercountry,
+        )
+
         canrecruit = selectedprovinceid is not None and getprovincecontroller(provincemap[selectedprovinceid]) == playercountry
         recruitgoldcost, recruitpopulationcost = getrecruitcosts(
             recruitamount,
@@ -831,6 +929,8 @@ def main(eventbus=None):
             recruitpopulationcost,
             countrymenutarget,
             countriesatwarset,
+            selectedtroopentries,
+            frontlineplacementmode,
             hovertext,
             mouseposition,
             troopbadgelist,
@@ -937,6 +1037,41 @@ def main(eventbus=None):
                 )
                 continue
 
+            if uiaction == EngineUI.actionsplit and gamephase == "play":
+                selectedids = [entry["provinceid"] for entry in selectedtroopentries]
+                splitresult = splitselectedtroops(
+                    provincemap,
+                    provincegraph,
+                    selectedids,
+                    playercountry,
+                )
+                if splitresult["success"]:
+                    selectedprovinceidset = set(splitresult["selectedprovinceids"])
+                    selectedprovinceid = splitresult["primaryprovinceid"]
+                    routepreviewset = set()
+                continue
+
+            if uiaction == EngineUI.actionmerge and gamephase == "play":
+                selectedids = [entry["provinceid"] for entry in selectedtroopentries]
+                mergeresult = mergeselectedtroops(
+                    provincemap,
+                    selectedids,
+                    playercountry,
+                    targetprovinceid=selectedprovinceid,
+                )
+                if mergeresult["success"]:
+                    selectedprovinceidset = set(mergeresult["selectedprovinceids"])
+                    selectedprovinceid = mergeresult["primaryprovinceid"]
+                    routepreviewset = set()
+                continue
+
+            if uiaction == EngineUI.actionfrontline and gamephase == "play":
+                hastroopsselected = any(int(entry.get("troops", 0)) > 0 for entry in selectedtroopentries)
+                frontlineplacementmode = bool(hastroopsselected) and not frontlineplacementmode
+                routepreviewset = set()
+                countrymenutarget = None
+                continue
+
             if event.type == pygame.QUIT:
                 isrunning = False
 
@@ -993,6 +1128,10 @@ def main(eventbus=None):
                         selectedprovinceid = None
                         selectedprovinceidset = set()
                         routepreviewset = set()
+                        frontlineplacementmode = False
+                        activefrontlineedgekeyset = set()
+                        frontlineassignmentlist = []
+                        frontlinebordersegmentcache = {}
                         countriesatwarset = set()
                         countrymenutarget = None
                         eventbus.emit(
@@ -1003,6 +1142,91 @@ def main(eventbus=None):
                         )
 
 
+                    continue
+
+                if gamephase == "play" and frontlineplacementmode:
+                    if hoveredfrontlineedgekey and hoveredfrontlineedgekey in frontlineedgebykey:
+                        frontlineresult = createfrontline(
+                            provincemap,
+                            provincegraph,
+                            playercountry,
+                            [entry["provinceid"] for entry in selectedtroopentries],
+                            frontlineedgebykey[hoveredfrontlineedgekey],
+                            nearbydepth=2,
+                        )
+                        if frontlineresult["success"]:
+                            frontlineassignmentlist.append(frontlineresult)
+                            activefrontlineedgekeyset.update(frontlineresult["frontlineedgekeys"])
+                            selectedprovinceidset = set(frontlineresult["frontlineprovinceids"])
+                            selectedprovinceid = frontlineresult["anchorprovinceid"]
+                            allowedprovinceidset = {
+                                provinceid
+                                for provinceid, province in provincemap.items()
+                                if getprovincecontroller(province) == playercountry
+                            }
+                            frontlinepathpreviewset = set()
+                            for transferentry in frontlineresult.get("transferplan", ()):
+                                sourceprovinceid = transferentry.get("sourceprovinceid")
+                                targetprovinceid = transferentry.get("targetprovinceid")
+                                transferamount = int(transferentry.get("amount", 0))
+                                if transferamount <= 0:
+                                    continue
+                                if not sourceprovinceid or not targetprovinceid:
+                                    continue
+                                if sourceprovinceid == targetprovinceid:
+                                    continue
+
+                                sourceprovince = provincemap.get(sourceprovinceid)
+                                if not sourceprovince:
+                                    continue
+                                if getprovincecontroller(sourceprovince) != playercountry:
+                                    continue
+
+                                foundpath = findprovincepath(
+                                    sourceprovinceid,
+                                    targetprovinceid,
+                                    provincemap,
+                                    provincegraph,
+                                    allowedprovinceidset=allowedprovinceidset,
+                                )
+                                if len(foundpath) < 2:
+                                    continue
+
+                                movingtroopcount = min(transferamount, int(sourceprovince.get("troops", 0)))
+                                if movingtroopcount <= 0:
+                                    continue
+
+                                sourceprovince["troops"] -= movingtroopcount
+                                movementorderlist.append(
+                                    {
+                                        "amount": movingtroopcount,
+                                        "path": foundpath,
+                                        "index": 0,
+                                        "current": foundpath[0],
+                                        "speedmodifier": 1.0,
+                                        "controllercountry": getprovincecontroller(sourceprovince),
+                                        "country": getprovincecontroller(sourceprovince),
+                                        "countrycolor": sourceprovince.get("countrycolor"),
+                                    }
+                                )
+                                frontlinepathpreviewset.update(foundpath)
+                                eventbus.emit(
+                                    EngineEventType.MOVEORDERCREATED,
+                                    {
+                                        "sourceProvinceId": sourceprovinceid,
+                                        "destinationProvinceId": targetprovinceid,
+                                        "path": list(foundpath),
+                                        "troops": movingtroopcount,
+                                        "country": getprovincecontroller(sourceprovince),
+                                        "turn": currentturnnumber,
+                                    },
+                                )
+                            selectedprovince = provincemap.get(selectedprovinceid) if selectedprovinceid else None
+                            if selectedprovince:
+                                expandedstateid = selectedprovince.get("parentid", expandedstateid)
+                            routepreviewset = frontlinepathpreviewset
+                            countrymenutarget = None
+                            frontlineplacementmode = False
                     continue
 
 
@@ -1117,7 +1341,7 @@ def main(eventbus=None):
                 dragselectcurrent = None
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3: # right click for move orders
-                if devconsole.visible or gamephase != "play":
+                if devconsole.visible or gamephase != "play" or frontlineplacementmode:
                     continue
 
                 # Only open the country interaction menu when the click is on a state (no hovered province).
@@ -1341,6 +1565,12 @@ buildprovinceadjacencygraph = movementmodule.buildprovinceadjacencygraph
 getterrainmovecost = movementmodule.getterrainmovecost
 findprovincepath = movementmodule.findprovincepath
 processmovementorders = movementmodule.processmovementorders
+splitselectedtroops = movementmodule.splitselectedtroops
+mergeselectedtroops = movementmodule.mergeselectedtroops
+getcountryborderedges = movementmodule.getcountryborderedges
+getborderworldsegments = movementmodule.getborderworldsegments
+createfrontline = movementmodule.createfrontline
+pointtosegmentdistance = movementmodule.pointtosegmentdistance
 
 getrecruitcosts = economymodule.getrecruitcosts
 canrecruittroops = economymodule.canrecruittroops
