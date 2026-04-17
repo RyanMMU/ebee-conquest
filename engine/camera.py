@@ -160,16 +160,18 @@ def resizecamerastate(camerastate, oldwindowwidth, oldwindowheight, newwindowwid
         camerastate.x = newwindowwidth * 0.5 - centerworldx * camerastate.zoom
         camerastate.y = newwindowheight * 0.5 - centerworldy * camerastate.zoom
 
-def updatesmoothzoom(camerastate, anchorx, anchory):
-    speed = 0.1  # boleh adjust kalau nak
+def updatesmoothzoom(camerastate, anchorx, anchory,dt):
+    speed = 8.0  # higher = more responsive
 
     oldzoom = camerastate.zoom
     target = camerastate.targetzoom
+    
+    # smooth + responsive interpolation
+    t = 1 - pow(0.001, dt * speed)
+    newzoom = oldzoom + (target - oldzoom) * t
 
-    newzoom = oldzoom + (target - oldzoom) * speed
-
-    # stop if it is too close
-    if abs(newzoom - target) < 0.001:
+    # stop if it is the same
+    if abs(newzoom - target) < 0.0001:
         newzoom = target
 
     camerastate.x, camerastate.y = zoomcameratoanchor(
