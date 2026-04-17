@@ -162,7 +162,7 @@ def loadsvgshapes(filepath, onprogress=None):
     esocachelist = eso_loadcache(filepath)
 
     if esocachelist is not None:
-        print(f"local@EbeeEngine:~$ ESO cache hit for {os.path.basename(filepath)} with {len(esocachelist)} shapes!", flush=True)
+        print(f"local@EbeeEngine:~$   ESO cache hit for {os.path.basename(filepath)} with {len(esocachelist)} shapes!", flush=True)
         if onprogress and not onprogress(0, 1):
             return []
         if onprogress and not onprogress(1, 1):
