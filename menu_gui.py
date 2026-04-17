@@ -47,7 +47,12 @@ def button(screen,x,y,w,h):
     screen.blit(button_surf, (x, y))
 
 while run:
-    mouse = pygame.mouse.get_pos()
+    dt = clock.get_time() / 1000.0
+    mousex, mousey = pygame.mouse.get_pos()
+
+    cameramodule.updatesmoothzoom(camerastate, mousex, mousey, dt)
+    cameramodule.clampcamerastate(camerastate, windowheight, mapbox)
+
     screen.blit(bg_image, (0, 0))
     
     for event in pygame.event.get():

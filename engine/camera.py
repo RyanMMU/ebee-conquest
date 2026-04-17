@@ -16,7 +16,7 @@ class CameraState:
     y: float
     zoom: float
     targetzoom: float
-
+    
 
 
 
@@ -160,7 +160,7 @@ def resizecamerastate(camerastate, oldwindowwidth, oldwindowheight, newwindowwid
         camerastate.x = newwindowwidth * 0.5 - centerworldx * camerastate.zoom
         camerastate.y = newwindowheight * 0.5 - centerworldy * camerastate.zoom
 
-def updatesmoothzoom(camerastate, anchorx, anchory,dt):
+def updatesmoothzoom(camerastate, anchorx, anchory, dt):
     speed = 8.0  # higher = more responsive
 
     oldzoom = camerastate.zoom
