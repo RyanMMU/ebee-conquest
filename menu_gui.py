@@ -10,7 +10,7 @@ def lerp(start, end, t):
 
 WIDTH,HEIGHT = 1280,720
 
-screen = pygame.display.set_mode((WIDTH, HEIGHT))
+screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE | pygame.SCALED)
 
 pygame.display.set_caption('game menu') 
 
@@ -63,7 +63,8 @@ while run:
     screen.blit(bg_image, (0, 0))
     
     for event in pygame.event.get():
-         
+
+        
         if event.type == pygame.QUIT:
             run = False
 
