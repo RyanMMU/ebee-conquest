@@ -419,59 +419,14 @@ def getborderedgekey(firstprovinceid, secondprovinceid):
     return (secondprovinceid, firstprovinceid)
 
 
-def getcountryborderedges(provincemap, provincegraph, countryname):
-    if not countryname:
-        return []
-
-    borderedgelist = []
-    visitededgekeyset = set()
-    for playerprovinceid, province in provincemap.items():
-        if getprovincecontroller(province) != countryname:
-            continue
-
-        for foreignprovinceid in provincegraph.get(playerprovinceid, ()):
-            foreignprovince = provincemap.get(foreignprovinceid)
-            if not foreignprovince:
-                continue
-
-            foreigncountry = getprovincecontroller(foreignprovince)
-            if foreigncountry == countryname:
-                continue
-
-            # trying province graph neighbors first
-            # Keep only edges that share actual polygon border segments
-            sharedsegments = getsharedbordersegments(
-                province,
-                foreignprovince,
-                precision=1,
-                minlength=0.75,
-            )
-            if not sharedsegments:
-                continue
-
-            edgekey = getborderedgekey(playerprovinceid, foreignprovinceid)
-            if edgekey in visitededgekeyset:
-                continue
-
-            visitededgekeyset.add(edgekey)
-            borderedgelist.append(
-                {
-                    "playerprovinceid": playerprovinceid,
-                    "foreignprovinceid": foreignprovinceid,
-                    "foreigncountry": foreigncountry,
-                    "edgekey": edgekey,
-                }
-            )
-
-    borderedgelist.sort(key=lambda edge: edge["edgekey"])
-    return borderedgelist
+_sharedbordersegmentcache = {}
 
 
-def _quantizepoint(point, precision=1):
+def _quantizepoint(point, precision=2):
     return (round(float(point[0]), precision), round(float(point[1]), precision))
 
 
-def _getnormalizededgekey(pointa, pointb, precision=1):
+def _getnormalizededgekey(pointa, pointb, precision=2):
     quantizeda = _quantizepoint(pointa, precision=precision)
     quantizedb = _quantizepoint(pointb, precision=precision)
     if quantizeda <= quantizedb:
@@ -493,44 +448,223 @@ def _iterprovinceedges(province):
             yield startpoint, endpoint
 
 
-def getsharedbordersegments(playerprovince, foreignprovince, precision=1, minlength=0.75):
-    playeredgeindex = {}
-    for startpoint, endpoint in _iterprovinceedges(playerprovince):
-        edgekey = _getnormalizededgekey(startpoint, endpoint, precision=precision)
-        playeredgeindex.setdefault(edgekey, []).append((startpoint, endpoint))
+def _getprovinceedgeentries(province):
+    cachedentries = province.get("_edgeentriescache")
+    if cachedentries is not None:
+        return cachedentries
 
+    edgeentries = []
+    for startpoint, endpoint in _iterprovinceedges(province):
+        startx, starty = startpoint
+        endx, endy = endpoint
+        dx = endx - startx
+        dy = endy - starty
+        length = math.hypot(dx, dy)
+        if length <= 1e-6:
+            continue
+        edgeentries.append(
+            {
+                "start": (float(startx), float(starty)),
+                "end": (float(endx), float(endy)),
+                "length": length,
+                "ux": dx / length,
+                "uy": dy / length,
+                "minx": min(startx, endx),
+                "maxx": max(startx, endx),
+                "miny": min(starty, endy),
+                "maxy": max(starty, endy),
+            }
+        )
+
+    province["_edgeentriescache"] = edgeentries
+    return edgeentries
+
+
+def _pointlinedistance(point, lineentry):
+    px, py = point
+    sx, sy = lineentry["start"]
+    ux = lineentry["ux"]
+    uy = lineentry["uy"]
+    # Perpendicular distance to infinite line.
+    return abs((px - sx) * (-uy) + (py - sy) * ux)
+
+
+def _projectpointonline(point, lineentry):
+    px, py = point
+    sx, sy = lineentry["start"]
+    ux = lineentry["ux"]
+    uy = lineentry["uy"]
+    return (px - sx) * ux + (py - sy) * uy
+
+
+def _getoverlappedcollinearsegment(firstentry, secondentry, line_tolerance, parallel_cross_tolerance, minlength):
+    # Quick reject by expanded bounding boxes.
+    if firstentry["maxx"] + line_tolerance < secondentry["minx"]:
+        return None
+    if secondentry["maxx"] + line_tolerance < firstentry["minx"]:
+        return None
+    if firstentry["maxy"] + line_tolerance < secondentry["miny"]:
+        return None
+    if secondentry["maxy"] + line_tolerance < firstentry["miny"]:
+        return None
+
+    crossvalue = abs(firstentry["ux"] * secondentry["uy"] - firstentry["uy"] * secondentry["ux"])
+    if crossvalue > parallel_cross_tolerance:
+        return None
+
+    # Require near-collinearity both ways.
+    if (
+        _pointlinedistance(secondentry["start"], firstentry) > line_tolerance
+        and _pointlinedistance(secondentry["end"], firstentry) > line_tolerance
+    ):
+        return None
+    if (
+        _pointlinedistance(firstentry["start"], secondentry) > line_tolerance
+        and _pointlinedistance(firstentry["end"], secondentry) > line_tolerance
+    ):
+        return None
+
+    secondstartprojection = _projectpointonline(secondentry["start"], firstentry)
+    secondendprojection = _projectpointonline(secondentry["end"], firstentry)
+
+    overlapstart = max(0.0, min(secondstartprojection, secondendprojection))
+    overlapend = min(firstentry["length"], max(secondstartprojection, secondendprojection))
+    if overlapend - overlapstart < minlength:
+        return None
+
+    segmentstart = (
+        firstentry["start"][0] + firstentry["ux"] * overlapstart,
+        firstentry["start"][1] + firstentry["uy"] * overlapstart,
+    )
+    segmentend = (
+        firstentry["start"][0] + firstentry["ux"] * overlapend,
+        firstentry["start"][1] + firstentry["uy"] * overlapend,
+    )
+    return segmentstart, segmentend
+
+
+def getsharedbordersegments(
+    playerprovince,
+    foreignprovince,
+    line_tolerance=1.1,
+    parallel_cross_tolerance=0.16,
+    minlength=0.55,
+    keyprecision=2,
+):
+    playerprovinceid = playerprovince.get("id")
+    foreignprovinceid = foreignprovince.get("id")
+    if playerprovinceid and foreignprovinceid:
+        cachekey = (
+            playerprovinceid if playerprovinceid <= foreignprovinceid else foreignprovinceid,
+            foreignprovinceid if playerprovinceid <= foreignprovinceid else playerprovinceid,
+        )
+        cachedsegments = _sharedbordersegmentcache.get(cachekey)
+        if cachedsegments is not None:
+            return list(cachedsegments)
+
+    playeredgeentries = _getprovinceedgeentries(playerprovince)
+    foreignedgeentries = _getprovinceedgeentries(foreignprovince)
     sharedsegmentlookup = {}
-    for startpoint, endpoint in _iterprovinceedges(foreignprovince):
-        edgekey = _getnormalizededgekey(startpoint, endpoint, precision=precision)
-        if edgekey not in playeredgeindex:
-            continue
-        segmentstart = edgekey[0]
-        segmentend = edgekey[1]
-        segmentlength = math.hypot(segmentend[0] - segmentstart[0], segmentend[1] - segmentstart[1])
-        if segmentlength < minlength:
-            continue
-        sharedsegmentlookup[edgekey] = (segmentstart, segmentend)
 
-    return list(sharedsegmentlookup.values())
+    for playeredgeentry in playeredgeentries:
+        for foreignedgeentry in foreignedgeentries:
+            overlappedsegment = _getoverlappedcollinearsegment(
+                playeredgeentry,
+                foreignedgeentry,
+                line_tolerance,
+                parallel_cross_tolerance,
+                minlength,
+            )
+            if not overlappedsegment:
+                continue
+
+            segmentstart, segmentend = overlappedsegment
+            segmentkey = _getnormalizededgekey(segmentstart, segmentend, precision=keyprecision)
+            existingsegment = sharedsegmentlookup.get(segmentkey)
+            if existingsegment is None:
+                sharedsegmentlookup[segmentkey] = overlappedsegment
+                continue
+
+            existinglength = math.hypot(
+                existingsegment[1][0] - existingsegment[0][0],
+                existingsegment[1][1] - existingsegment[0][1],
+            )
+            candidatelength = math.hypot(
+                segmentend[0] - segmentstart[0],
+                segmentend[1] - segmentstart[1],
+            )
+            if candidatelength > existinglength:
+                sharedsegmentlookup[segmentkey] = overlappedsegment
+
+    sharedsegmentlist = list(sharedsegmentlookup.values())
+    if playerprovinceid and foreignprovinceid:
+        _sharedbordersegmentcache[cachekey] = list(sharedsegmentlist)
+    return sharedsegmentlist
+
+
+def getcountryborderedges(provincemap, provincegraph, countryname):
+    if not countryname:
+        return []
+
+    borderedgelist = []
+    visitededgekeyset = set()
+    for playerprovinceid, province in provincemap.items():
+        if getprovincecontroller(province) != countryname:
+            continue
+
+        for foreignprovinceid in provincegraph.get(playerprovinceid, ()):
+            foreignprovince = provincemap.get(foreignprovinceid)
+            if not foreignprovince:
+                continue
+
+            foreigncountry = getprovincecontroller(foreignprovince)
+            if foreigncountry == countryname:
+                continue
+
+            sharedsegments = getsharedbordersegments(province, foreignprovince)
+            if not sharedsegments:
+                continue
+
+            edgekey = getborderedgekey(playerprovinceid, foreignprovinceid)
+            if edgekey in visitededgekeyset:
+                continue
+
+            visitededgekeyset.add(edgekey)
+            borderedgelist.append(
+                {
+                    "playerprovinceid": playerprovinceid,
+                    "foreignprovinceid": foreignprovinceid,
+                    "foreigncountry": foreigncountry,
+                    "edgekey": edgekey,
+                    "worldsegments": sharedsegments,
+                }
+            )
+
+    borderedgelist.sort(key=lambda edge: edge["edgekey"])
+    return borderedgelist
 
 
 def getborderworldsegments(provincemap, borderedge):
     if not borderedge:
         return []
 
+    cachedworldsegments = borderedge.get("worldsegments")
+    if cachedworldsegments is not None:
+        return list(cachedworldsegments)
+
     playerprovince = provincemap.get(borderedge.get("playerprovinceid"))
     foreignprovince = provincemap.get(borderedge.get("foreignprovinceid"))
     if not playerprovince or not foreignprovince:
         return []
 
-    sharedsegments = getsharedbordersegments(playerprovince, foreignprovince, precision=1, minlength=0.75)
+    sharedsegments = getsharedbordersegments(playerprovince, foreignprovince)
     if sharedsegments:
         return sharedsegments
 
     return []
 
 
-def getfrontlineprovinces(provincemap, provincegraph, playercountry, anchorprovinceid, nearbydepth=2):
+def getfrontlineprovinces(provincemap, provincegraph, playercountry, anchorprovinceid, targetcountry=None):
     anchorprovince = provincemap.get(anchorprovinceid)
     if not anchorprovince or getprovincecontroller(anchorprovince) != playercountry:
         return set()
@@ -539,35 +673,42 @@ def getfrontlineprovinces(provincemap, provincegraph, playercountry, anchorprovi
     for provinceid, province in provincemap.items():
         if getprovincecontroller(province) != playercountry:
             continue
+
+        provincehasmatchingborder = False
         for neighborprovinceid in provincegraph.get(provinceid, ()):
             neighborprovince = provincemap.get(neighborprovinceid)
             if not neighborprovince:
                 continue
-            if getprovincecontroller(neighborprovince) != playercountry:
-                frontierprovinceidset.add(provinceid)
-                break
+            neighborcountry = getprovincecontroller(neighborprovince)
+            if neighborcountry == playercountry:
+                continue
+            if targetcountry is not None and neighborcountry != targetcountry:
+                continue
+            if not getsharedbordersegments(province, neighborprovince):
+                continue
+            provincehasmatchingborder = True
+            break
+
+        if provincehasmatchingborder:
+            frontierprovinceidset.add(provinceid)
 
     if anchorprovinceid not in frontierprovinceidset:
         frontierprovinceidset.add(anchorprovinceid)
 
     frontlineprovinceidset = set()
-    openlist = [(anchorprovinceid, 0)]
+    openlist = [anchorprovinceid]
     while openlist:
-        currentprovinceid, depth = openlist.pop(0)
+        currentprovinceid = openlist.pop(0)
         if currentprovinceid in frontlineprovinceidset:
-            continue
-        if depth > nearbydepth:
             continue
         if currentprovinceid not in frontierprovinceidset:
             continue
 
         frontlineprovinceidset.add(currentprovinceid)
-        if depth == nearbydepth:
-            continue
 
         for neighborprovinceid in provincegraph.get(currentprovinceid, ()):
             if neighborprovinceid in frontierprovinceidset:
-                openlist.append((neighborprovinceid, depth + 1))
+                openlist.append(neighborprovinceid)
 
     return frontlineprovinceidset
 
@@ -694,12 +835,13 @@ def createfrontline(provincemap, provincegraph, playercountry, selectedprovincei
             "transferplan": [],
         }
 
+    targetcountry = borderedge.get("foreigncountry")
     nearbyfrontlineprovinceidset = getfrontlineprovinces(
         provincemap,
         provincegraph,
         playercountry,
         anchorprovinceid,
-        nearbydepth=nearbydepth,
+        targetcountry=targetcountry,
     )
     if not nearbyfrontlineprovinceidset:
         nearbyfrontlineprovinceidset = {anchorprovinceid}
@@ -734,18 +876,16 @@ def createfrontline(provincemap, provincegraph, playercountry, selectedprovincei
             foreignprovince = provincemap.get(foreignprovinceid)
             if not foreignprovince:
                 continue
-            if getprovincecontroller(foreignprovince) == playercountry:
+            foreigncountry = getprovincecontroller(foreignprovince)
+            if foreigncountry == playercountry:
+                continue
+            if targetcountry is not None and foreigncountry != targetcountry:
                 continue
 
             playerprovince = provincemap.get(playerprovinceid)
             if not playerprovince:
                 continue
-            sharedsegments = getsharedbordersegments(
-                playerprovince,
-                foreignprovince,
-                precision=1,
-                minlength=0.75,
-            )
+            sharedsegments = getsharedbordersegments(playerprovince, foreignprovince)
             if not sharedsegments:
                 continue
 
@@ -758,6 +898,8 @@ def createfrontline(provincemap, provincegraph, playercountry, selectedprovincei
                     "playerprovinceid": playerprovinceid,
                     "foreignprovinceid": foreignprovinceid,
                     "edgekey": edgekey,
+                    "foreigncountry": foreigncountry,
+                    "worldsegments": sharedsegments,
                 }
             )
 

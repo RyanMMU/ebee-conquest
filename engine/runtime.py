@@ -1152,7 +1152,6 @@ def main(eventbus=None):
                             playercountry,
                             [entry["provinceid"] for entry in selectedtroopentries],
                             frontlineedgebykey[hoveredfrontlineedgekey],
-                            nearbydepth=2,
                         )
                         if frontlineresult["success"]:
                             frontlineassignmentlist.append(frontlineresult)
