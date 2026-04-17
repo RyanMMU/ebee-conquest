@@ -1,7 +1,6 @@
 import os
 import json
 import math
-import heapq
 import time
 import platform
 import pygame
@@ -15,7 +14,7 @@ from engine.console import developmentconsole, loaddevmodeflag
 from engine.gui import EngineUI, gui_lightencolor, gui_gettroopbadgerect
 from engine.diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
 from . import core as coremodule
-from . import gameplay as gameplaymodule
+from . import movement as movementmodule
 from . import economy as economymodule
 from . import api as apimodule
 from . import camera as cameramodule
@@ -25,7 +24,10 @@ from .events import EventBus, EngineEventType
 from .apicalltest.newsbannereventtest import NewsSystem, NewsPopup # TEST API CALL
 
 
-print("CURRENT VERSION - APRIL 8 2024")
+
+
+
+print("CURRENT VERSION - APRIL 17 2024")
 # MAIN GAME LOOP FILE
 
 
@@ -47,15 +49,6 @@ edgepanmargin = cameramodule.defaultpanconfig.margin
 edgepanspeed = cameramodule.defaultpanconfig.speed
 curvesamplestep = 1.5
 maxsegmentsteps = 48
-terrainmovecostlookup = {
-    "plains": 1.0,
-    "forest": 1.25,
-    "hills": 1.35,
-    "mountains": 1.8,
-    "desert": 1.2,
-    "swamp": 1.5,
-    "urban": 1.1,
-}
 autocountrycolors = [
     (197, 92, 92),
     (88, 157, 216),
@@ -329,281 +322,6 @@ def rectanglesclose(firstrectangle, secondrectangle, padding=1):
 def getshapecenter(shape):
     return (shape["rectangle"].centerx, shape["rectangle"].centery)
 
-
-
-
-def getprovincecontroller(province): # get the current controller
-    return province.get("controllercountry", province.get("country"))
-
-
-
-
-def getprovinceowner(province): # get the original owner
-    return province.get("ownercountry", province.get("country"))
-
-
-
-
-def setprovincecontroller(province, countryname, countrycolor=None): #set the controller of the provincewhen occupied or annexed
-    province["controllercountry"] = countryname
-    province["country"] = countryname  # compatibility alias
-    if countrycolor is not None:
-        province["countrycolor"] = countrycolor
-
-
-
-# Movement starts
-
-
-def prepareprovincemetadata(provincelist):
-    enrichedList = []
-    testCounter = 0  
-    for province in provincelist:
-        enrichedProvince = dict(province)
-        enrichedProvince["parentstateid"] = getparentstateidfromprovinceid(enrichedProvince["id"])
-        enrichedProvince["terrain"] = "plains"
-        enrichedProvince["troops"] = 0
-        enrichedProvince["center"] = getshapecenter(enrichedProvince)
-        enrichedProvince["ownercountry"] = None
-        enrichedProvince["controllercountry"] = None
-        enrichedProvince["country"] = None
-
-        
-        # print("Debug: province center =", enrichedProvince["center"])  
-        enrichedList.append(enrichedProvince)
-        testCounter += 1  
-
-    # print("Total provinces:", testCounter)
-    #print(enrichedList[0])
-    return enrichedList
-
-
-
-
-def buildprovinceadjacencygraph(provincemap, onprogress=None):
-    provinceidlist = list(provincemap.keys())
-    totalprovincecount = len(provinceidlist)
-
-
-    # TEST OPTIMIZATION 3 APRIL
-    totalprogresssteps = max(1, totalprovincecount * 2)
-    if onprogress and not onprogress(0, totalprogresssteps):
-        #print("PROGRES", totalprogresssteps)
-        return None
-
-    # larger cells will = faster but not as accurate
-    gridcellsize = 32.0
-    adjacencytestpadding = 1
-    gridlookup = {}
-    provinceentrylist = []
-
-    for provinceindex, provinceid in enumerate(provinceidlist):
-        #print(provinceindex, provinceid, provinceidlist[0])
-        provincerectangle = provincemap[provinceid]["rectangle"]
-        minimumgridx = int(math.floor((provincerectangle.left - adjacencytestpadding) / gridcellsize))
-        maximumgridx = int(math.floor((provincerectangle.right + adjacencytestpadding) / gridcellsize))
-        minimumgridy = int(math.floor((provincerectangle.top - adjacencytestpadding) / gridcellsize))
-        maximumgridy = int(math.floor((provincerectangle.bottom + adjacencytestpadding) / gridcellsize))
-
-        provinceentrylist.append((provinceid, provincerectangle, minimumgridx, maximumgridx, minimumgridy, maximumgridy))
-
-        for gridx in range(minimumgridx, maximumgridx + 1):
-            for gridy in range(minimumgridy, maximumgridy + 1):
-                gridlookup.setdefault((gridx, gridy), []).append(provinceindex)
-
-        #if onprogress and provinceindex % 100 == 0:
-        #    onprogress(provinceindex, totalprogresssteps)
-        #       if not onprogress(provinceindex, totalprogresssteps):
-        #          return None
-
-        if onprogress and (provinceindex == 0 or (provinceindex + 1) % 200 == 0 or (provinceindex + 1) == totalprovincecount):
-            if not onprogress(provinceindex + 1, totalprogresssteps):
-                return None
-
-    adjacencygraph = {provinceid: set() for provinceid in provinceidlist}
-    #print("graph adjacent", adjacencygraph)
-    for provinceindex, provinceentry in enumerate(provinceentrylist):
-        provinceid, firstrectangle, minimumgridx, maximumgridx, minimumgridy, maximumgridy = provinceentry
-        candidateindexset = set()
-
-        for gridx in range(minimumgridx, maximumgridx + 1):
-            for gridy in range(minimumgridy, maximumgridy + 1):
-                for candidateindex in gridlookup.get((gridx, gridy), ()):
-                    
-                    
-                    #compare each pair once only, but avoid storing a global pair set
-                    if candidateindex > provinceindex:
-                        candidateindexset.add(candidateindex)
-
-        for candidateindex in candidateindexset:
-            candidateprovinceid, secondrectangle, _, _, _, _ = provinceentrylist[candidateindex] 
-            if rectanglesclose(firstrectangle, secondrectangle, padding=adjacencytestpadding):
-                adjacencygraph[provinceid].add(candidateprovinceid)
-                adjacencygraph[candidateprovinceid].add(provinceid)
-
-        if onprogress and (provinceindex == 0 or (provinceindex + 1) % 100 == 0 or (provinceindex + 1) == totalprovincecount):
-            if not onprogress(totalprovincecount + provinceindex + 1, totalprogresssteps):
-                return None
-            
-
-    #print(adjacencygraph)
-    return adjacencygraph
-    
-    # optimization issue, cannot run on Benedict's AMD computer, might need to optimize the adjacency graph building 
-
-
-
-def getterrainmovecost(province):
-    return terrainmovecostlookup.get(province.get("terrain", "plains"), 1.0)
-
-
-
-
-
-
-# A* PATHFINDING ADAPTED FROM https://medium.com/@nicholas.w.swift/easy-a-star-pathfinding-7e6689c7f7b2
-
-def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph, allowedprovinceidset=None):
-    if startprovinceid not in provincemap or goalprovinceid not in provincemap:
-        return []
-    if allowedprovinceidset is not None:
-        if startprovinceid not in allowedprovinceidset or goalprovinceid not in allowedprovinceidset:
-            return []
-    if startprovinceid == goalprovinceid:
-        return [startprovinceid]
-
-
-
-
-
-    goalcenter = provincemap[goalprovinceid]["center"]
-    openheap = [(0.0, startprovinceid)]
-    parentlookup = {}
-    costlookup = {startprovinceid: 0.0}
-    visitedset = set()
-
-    #  A* 
-    while openheap:
-        _, currentprovinceid = heapq.heappop(openheap) # total province with lowest cost
-        if currentprovinceid in visitedset:
-            continue
-
-
-
-        if currentprovinceid == goalprovinceid:
-            pathlist = [goalprovinceid]
-            while pathlist[-1] in parentlookup:
-                pathlist.append(parentlookup[pathlist[-1]])
-            pathlist.reverse()
-            return pathlist
-
-        visitedset.add(currentprovinceid)
-        currentcenter = provincemap[currentprovinceid]["center"]
-
-        for nextprovinceid in provincegraph.get(currentprovinceid, ()):
-            if allowedprovinceidset is not None and nextprovinceid not in allowedprovinceidset:
-                continue
-            if nextprovinceid in visitedset:
-                continue
-
-            nextcenter = provincemap[nextprovinceid]["center"]
-            stepdistance = math.hypot(nextcenter[0] - currentcenter[0], nextcenter[1] - currentcenter[1])
-            moveenergy = stepdistance * getterrainmovecost(provincemap[nextprovinceid])
-            newcost = costlookup[currentprovinceid] + moveenergy
-
-            if newcost >= costlookup.get(nextprovinceid, float("inf")):
-                continue
-
-            parentlookup[nextprovinceid] = currentprovinceid
-            costlookup[nextprovinceid] = newcost
-            estimateddistance = math.hypot(goalcenter[0] - nextcenter[0], goalcenter[1] - nextcenter[1])
-            heapq.heappush(openheap, (newcost + estimateddistance, nextprovinceid))
-
-    return []
-
-
-
-
-# def processmovementorders(movementorderlist, provincemap):
-#     finishedorderlist = []
-# 
-# 
-# 
-#     for movementorder in movementorderlist:
-#         movementpoints = 1.0 * float(movementorder.get("speedmodifier", 1.0))
-#         pathlist = movementorder["path"]
-#         currentpathindex = movementorder["index"]
-#         movingcountry = movementorder.get("controllercountry", movementorder.get("country"))
-#         movingcountrycolor = movementorder.get("countrycolor")
-# 
-#         while currentpathindex < len(pathlist) - 1:
-# 
-# 
-#             nextprovinceid = pathlist[currentpathindex + 1]
-#             nextprovince = provincemap[nextprovinceid]
-#             movecost = getterrainmovecost(nextprovince)
-# 
-#             if movementpoints < movecost: # move next turn if not enough
-#                 break
-# 
-#             if movingcountry is None: 
-#                 movingcountry = getprovincecontroller(provincemap[pathlist[currentpathindex]])
-#                 movementorder["controllercountry"] = movingcountry
-#                 movementorder["country"] = movingcountry
-# 
-#             nextcountry = getprovincecontroller(nextprovince)
-#             if (
-#                 movingcountry is not None
-#                 and nextcountry is not None
-#                 and nextcountry != movingcountry
-#                 and nextprovince["troops"] > 0
-#             ):
-#                 attackers = movementorder["amount"]
-#                 defenders = nextprovince["troops"]
-#                 if attackers <= defenders:
-#                     nextprovince["troops"] = defenders - attackers
-#                     movementorder["amount"] = 0
-#                     break
-# 
-#                 movementorder["amount"] = attackers - defenders
-#                 nextprovince["troops"] = 0
-# 
-# 
-# 
-#             movementpoints -= movecost
-#             currentpathindex += 1
-# 
-#             if (
-#                 movingcountry is not None
-#                 and nextcountry is not None
-#                 and nextcountry != movingcountry
-#                 and nextprovince["troops"] <= 0
-#             ):
-#                 setprovincecontroller(nextprovince, movingcountry, movingcountrycolor)
-# 
-#         movementorder["index"] = currentpathindex
-#         movementorder["current"] = pathlist[currentpathindex]
-# 
-# 
-# 
-# 
-#         if movementorder["amount"] <= 0:
-#             finishedorderlist.append(movementorder)
-#         elif currentpathindex >= len(pathlist) - 1:
-#             destinationprovinceid = pathlist[-1]
-#             provincemap[destinationprovinceid]["troops"] += movementorder["amount"]
-#             finishedorderlist.append(movementorder)
-# 
-#     for finishedorder in finishedorderlist:
-#         movementorderlist.remove(finishedorder)
-
-
-
-
-# TODO: handle occupation, changing the province ownership when all enemy troops are removed and the player moves into the province, or the npc moves into the province or the players province
-
-
-# Movement ends
 # GAME LOGIC AND RENDERING ENDSS
 
 
@@ -1615,14 +1333,14 @@ ispointinsidepolygon = coremodule.ispointinsidepolygon
 loadcountrydata = coremodule.loadcountrydata
 groupsubdivisionsbystate = coremodule.groupsubdivisionsbystate
 
-getprovincecontroller = gameplaymodule.getprovincecontroller
-getprovinceowner = gameplaymodule.getprovinceowner
-setprovincecontroller = gameplaymodule.setprovincecontroller
-prepareprovincemetadata = gameplaymodule.prepareprovincemetadata
-buildprovinceadjacencygraph = gameplaymodule.buildprovinceadjacencygraph
-getterrainmovecost = gameplaymodule.getterrainmovecost
-findprovincepath = gameplaymodule.findprovincepath
-processmovementorders = gameplaymodule.processmovementorders
+getprovincecontroller = movementmodule.getprovincecontroller
+getprovinceowner = movementmodule.getprovinceowner
+setprovincecontroller = movementmodule.setprovincecontroller
+prepareprovincemetadata = movementmodule.prepareprovincemetadata
+buildprovinceadjacencygraph = movementmodule.buildprovinceadjacencygraph
+getterrainmovecost = movementmodule.getterrainmovecost
+findprovincepath = movementmodule.findprovincepath
+processmovementorders = movementmodule.processmovementorders
 
 getrecruitcosts = economymodule.getrecruitcosts
 canrecruittroops = economymodule.canrecruittroops
