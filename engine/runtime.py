@@ -271,56 +271,135 @@ def getselectedtroopentries(selectedprovinceidset, selectedprovinceid, provincem
     return entries
 
 
-def getsegmentgapbridges(segmentlist, maxgapdistance=14.0):
+
+
+
+
+
+
+
+
+
+
+
+
+
+def getkruskalbridges(segmentlist, maxgapdistance=16.0):
+
     if not segmentlist:
         return []
 
+
+
     maxgapsquared = maxgapdistance * maxgapdistance
-    endpointlist = []
+    endpointpositionlist = []
+    endpointsegmentindexlist = []
+
+
     for segmentindex, segment in enumerate(segmentlist):
+        
         segmentstart, segmentend = segment
-        endpointlist.append((segmentindex, 0, segmentstart))
-        endpointlist.append((segmentindex, 1, segmentend))
+        endpointpositionlist.append(segmentstart)
+        endpointsegmentindexlist.append(segmentindex)
+        endpointpositionlist.append(segmentend)
+        endpointsegmentindexlist.append(segmentindex)
+
+    endpointcount = len(endpointpositionlist)
+
+
+    if endpointcount < 2:
+        return []
+
+    # First pass: collect all viable endpoint pairs within the gap threshold.
+    # This forms local "gap clusters" we can stitch using a minimum spanning bridge set.
+    candidateedgelist = []
+
+
+
+    for endpointindex in range(endpointcount):
+        endpointx, endpointy = endpointpositionlist[endpointindex]
+        endpointsegmentindex = endpointsegmentindexlist[endpointindex]
+        for candidateindex in range(endpointindex + 1, endpointcount):
+            if endpointsegmentindexlist[candidateindex] == endpointsegmentindex:
+                continue
+
+
+
+            candidatex, candidatey = endpointpositionlist[candidateindex]
+            offsetx = candidatex - endpointx
+            offsety = candidatey - endpointy
+            distancesquared = offsetx * offsetx + offsety * offsety
+
+
+            if distancesquared <= 1e-6 or distancesquared > maxgapsquared:
+                continue
+            candidateedgelist.append((distancesquared, endpointindex, candidateindex))
+
+
+    if not candidateedgelist:
+        return []
+
+    # KRUSKAL ALGORITHM
+    bridgeparent = list(range(endpointcount))
+    bridgerank = [0] * endpointcount
+
+
+
+
+    def findbridgeparent(index):
+        while bridgeparent[index] != index:
+            bridgeparent[index] = bridgeparent[bridgeparent[index]]
+            index = bridgeparent[index]
+        return index
+
+
+
+
+    def combinebridgegroup(firstindex, secondindex):
+        firstroot = findbridgeparent(firstindex)
+        secondroot = findbridgeparent(secondindex)
+        if firstroot == secondroot:
+            return False
+        if bridgerank[firstroot] < bridgerank[secondroot]:
+            bridgeparent[firstroot] = secondroot
+        elif bridgerank[firstroot] > bridgerank[secondroot]:
+            bridgeparent[secondroot] = firstroot
+        else:
+            bridgeparent[secondroot] = firstroot
+            bridgerank[firstroot] += 1
+        return True
 
     bridgelines = []
     bridgepairset = set()
-    endpointcount = len(endpointlist)
-    for endpointindex in range(endpointcount):
-        segmentindex, endpointkind, endpointposition = endpointlist[endpointindex]
-        endpointx, endpointy = endpointposition
+    candidateedgelist.sort(key=lambda edge: edge[0])
 
-        nearestcandidate = None
-        nearestdistance = float("inf")
-        for candidateindex in range(endpointcount):
-            if candidateindex == endpointindex:
-                continue
 
-            othersegmentindex, otherendpointkind, otherposition = endpointlist[candidateindex]
-            if othersegmentindex == segmentindex:
-                continue
 
-            offsetx = otherposition[0] - endpointx
-            offsety = otherposition[1] - endpointy
-            distancesquared = offsetx * offsetx + offsety * offsety
-            if distancesquared <= 1e-6 or distancesquared > maxgapsquared:
-                continue
-            if distancesquared >= nearestdistance:
-                continue
-
-            nearestdistance = distancesquared
-            nearestcandidate = (candidateindex, otherposition)
-
-        if nearestcandidate is None:
+    for distancesquared, endpointindex, candidateindex in candidateedgelist:
+        if not combinebridgegroup(endpointindex, candidateindex):
             continue
 
-        candidateindex, candidateposition = nearestcandidate
-        pairkey = (endpointindex, candidateindex) if endpointindex < candidateindex else (candidateindex, endpointindex)
-        if pairkey in bridgepairset:
-            continue
+        pairkey = (endpointindex, candidateindex)
         bridgepairset.add(pairkey)
-        bridgelines.append((endpointposition, candidateposition))
+        bridgelines.append(
+            (
+                endpointpositionlist[endpointindex],
+                endpointpositionlist[candidateindex],
+            )
+        )
 
     return bridgelines
+
+
+
+
+
+
+
+
+
+
+
 
 
 #  from https://stackoverflow.com/a/29643643  
@@ -350,7 +429,7 @@ def loadcountrydata(filepath):
         if not countryname:
             continue
 
-        # No color in new format, assign default (CHATGPT)
+        # No color in new format, assign default
         parsedcolor = autocountrycolors[countryindex % len(autocountrycolors)]
         countrytocolorlookup[countryname] = parsedcolor
 
@@ -383,6 +462,17 @@ def groupsubdivisionsbystate(provincelist, statelist):
     #print(groupedlookup)
 
     return groupedlookup # stateid to list of provinces for example ("Malaya" -> [province1, province2])
+
+
+
+
+
+
+
+
+
+
+
 
 
 # check if rect are close to be considered adjacent to build provinece graph for path finding
@@ -947,7 +1037,7 @@ def main(eventbus=None):
 
             if frontlineplacementmode:
                 placementsegmentlist = [(segmentstart, segmentend) for _, segmentstart, segmentend in frontlineoverlaysegments]
-                placementbridges = getsegmentgapbridges(placementsegmentlist, maxgapdistance=16.0)
+                placementbridges = getkruskalbridges(placementsegmentlist, maxgapdistance=20.0)
                 for bridgestart, bridgeend in placementbridges:
                     pygame.draw.line(screen, (235, 205, 92), bridgestart, bridgeend, 2)
 
@@ -956,7 +1046,7 @@ def main(eventbus=None):
                 for edgekey, segmentstart, segmentend in frontlineoverlaysegments
                 if edgekey in activefrontlineedgekeyset
             ]
-            activefrontlinebridges = getsegmentgapbridges(activefrontlinesegmentlist, maxgapdistance=16.0)
+            activefrontlinebridges = getkruskalbridges(activefrontlinesegmentlist, maxgapdistance=20.0)
             for bridgestart, bridgeend in activefrontlinebridges:
                 pygame.draw.line(screen, (185, 24, 24), bridgestart, bridgeend, 8)
                 pygame.draw.line(screen, (220, 42, 42), bridgestart, bridgeend, 5)

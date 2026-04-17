@@ -257,6 +257,8 @@ def processmovementorders(movementorderlist, provincemap, emit):
 
         if movementorder["amount"] <= 0:
             finishedorderlist.append(movementorder)
+
+
             if emit is not None:
                 emit(
                     EngineEventType.MOVEORDERFINISHED,
@@ -264,13 +266,15 @@ def processmovementorders(movementorderlist, provincemap, emit):
                         "path": list(pathlist),
                         "finalProvinceId": pathlist[currentpathindex],
                         "remainingTroops": 0,
-                        "reason": "destroyed",
+                        "reason": "donno",
                     },
                 )
+
         elif currentpathindex >= len(pathlist) - 1:
             destinationprovinceid = pathlist[-1]
             provincemap[destinationprovinceid]["troops"] += movementorder["amount"]
             finishedorderlist.append(movementorder)
+
 
             if emit is not None:
                 emit(
@@ -288,6 +292,7 @@ def processmovementorders(movementorderlist, provincemap, emit):
 
 
 def splitselectedtroops(provincemap, provincegraph, selectedprovinceids, playercountry):
+
     validselectedprovinceids = []
     for provinceid in sorted(set(selectedprovinceids or ())):
         province = provincemap.get(provinceid)
@@ -297,7 +302,9 @@ def splitselectedtroops(provincemap, provincegraph, selectedprovinceids, playerc
             continue
         validselectedprovinceids.append(provinceid)
 
+
     if not validselectedprovinceids:
+
         return {
             "success": False,
             "selectedprovinceids": [],
@@ -305,10 +312,14 @@ def splitselectedtroops(provincemap, provincegraph, selectedprovinceids, playerc
             "movedtroops": 0,
         }
 
+
+
     if len(validselectedprovinceids) == 1:
         sourceprovinceid = validselectedprovinceids[0]
         sourceprovince = provincemap[sourceprovinceid]
         sourcetroops = int(sourceprovince.get("troops", 0))
+
+
         if sourcetroops < 2:
             return {
                 "success": False,
@@ -318,6 +329,8 @@ def splitselectedtroops(provincemap, provincegraph, selectedprovinceids, playerc
             }
 
         friendlyneighborids = []
+
+
         for neighborprovinceid in provincegraph.get(sourceprovinceid, ()):
             neighborprovince = provincemap.get(neighborprovinceid)
             if not neighborprovince:
@@ -325,6 +338,8 @@ def splitselectedtroops(provincemap, provincegraph, selectedprovinceids, playerc
             if getprovincecontroller(neighborprovince) != playercountry:
                 continue
             friendlyneighborids.append(neighborprovinceid)
+
+
 
         if not friendlyneighborids:
             return {
@@ -339,6 +354,8 @@ def splitselectedtroops(provincemap, provincegraph, selectedprovinceids, playerc
             key=lambda provinceid: int(provincemap[provinceid].get("troops", 0)),
         )
         movedtroops = sourcetroops // 2
+
+
         if movedtroops <= 0:
             return {
                 "success": False,
@@ -349,12 +366,14 @@ def splitselectedtroops(provincemap, provincegraph, selectedprovinceids, playerc
 
         sourceprovince["troops"] = sourcetroops - movedtroops
         provincemap[targetprovinceid]["troops"] += movedtroops
+
         return {
             "success": True,
             "selectedprovinceids": [sourceprovinceid, targetprovinceid],
             "primaryprovinceid": sourceprovinceid,
             "movedtroops": movedtroops,
         }
+
 
     totaltroops = sum(int(provincemap[provinceid].get("troops", 0)) for provinceid in validselectedprovinceids)
     if totaltroops <= 0:
@@ -364,10 +383,13 @@ def splitselectedtroops(provincemap, provincegraph, selectedprovinceids, playerc
             "primaryprovinceid": validselectedprovinceids[0],
             "movedtroops": 0,
         }
+    
 
     provincecount = len(validselectedprovinceids)
     baseallocation = totaltroops // provincecount
     remainder = totaltroops % provincecount
+
+
     for provinceindex, provinceid in enumerate(validselectedprovinceids):
         provincemap[provinceid]["troops"] = baseallocation + (1 if provinceindex < remainder else 0)
 
@@ -379,7 +401,10 @@ def splitselectedtroops(provincemap, provincegraph, selectedprovinceids, playerc
     }
 
 
+
+
 def mergeselectedtroops(provincemap, selectedprovinceids, playercountry, targetprovinceid=None):
+
     validselectedprovinceids = []
     for provinceid in sorted(set(selectedprovinceids or ())):
         province = provincemap.get(provinceid)
@@ -389,6 +414,7 @@ def mergeselectedtroops(provincemap, selectedprovinceids, playercountry, targetp
             continue
         validselectedprovinceids.append(provinceid)
 
+
     if not validselectedprovinceids:
         return {
             "success": False,
@@ -397,13 +423,18 @@ def mergeselectedtroops(provincemap, selectedprovinceids, playercountry, targetp
             "mergedtroops": 0,
         }
 
+
     if targetprovinceid not in validselectedprovinceids:
         targetprovinceid = validselectedprovinceids[0]
 
     totaltroops = sum(int(provincemap[provinceid].get("troops", 0)) for provinceid in validselectedprovinceids)
+
     for provinceid in validselectedprovinceids:
+
         provincemap[provinceid]["troops"] = 0
     provincemap[targetprovinceid]["troops"] = totaltroops
+
+
 
     return {
         "success": True,
@@ -413,28 +444,36 @@ def mergeselectedtroops(provincemap, selectedprovinceids, playercountry, targetp
     }
 
 
+
+
+
+
 def getborderedgekey(firstprovinceid, secondprovinceid):
     if firstprovinceid <= secondprovinceid:
         return (firstprovinceid, secondprovinceid)
     return (secondprovinceid, firstprovinceid)
 
 
-_sharedbordersegmentcache = {}
+eso_bordersegmentcache = {}
 
 
-def _quantizepoint(point, precision=2):
+
+
+def snappoint(point, precision=2):
     return (round(float(point[0]), precision), round(float(point[1]), precision))
 
 
-def _getnormalizededgekey(pointa, pointb, precision=2):
-    quantizeda = _quantizepoint(pointa, precision=precision)
-    quantizedb = _quantizepoint(pointb, precision=precision)
-    if quantizeda <= quantizedb:
-        return (quantizeda, quantizedb)
-    return (quantizedb, quantizeda)
 
 
-def _iterprovinceedges(province):
+def getedgekey(pointa, pointb, precision=2):
+    snappeda = snappoint(pointa, precision=precision)
+    snappedb = snappoint(pointb, precision=precision)
+    if snappeda <= snappedb:
+        return (snappeda, snappedb)
+    return (snappedb, snappeda)
+
+
+def iterateprovinceedge(province):
     for polygon in province.get("polygons", ()):
         polygonpoints = polygon.get("points", ())
         pointcount = len(polygonpoints)
@@ -448,13 +487,13 @@ def _iterprovinceedges(province):
             yield startpoint, endpoint
 
 
-def _getprovinceedgeentries(province):
+def getprovinceedgedata(province):
     cachedentries = province.get("_edgeentriescache")
     if cachedentries is not None:
         return cachedentries
 
     edgeentries = []
-    for startpoint, endpoint in _iterprovinceedges(province):
+    for startpoint, endpoint in iterateprovinceedge(province):
         startx, starty = startpoint
         endx, endy = endpoint
         dx = endx - startx
@@ -480,52 +519,57 @@ def _getprovinceedgeentries(province):
     return edgeentries
 
 
-def _pointlinedistance(point, lineentry):
+def pointvsline_distance(point, lineentry):
     px, py = point
     sx, sy = lineentry["start"]
     ux = lineentry["ux"]
     uy = lineentry["uy"]
-    # Perpendicular distance to infinite line.
+    # perpendicular line
+
+
     return abs((px - sx) * (-uy) + (py - sy) * ux)
 
 
-def _projectpointonline(point, lineentry):
+def lineuppointonline(point, lineentry):
     px, py = point
     sx, sy = lineentry["start"]
     ux = lineentry["ux"]
     uy = lineentry["uy"]
+
     return (px - sx) * ux + (py - sy) * uy
 
 
-def _getoverlappedcollinearsegment(firstentry, secondentry, line_tolerance, parallel_cross_tolerance, minlength):
+def getoverlapsegment(firstentry, secondentry, linetolerancee, alignmenttolerance, minlength):
     # Quick reject by expanded bounding boxes.
-    if firstentry["maxx"] + line_tolerance < secondentry["minx"]:
+    if firstentry["maxx"] + linetolerancee < secondentry["minx"]:
         return None
-    if secondentry["maxx"] + line_tolerance < firstentry["minx"]:
+    if secondentry["maxx"] + linetolerancee < firstentry["minx"]:
         return None
-    if firstentry["maxy"] + line_tolerance < secondentry["miny"]:
+    if firstentry["maxy"] + linetolerancee < secondentry["miny"]:
         return None
-    if secondentry["maxy"] + line_tolerance < firstentry["miny"]:
+    if secondentry["maxy"] + linetolerancee < firstentry["miny"]:
         return None
 
     crossvalue = abs(firstentry["ux"] * secondentry["uy"] - firstentry["uy"] * secondentry["ux"])
-    if crossvalue > parallel_cross_tolerance:
+    if crossvalue > alignmenttolerance:
         return None
 
-    # Require near-collinearity both ways.
+    # need alignment for both ways
     if (
-        _pointlinedistance(secondentry["start"], firstentry) > line_tolerance
-        and _pointlinedistance(secondentry["end"], firstentry) > line_tolerance
+        pointvsline_distance(secondentry["start"], firstentry) > linetolerancee
+        and pointvsline_distance(secondentry["end"], firstentry) > linetolerancee
     ):
         return None
     if (
-        _pointlinedistance(firstentry["start"], secondentry) > line_tolerance
-        and _pointlinedistance(firstentry["end"], secondentry) > line_tolerance
+        pointvsline_distance(firstentry["start"], secondentry) > linetolerancee
+        and pointvsline_distance(firstentry["end"], secondentry) > linetolerancee
     ):
         return None
 
-    secondstartprojection = _projectpointonline(secondentry["start"], firstentry)
-    secondendprojection = _projectpointonline(secondentry["end"], firstentry)
+
+
+    secondstartprojection = lineuppointonline(secondentry["start"], firstentry)
+    secondendprojection = lineuppointonline(secondentry["end"], firstentry)
 
     overlapstart = max(0.0, min(secondstartprojection, secondendprojection))
     overlapend = min(firstentry["length"], max(secondstartprojection, secondendprojection))
@@ -546,11 +590,13 @@ def _getoverlappedcollinearsegment(firstentry, secondentry, line_tolerance, para
 def getsharedbordersegments(
     playerprovince,
     foreignprovince,
-    line_tolerance=1.1,
-    parallel_cross_tolerance=0.16,
+    linetolerancee=1.1,
+    alignmenttolerance=0.16,
     minlength=0.55,
     keyprecision=2,
 ):
+    
+
     playerprovinceid = playerprovince.get("id")
     foreignprovinceid = foreignprovince.get("id")
     if playerprovinceid and foreignprovinceid:
@@ -558,28 +604,29 @@ def getsharedbordersegments(
             playerprovinceid if playerprovinceid <= foreignprovinceid else foreignprovinceid,
             foreignprovinceid if playerprovinceid <= foreignprovinceid else playerprovinceid,
         )
-        cachedsegments = _sharedbordersegmentcache.get(cachekey)
+        cachedsegments = eso_bordersegmentcache.get(cachekey)
         if cachedsegments is not None:
             return list(cachedsegments)
 
-    playeredgeentries = _getprovinceedgeentries(playerprovince)
-    foreignedgeentries = _getprovinceedgeentries(foreignprovince)
+    playeredgeentries = getprovinceedgedata(playerprovince)
+    foreignedgeentries = getprovinceedgedata(foreignprovince)
     sharedsegmentlookup = {}
+
 
     for playeredgeentry in playeredgeentries:
         for foreignedgeentry in foreignedgeentries:
-            overlappedsegment = _getoverlappedcollinearsegment(
+            overlappedsegment = getoverlapsegment(
                 playeredgeentry,
                 foreignedgeentry,
-                line_tolerance,
-                parallel_cross_tolerance,
+                linetolerancee,
+                alignmenttolerance,
                 minlength,
             )
             if not overlappedsegment:
                 continue
 
             segmentstart, segmentend = overlappedsegment
-            segmentkey = _getnormalizededgekey(segmentstart, segmentend, precision=keyprecision)
+            segmentkey = getedgekey(segmentstart, segmentend, precision=keyprecision)
             existingsegment = sharedsegmentlookup.get(segmentkey)
             if existingsegment is None:
                 sharedsegmentlookup[segmentkey] = overlappedsegment
@@ -598,7 +645,7 @@ def getsharedbordersegments(
 
     sharedsegmentlist = list(sharedsegmentlookup.values())
     if playerprovinceid and foreignprovinceid:
-        _sharedbordersegmentcache[cachekey] = list(sharedsegmentlist)
+        eso_bordersegmentcache[cachekey] = list(sharedsegmentlist)
     return sharedsegmentlist
 
 
@@ -608,7 +655,10 @@ def getcountryborderedges(provincemap, provincegraph, countryname):
 
     borderedgelist = []
     visitededgekeyset = set()
+
+
     for playerprovinceid, province in provincemap.items():
+
         if getprovincecontroller(province) != countryname:
             continue
 
@@ -640,11 +690,14 @@ def getcountryborderedges(provincemap, provincegraph, countryname):
                 }
             )
 
-    borderedgelist.sort(key=lambda edge: edge["edgekey"])
+    borderedgelist.sort(key=lambda edge: edge["edgekey"]) #sort by edge key to ensure consistent order
     return borderedgelist
 
 
+
+
 def getborderworldsegments(provincemap, borderedge):
+
     if not borderedge:
         return []
 
@@ -665,6 +718,8 @@ def getborderworldsegments(provincemap, borderedge):
 
 
 def getfrontlineprovinces(provincemap, provincegraph, playercountry, anchorprovinceid, targetcountry=None):
+
+
     anchorprovince = provincemap.get(anchorprovinceid)
     if not anchorprovince or getprovincecontroller(anchorprovince) != playercountry:
         return set()
@@ -714,6 +769,7 @@ def getfrontlineprovinces(provincemap, provincegraph, playercountry, anchorprovi
 
 
 def buildfrontlinetransferplan(provincemap, selectedprovinceids, frontlineprovinceids, playercountry):
+
     validsourceprovinceids = []
     for provinceid in sorted(set(selectedprovinceids or ())):
         province = provincemap.get(provinceid)
@@ -753,6 +809,8 @@ def buildfrontlinetransferplan(provincemap, selectedprovinceids, frontlineprovin
         provinceid: int(provincemap[provinceid].get("troops", 0)) for provinceid in validsourceprovinceids
     }
     totalavailabletroops = sum(sourceremaininglookup.values())
+
+
     if totalavailabletroops <= 0:
         return {
             "totalassignedtroops": 0,
@@ -764,11 +822,16 @@ def buildfrontlinetransferplan(provincemap, selectedprovinceids, frontlineprovin
     baseallocation = totalavailabletroops // targetcount
     remainder = totalavailabletroops % targetcount
     targetdesiredlookup = {}
+
+
     for targetindex, provinceid in enumerate(validtargetprovinceids):
         targetdesiredlookup[provinceid] = baseallocation + (1 if targetindex < remainder else 0)
 
     transferplan = []
     sourcecursor = 0
+
+
+
     for targetprovinceid in validtargetprovinceids:
         neededtroops = targetdesiredlookup.get(targetprovinceid, 0)
         while neededtroops > 0 and sourcecursor < len(validsourceprovinceids):
@@ -798,6 +861,8 @@ def buildfrontlinetransferplan(provincemap, selectedprovinceids, frontlineprovin
     totalassignedtroops = sum(entry["amount"] for entry in transferplan)
     effectivefrontlineprovinceids = []
     seenprovinceids = set()
+
+
     for transferentry in transferplan:
         targetprovinceid = transferentry["targetprovinceid"]
         if targetprovinceid in seenprovinceids:
@@ -813,6 +878,7 @@ def buildfrontlinetransferplan(provincemap, selectedprovinceids, frontlineprovin
 
 
 def createfrontline(provincemap, provincegraph, playercountry, selectedprovinceids, borderedge, nearbydepth=2):
+
     if not borderedge:
         return {
             "success": False,
@@ -825,6 +891,9 @@ def createfrontline(provincemap, provincegraph, playercountry, selectedprovincei
 
     anchorprovinceid = borderedge.get("playerprovinceid")
     anchorprovince = provincemap.get(anchorprovinceid)
+
+
+
     if not anchorprovince or getprovincecontroller(anchorprovince) != playercountry:
         return {
             "success": False,
@@ -834,6 +903,7 @@ def createfrontline(provincemap, provincegraph, playercountry, selectedprovincei
             "anchorprovinceid": None,
             "transferplan": [],
         }
+
 
     targetcountry = borderedge.get("foreigncountry")
     nearbyfrontlineprovinceidset = getfrontlineprovinces(
@@ -859,6 +929,8 @@ def createfrontline(provincemap, provincegraph, playercountry, selectedprovincei
     )
     assignedtroops = frontlineplan["totalassignedtroops"]
     assignedprovinceids = frontlineplan["targetprovinceids"]
+
+
     if assignedtroops <= 0 or not assignedprovinceids:
         return {
             "success": False,
@@ -871,6 +943,8 @@ def createfrontline(provincemap, provincegraph, playercountry, selectedprovincei
 
     frontlineedgekeys = set()
     frontlineedgelist = []
+
+
     for playerprovinceid in assignedprovinceids:
         for foreignprovinceid in provincegraph.get(playerprovinceid, ()):
             foreignprovince = provincemap.get(foreignprovinceid)
@@ -918,6 +992,7 @@ def createfrontline(provincemap, provincegraph, playercountry, selectedprovincei
         )
 
     return {
+
         "success": True,
         "assignedtroops": assignedtroops,
         "frontlineprovinceids": assignedprovinceids,
@@ -936,6 +1011,8 @@ def pointtosegmentdistance(point, segmentstart, segmentend):
     segmentdx = endx - startx
     segmentdy = endy - starty
     segmentsquaredlength = segmentdx * segmentdx + segmentdy * segmentdy
+
+    
     if segmentsquaredlength <= 1e-9:
         return math.hypot(pointx - startx, pointy - starty)
 
@@ -943,7 +1020,8 @@ def pointtosegmentdistance(point, segmentstart, segmentend):
     projectionratio = max(0.0, min(1.0, projectionratio))
     nearestx = startx + projectionratio * segmentdx
     nearesty = starty + projectionratio * segmentdy
-    return math.hypot(pointx - nearestx, pointy - nearesty)
+
+    return math.hypot(pointx - nearestx, pointy - nearesty) # distnace from point to nearest point, hypotenuse
 
 
 
