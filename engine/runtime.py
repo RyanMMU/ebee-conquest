@@ -888,6 +888,12 @@ def main(eventbus=None):
         """
 
         cameramodule.enforceminimumzoom(camerastate, windowwidth, windowheight, mapbox)
+        cameramodule.updatesmoothzoom(
+            camerastate,
+            mouseposition[0],
+            mouseposition[1],
+            elapsedseconds,
+        )
         cameramodule.clampcamerastate(camerastate, windowheight, mapbox)
 
         zoomvalue = camerastate.zoom
