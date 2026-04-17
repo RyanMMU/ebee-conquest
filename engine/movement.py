@@ -438,6 +438,17 @@ def getcountryborderedges(provincemap, provincegraph, countryname):
             if foreigncountry == countryname:
                 continue
 
+            # trying province graph neighbors first
+            # Keep only edges that share actual polygon border segments
+            sharedsegments = getsharedbordersegments(
+                province,
+                foreignprovince,
+                precision=1,
+                minlength=0.75,
+            )
+            if not sharedsegments:
+                continue
+
             edgekey = getborderedgekey(playerprovinceid, foreignprovinceid)
             if edgekey in visitededgekeyset:
                 continue
@@ -515,27 +526,6 @@ def getborderworldsegments(provincemap, borderedge):
     sharedsegments = getsharedbordersegments(playerprovince, foreignprovince, precision=1, minlength=0.75)
     if sharedsegments:
         return sharedsegments
-
-    playerrect = playerprovince.get("rectangle")
-    foreignrect = foreignprovince.get("rectangle")
-    if playerrect is not None and foreignrect is not None:
-        overlapleft = max(playerrect.left, foreignrect.left)
-        overlapright = min(playerrect.right, foreignrect.right)
-        overlaptop = max(playerrect.top, foreignrect.top)
-        overlapbottom = min(playerrect.bottom, foreignrect.bottom)
-
-        if overlapleft <= overlapright and overlaptop <= overlapbottom:
-            overlapwidth = float(overlapright - overlapleft)
-            overlapheight = float(overlapbottom - overlaptop)
-            if overlapwidth <= 1e-6 and overlapheight <= 1e-6:
-                return []
-
-            if overlapwidth >= overlapheight:
-                centery = (overlaptop + overlapbottom) * 0.5
-                return [((float(overlapleft), centery), (float(overlapright), centery))]
-
-            centerx = (overlapleft + overlapright) * 0.5
-            return [((centerx, float(overlaptop)), (centerx, float(overlapbottom)))]
 
     return []
 
@@ -745,6 +735,18 @@ def createfrontline(provincemap, provincegraph, playercountry, selectedprovincei
             if not foreignprovince:
                 continue
             if getprovincecontroller(foreignprovince) == playercountry:
+                continue
+
+            playerprovince = provincemap.get(playerprovinceid)
+            if not playerprovince:
+                continue
+            sharedsegments = getsharedbordersegments(
+                playerprovince,
+                foreignprovince,
+                precision=1,
+                minlength=0.75,
+            )
+            if not sharedsegments:
                 continue
 
             edgekey = getborderedgekey(playerprovinceid, foreignprovinceid)
