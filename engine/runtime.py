@@ -271,6 +271,58 @@ def getselectedtroopentries(selectedprovinceidset, selectedprovinceid, provincem
     return entries
 
 
+def getsegmentgapbridges(segmentlist, maxgapdistance=14.0):
+    if not segmentlist:
+        return []
+
+    maxgapsquared = maxgapdistance * maxgapdistance
+    endpointlist = []
+    for segmentindex, segment in enumerate(segmentlist):
+        segmentstart, segmentend = segment
+        endpointlist.append((segmentindex, 0, segmentstart))
+        endpointlist.append((segmentindex, 1, segmentend))
+
+    bridgelines = []
+    bridgepairset = set()
+    endpointcount = len(endpointlist)
+    for endpointindex in range(endpointcount):
+        segmentindex, endpointkind, endpointposition = endpointlist[endpointindex]
+        endpointx, endpointy = endpointposition
+
+        nearestcandidate = None
+        nearestdistance = float("inf")
+        for candidateindex in range(endpointcount):
+            if candidateindex == endpointindex:
+                continue
+
+            othersegmentindex, otherendpointkind, otherposition = endpointlist[candidateindex]
+            if othersegmentindex == segmentindex:
+                continue
+
+            offsetx = otherposition[0] - endpointx
+            offsety = otherposition[1] - endpointy
+            distancesquared = offsetx * offsetx + offsety * offsety
+            if distancesquared <= 1e-6 or distancesquared > maxgapsquared:
+                continue
+            if distancesquared >= nearestdistance:
+                continue
+
+            nearestdistance = distancesquared
+            nearestcandidate = (candidateindex, otherposition)
+
+        if nearestcandidate is None:
+            continue
+
+        candidateindex, candidateposition = nearestcandidate
+        pairkey = (endpointindex, candidateindex) if endpointindex < candidateindex else (candidateindex, endpointindex)
+        if pairkey in bridgepairset:
+            continue
+        bridgepairset.add(pairkey)
+        bridgelines.append((endpointposition, candidateposition))
+
+    return bridgelines
+
+
 #  from https://stackoverflow.com/a/29643643  
 
 
@@ -889,8 +941,26 @@ def main(eventbus=None):
                     pygame.draw.line(screen, bordercolor, segmentstart, segmentend, borderwidth)
 
                 if isactivefrontline:
-                    pygame.draw.line(screen, (215, 40, 40), segmentstart, segmentend, 4)
-                    pygame.draw.line(screen, (255, 86, 86), segmentstart, segmentend, 2)
+                    pygame.draw.line(screen, (185, 24, 24), segmentstart, segmentend, 8)
+                    pygame.draw.line(screen, (220, 42, 42), segmentstart, segmentend, 5)
+                    pygame.draw.line(screen, (255, 96, 96), segmentstart, segmentend, 2)
+
+            if frontlineplacementmode:
+                placementsegmentlist = [(segmentstart, segmentend) for _, segmentstart, segmentend in frontlineoverlaysegments]
+                placementbridges = getsegmentgapbridges(placementsegmentlist, maxgapdistance=16.0)
+                for bridgestart, bridgeend in placementbridges:
+                    pygame.draw.line(screen, (235, 205, 92), bridgestart, bridgeend, 2)
+
+            activefrontlinesegmentlist = [
+                (segmentstart, segmentend)
+                for edgekey, segmentstart, segmentend in frontlineoverlaysegments
+                if edgekey in activefrontlineedgekeyset
+            ]
+            activefrontlinebridges = getsegmentgapbridges(activefrontlinesegmentlist, maxgapdistance=16.0)
+            for bridgestart, bridgeend in activefrontlinebridges:
+                pygame.draw.line(screen, (185, 24, 24), bridgestart, bridgeend, 8)
+                pygame.draw.line(screen, (220, 42, 42), bridgestart, bridgeend, 5)
+                pygame.draw.line(screen, (255, 96, 96), bridgestart, bridgeend, 2)
 
         selectedtroopentries = getselectedtroopentries(
             selectedprovinceidset,
