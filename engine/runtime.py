@@ -1378,7 +1378,8 @@ def main(eventbus=None):
                     continue
                 mousex, mousey = pygame.mouse.get_pos()
                 cameramodule.applywheelzoom(camerastate, event.y, windowheight, mapbox, mousex, mousey)
-                cameramodule.updatesmoothzoom(camerastate, mousex, mousey)
+                dt = clock.get_time() / 1000.0
+                cameramodule.updatesmoothzoom(camerastate, mousex, mousey, dt)
                 cameramodule.clampcamerastate(camerastate, windowheight, mapbox)
                 zoomvalue = camerastate.zoom
                 camerax = camerastate.x
