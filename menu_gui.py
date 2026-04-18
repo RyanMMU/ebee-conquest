@@ -76,6 +76,8 @@ while run:
                 
                 if button_m < mouse[0] < button_m + button_width and 170 < mouse[1] < 223:
                         main()
+                        pygame.quit()
+                        sys.exit()
                
                 elif button_m < mouse[0] < button_m+button_width and 345 < mouse[1] < 390:
                         menu = 'settings'
