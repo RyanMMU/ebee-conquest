@@ -50,16 +50,18 @@ edgepanspeed = cameramodule.defaultpanconfig.speed
 curvesamplestep = 1.5
 maxsegmentsteps = 48
 autocountrycolors = [
-    (197, 92, 92),
+    (197, 92, 50),
     (88, 157, 216),
     (96, 176, 118),
     (212, 154, 79),
     (166, 120, 199),
     (101, 187, 180),
     (214, 124, 162),
-    (191, 196, 84),
-    (129, 144, 224),
+    (191, 80, 84),
+    (129, 20, 224),
     (206, 138, 112),
+    (120, 177, 161),
+    (177, 50, 195),
 ]
 
 
@@ -986,17 +988,27 @@ def main(eventbus=None):
                         pygame.draw.polygon(screen, finalfillcolor, drawpolygon)
                         pygame.draw.polygon(screen, (50, 50, 50), drawpolygon, 1)
 
-                    if gamephase == "play" and "troops" in drawitem and drawitem["troops"] > 0 and itemrectanglescreen.colliderect(screenrectangle):
-                        troopbadgelist.append((itemrectanglescreen.center, drawitem["troops"])) #store as screen coords, troop count
+        if gamephase == "play":
+            for copyshift in copyshiftlist:
+                drawcamerax = camerax + copyshift
+                for provinceid, province in provincemap.items():
+                    if int(province.get("troops", 0)) <= 0:
+                        continue
 
-                        # for quick search: "troop badge hitbox"
-                        troopbadgerect = gui_gettroopbadgerect(itemrectanglescreen.center, drawitem["troops"], runtimeui.troopbadgefont)
-                        troopbadgehitlist.append(
-                            {
-                                "provinceid": drawitem["id"],
-                                "rect": troopbadgerect,
-                            }
-                        )
+                    provincerectanglescreen = getscreenrectangle(province["rectangle"], zoomvalue, drawcamerax, cameray)
+                    if not provincerectanglescreen.colliderect(screenrectangle):
+                        continue
+
+                    troopbadgelist.append((provincerectanglescreen.center, province["troops"]))
+
+                    # for quick search: "troop badge hitbox"
+                    troopbadgerect = gui_gettroopbadgerect(provincerectanglescreen.center, province["troops"], runtimeui.troopbadgefont)
+                    troopbadgehitlist.append(
+                        {
+                            "provinceid": provinceid,
+                            "rect": troopbadgerect,
+                        }
+                    )
 
         frontlineborderedgelist = []
         frontlineedgebykey = {}
