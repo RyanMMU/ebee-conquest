@@ -1,6 +1,5 @@
 import pygame
 import pygame_gui
-from runtime import get_state_data
 
 #FOR ANY GUI PLEASE PUT IT IN HERE
 # THIS SHOULD BE THE ONLY FILE WITH GUI CODE IN IT
@@ -45,6 +44,27 @@ def gui_lightencolor(colorvalue, amount):
         int(green + (255 - green) * amount),
         int(blue + (255 - blue) * amount),
     )
+
+def get_state_data(state_id):
+    for country in countries:
+        country_name = country["Country"]
+        states = country["States"]
+
+        for state_name, state_data in states.items():
+            if state_name.lower() == state_id.lower():
+
+                province_count = len(states)
+
+                return {
+                    "name": state_name,
+                    "country": country_name,
+                    "capital": state_data["capital"],
+                    "population": state_data["population"],
+                    "terrain": state_data["terrain"],
+                    "province_count": province_count
+                }
+
+    return None
 
 
 class EngineUI:

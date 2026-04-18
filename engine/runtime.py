@@ -76,28 +76,6 @@ autocountrycolors = [
 
 
 
-def get_state_data(state_id):
-    for country in countries:
-        country_name = country["Country"]
-        states = country["States"]
-
-        for state_name, state_data in states.items():
-            if state_name.lower() == state_id.lower():
-
-                province_count = len(states)
-
-                return {
-                    "name": state_name,
-                    "country": country_name,
-                    "capital": state_data["capital"],
-                    "population": state_data["population"],
-                    "terrain": state_data["terrain"],
-                    "province_count": province_count
-                }
-
-    return None
-
-
 
 def getsegmentsamplecount(segment):
     segmenttypename = type(segment).__name__
