@@ -164,9 +164,9 @@ Non-player nations aren't just scripts; they are agents.
 
 | Member | Role | Primary Contributions |
 | :--- | :--- | :--- |
-| **M. Ryan Haiqal** | Lead Developer | Engine Core, Performance, LLM Integration (Pydantic), Optimization. |
-| **Benedict Chin** | Game Logic & UI | UI/UX Design, Combat Math, Save/Load Systems. |
-| **Adam Syahmi** | Narrative Systems | Database setup, Prompt Engineering, NPC Personality Logic. |
+| **Ryan** | Lead Developer | Engine Core, Performance, LLM Integration (Pydantic), Optimization. |
+| **Benedict C.** | Game Logic & UI | UI/UX Design, Combat Math, Save/Load Systems. |
+| **Adam S.** | Narrative Systems | Database setup, Prompt Engineering, NPC Personality Logic. |
 
 -----
 
