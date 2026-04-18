@@ -595,8 +595,35 @@ def gui_drawhoverlabel(screen, fontobject, hovertext, mouseposition):
     if not hovertext:
         return
 
-    labelsurface = fontobject.render("id:" + hovertext, True, (255, 255, 255))
-    screen.blit(labelsurface, (mouseposition[0] + 16, mouseposition[1] + 16))
+    state = get_state_data(hovertext)
+    if not state:
+        return
+
+    padding = 8
+    x = mouseposition[0] + 16
+    y = mouseposition[1] + 16
+
+    lines = [
+        f"id: {state['name']}",
+        f"Population: {state['population']}",
+        f"Country: {state['country']}",
+        f"Terrain Type: {state['terrain']}",
+        f"Number of provinces: {state['province_count']}"
+    ]
+
+    text_surfaces = [fontobject.render(line, True, (255, 255, 255)) for line in lines]
+
+    width = max(text.get_width() for text in text_surfaces) + padding * 2
+    height = sum(text.get_height() for text in text_surfaces) + padding * 2
+
+    pygame.draw.rect(screen, (20, 20, 20), (x, y, width, height))
+    pygame.draw.rect(screen, (255, 200, 0), (x, y, width, height), 2)
+
+    offset_y = y + padding
+    for text in text_surfaces:
+        screen.blit(text, (x + padding, offset_y))
+        offset_y += text.get_height()
+
 
 
 def gui_drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountry):
