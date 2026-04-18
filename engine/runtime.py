@@ -245,6 +245,30 @@ def getdragselectedprovinceids(selectionrect, badgehitlist, provincemap, playerc
     return selectedids
 
 
+def getprovinceundercursorinstate(mouseposition, stateid, stateshapelist, zoomvalue, camerax, cameray, copyshiftlist):
+    stateobject = next((state for state in stateshapelist if state["id"] == stateid), None)
+    if not stateobject:
+        return None
+
+    subdivisions = stateobject.get("subdivisions", [])
+    if not subdivisions:
+        return None
+
+    for copyshift in copyshiftlist:
+        drawcamerax = camerax + copyshift
+        for province in subdivisions:
+            for polygon in province.get("polygons", []):
+                polygonrectanglescreen = getscreenrectangle(polygon["rectangle"], zoomvalue, drawcamerax, cameray)
+                if not polygonrectanglescreen.collidepoint(mouseposition):
+                    continue
+
+                polygonpointsscreen = getscreenpoints(polygon["points"], zoomvalue, drawcamerax, cameray)
+                if ispointinsidepolygon(mouseposition, polygonpointsscreen):
+                    return province
+
+    return None
+
+
 def getselectedtroopentries(selectedprovinceidset, selectedprovinceid, provincemap, playercountry):
     selectedids = []
     if selectedprovinceidset:
@@ -1489,6 +1513,32 @@ def main(eventbus=None):
 
                 if hoveredstateid is not None:
                     expandedstateid = hoveredstateid
+
+
+                    hoveredstateprovince = getprovinceundercursorinstate(
+                        event.pos,
+                        hoveredstateid,
+                        stateshapelist,
+                        zoomvalue,
+                        camerax,
+                        cameray,
+                        copyshiftlist,
+                    )
+
+                    if hoveredstateprovince and getprovincecontroller(hoveredstateprovince) == playercountry:
+                        selectedprovinceid = hoveredstateprovince["id"]
+                        selectedprovinceidset = {selectedprovinceid}
+                        routepreviewset = set()
+                        countrymenutarget = None
+                        eventbus.emit(
+                            EngineEventType.PROVINCESELECTED,
+                            {
+                                "provinceId": selectedprovinceid,
+                                "stateId": hoveredstateprovince.get("parentid"),
+                                "country": getprovincecontroller(hoveredstateprovince),
+                            },
+                        )
+
                     eventbus.emit(
                         EngineEventType.STATESELECTED,
                         {
@@ -1500,6 +1550,12 @@ def main(eventbus=None):
                     selectedprovinceid = None
                     selectedprovinceidset = set()
                     routepreviewset = set()
+
+
+
+
+
+
 
                 dragselectstart = None
                 dragselectcurrent = None
