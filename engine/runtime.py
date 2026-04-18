@@ -49,20 +49,6 @@ edgepanmargin = cameramodule.defaultpanconfig.margin
 edgepanspeed = cameramodule.defaultpanconfig.speed
 curvesamplestep = 1.5
 maxsegmentsteps = 48
-autocountrycolors = [
-    (197, 92, 50),
-    (88, 157, 216),
-    (96, 176, 118),
-    (212, 154, 79),
-    (166, 120, 199),
-    (101, 187, 180),
-    (214, 124, 162),
-    (191, 80, 84),
-    (129, 20, 224),
-    (206, 138, 112),
-    (120, 177, 161),
-    (177, 50, 195),
-]
 
 
 # GAME LOGIC AND RENDERING STARTS
