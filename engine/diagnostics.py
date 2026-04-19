@@ -41,20 +41,34 @@ def logstartupdiagnostics(startuptimestamp, stage, details=""):
 
 
 
-def createloadingprogresscallback(drawprogresscallback, startuptimestamp, stage, logintervalseconds=1.5):
+def createloadingprogresscallback(
+    drawprogresscallback,
+    startuptimestamp,
+    stage,
+    logintervalseconds=1.5,
+    onlog=None,
+):
     callbackstate = {"lastlogtimestamp": 0.0}
 
 
     def loadingprogresscallback(completedcount, totalcount):
-        shouldcontinue = drawprogresscallback(completedcount, totalcount)
         currenttimestamp = time.perf_counter()
+        elapsedseconds = currenttimestamp - startuptimestamp
+        progressratio = 0.0 if totalcount <= 0 else completedcount / totalcount
+        progresspercent = max(0.0, min(100.0, progressratio * 100.0))
+        statusline = f"{stage} | {completedcount}/{totalcount} ({progresspercent:.1f}%) | {elapsedseconds:.1f}s"
+        shouldcontinue = drawprogresscallback(completedcount, totalcount, stage, statusline)
+
         shouldlog = (
             completedcount == 0
             or (totalcount > 0 and completedcount >= totalcount)
             or (currenttimestamp - callbackstate["lastlogtimestamp"]) >= logintervalseconds
         )
         if shouldlog:
-            logstartupdiagnostics(startuptimestamp, stage, f"progress={completedcount}/{totalcount}")
+            details = f"progress={completedcount}/{totalcount} ({progresspercent:.1f}%) elapsed={elapsedseconds:.1f}s"
+            logstartupdiagnostics(startuptimestamp, stage, details)
+            if onlog:
+                onlog(f"{stage}: {details}")
             callbackstate["lastlogtimestamp"] = currenttimestamp
         return shouldcontinue
 

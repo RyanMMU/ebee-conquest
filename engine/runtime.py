@@ -609,7 +609,16 @@ def getprovinceatmouse(mouseposition, provincelist, zoomvalue, camerax, cameray,
 
 
 
-def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
+def drawloadingscreen(
+    screen,
+    largefont,
+    smallfont,
+    completedcount,
+    totalcount,
+    stage="Loading map data",
+    statusline="",
+    loglines=None,
+):
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             return False
@@ -621,28 +630,49 @@ def drawloadingscreen(screen, largefont, smallfont, completedcount, totalcount):
     progressvalue = max(0.0, min(1.0, progressvalue))
 
     screen.fill((18, 18, 22))
-    #print("progress", progressvalue, completedcount, totalcount)
     windowwidth, windowheight = screen.get_size()
 
-
-
-
-    titletextabovebar = largefont.render("Engine: Precompiling map data...", True, (240, 240, 240))
+    titletextabovebar = largefont.render(f"Engine: {stage}", True, (240, 240, 240))
     screen.blit(titletextabovebar, titletextabovebar.get_rect(center=(windowwidth // 2, windowheight // 2 - 40)))
 
-
-
-    barwidth = min(640, windowwidth - 120)
+    barwidth = min(760, windowwidth - 120)
     barheight = 22
     barx = (windowwidth - barwidth) // 2
-    bary = windowheight // 2 + 4
+    bary = windowheight // 2 - 8
 
-    pygame.draw.rect(screen, (60, 60, 70), (barx, bary, barwidth, barheight), border_radius=1)
-    pygame.draw.rect(screen, (120, 190, 255), (barx, bary, int(barwidth * progressvalue), barheight), border_radius=1)
-    pygame.draw.rect(screen, (120, 120, 130), (barx, bary, barwidth, barheight), 1, border_radius=1)
+    pygame.draw.rect(screen, (60, 60, 70), (barx, bary, barwidth, barheight), border_radius=2)
+    pygame.draw.rect(screen, (120, 190, 255), (barx, bary, int(barwidth * progressvalue), barheight), border_radius=2)
+    pygame.draw.rect(screen, (120, 120, 130), (barx, bary, barwidth, barheight), 1, border_radius=2)
 
-    progresstext = smallfont.render(f"{completedcount}/{totalcount} provinces", True, (255, 255, 255))
-    screen.blit(progresstext, progresstext.get_rect(center=(windowwidth // 2, bary + 10)))
+    overlaytext = statusline if statusline else f"{completedcount}/{totalcount}"
+    maxoverlaywidth = max(20, barwidth - 12)
+    while overlaytext and smallfont.size(overlaytext)[0] > maxoverlaywidth:
+        overlaytext = overlaytext[:-1]
+    if overlaytext != statusline and overlaytext:
+        overlaytext = overlaytext[:-3] + "..." if len(overlaytext) > 3 else overlaytext
+
+    overlaytextshadow = smallfont.render(overlaytext, True, (20, 20, 24))
+    overlaytextsurface = smallfont.render(overlaytext, True, (245, 245, 245))
+    overlayrect = overlaytextsurface.get_rect(center=(windowwidth // 2, bary + 11))
+    shadowrect = overlayrect.move(1, 1)
+    screen.blit(overlaytextshadow, shadowrect)
+    screen.blit(overlaytextsurface, overlayrect)
+
+    paneltop = bary + 40
+    panelheight = min(180, max(100, windowheight - paneltop - 40))
+    panelrect = pygame.Rect(barx, paneltop, barwidth, panelheight)
+
+    pygame.draw.rect(screen, (23, 26, 31), panelrect, border_radius=3)
+    pygame.draw.rect(screen, (60, 70, 85), panelrect, 1, border_radius=3)
+
+    visibleloglines = list(loglines or ())
+    maxvisiblelines = max(1, (panelrect.height - 16) // 18)
+    visibleloglines = visibleloglines[-maxvisiblelines:]
+    texty = panelrect.y + 8
+    for logline in visibleloglines:
+        loglinesurface = smallfont.render(logline, True, (190, 210, 230))
+        screen.blit(loglinesurface, (panelrect.x + 10, texty))
+        texty += 18
 
     pygame.display.flip()
     return True
@@ -681,11 +711,27 @@ def main(eventbus=None):
     loadingtextfont = pygame.font.SysFont("Arial", 18)
     developmentmode = loaddevmodeflag("dev.txt")
 
+    loadingloglines = []
+
+    def appendloadinglog(logline):
+        loadingloglines.append(f"local@EbeeEngine:~$  {logline}")
+        if len(loadingloglines) > 200:
+            del loadingloglines[:-200]
+
 
 
 
     logstartupdiagnostics(startupbegintimestamp, "fonts done", f"development_mode={developmentmode}")
-    if not drawloadingscreen(screen, loadingtitlefont, loadingtextfont, 0, 1):
+    if not drawloadingscreen(
+        screen,
+        loadingtitlefont,
+        loadingtextfont,
+        0,
+        1,
+        stage="Initializing",
+        statusline="Starting engine...",
+        loglines=loadingloglines,
+    ):
         pygame.quit()
         return
 
@@ -694,9 +740,19 @@ def main(eventbus=None):
 
 
     stateprogresscallback = createloadingprogresscallback(
-        lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
+        lambda completed, total, stage, statusline: drawloadingscreen(
+            screen,
+            loadingtitlefont,
+            loadingtextfont,
+            completed,
+            total,
+            stage=stage,
+            statusline=statusline,
+            loglines=loadingloglines,
+        ),
         startupbegintimestamp,
-        "loading states.svg",
+        "Precompiling states geometry...",
+        onlog=appendloadinglog,
     )
 
 
@@ -729,9 +785,19 @@ def main(eventbus=None):
 
 
     provinceprogresscallback = createloadingprogresscallback(
-        lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
+        lambda completed, total, stage, statusline: drawloadingscreen(
+            screen,
+            loadingtitlefont,
+            loadingtextfont,
+            completed,
+            total,
+            stage=stage,
+            statusline=statusline,
+            loglines=loadingloglines,
+        ),
         startupbegintimestamp,
-        "loading provinces.svg",
+        "Precompiling provinces geometry...",
+        onlog=appendloadinglog,
     )
 
 
@@ -746,9 +812,19 @@ def main(eventbus=None):
     # fix accidental typo safely
     if not provinceshapelist:
         provinceprogresscallback = createloadingprogresscallback(
-            lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
+            lambda completed, total, stage, statusline: drawloadingscreen(
+                screen,
+                loadingtitlefont,
+                loadingtextfont,
+                completed,
+                total,
+                stage=stage,
+                statusline=statusline,
+                loglines=loadingloglines,
+            ),
             startupbegintimestamp,
-            "loading provinces.svg (retry)",
+            "Precompiling provinces geometry... (ERROR! retrying..)",
+            onlog=appendloadinglog,
         )
         provinceshapelist = loadsvgshapes(
             provincefilepath if False else provincefilepath,
@@ -778,9 +854,19 @@ def main(eventbus=None):
 
 
     graphprogresscallback = createloadingprogresscallback(
-        lambda completed, total: drawloadingscreen(screen, loadingtitlefont, loadingtextfont, completed, total),
+        lambda completed, total, stage, statusline: drawloadingscreen(
+            screen,
+            loadingtitlefont,
+            loadingtextfont,
+            completed,
+            total,
+            stage=stage,
+            statusline=statusline,
+            loglines=loadingloglines,
+        ),
         startupbegintimestamp,
-        "building province graph",
+        "Compiling province graph..",
+        onlog=appendloadinglog,
     )
     provincegraph = buildprovinceadjacencygraph(
         provincemap,
