@@ -1,5 +1,9 @@
 import pygame
 import pygame_gui
+import math
+
+troopbadgevisiblezoommultiplier = 2.5
+countrylabelvisiblezoommultiplier = 6
 
 #FOR ANY GUI PLEASE PUT IT IN HERE
 # THIS SHOULD BE THE ONLY FILE WITH GUI CODE IN IT
@@ -79,6 +83,8 @@ class EngineUI:
         self.hudfont = pygame.font.SysFont("Arial", 14)
         self.hudsmallfont = pygame.font.SysFont("Arial", 12)
         self.hoverfont = pygame.font.SysFont("Arial", 14)
+        self.countrylabelfont = pygame.font.SysFont("Arial", 18, bold=True)
+        self.countrylabelcache = {}
         self.choosetitlefont = pygame.font.SysFont("Arial", 32, bold=True)
         self.choosetextfont = pygame.font.SysFont("Arial", 16)
         self.choosebuttonrect = pygame.Rect(0, 0, 190, 38)
@@ -90,7 +96,7 @@ class EngineUI:
         self.hudheadertext = ""
         self.huddetailtext = ""
         self.hudcontrolstext = ""
-        self.selectionpanelwidth = 356
+        self.selectionpanelwidth = 356 
         self.selectionpanelheight = 308
         self.selectionrowlabels = []
 
@@ -110,7 +116,7 @@ class EngineUI:
         #print("function element")
         self.choose_title = pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(0, 0, 420, 28),
-            text="choose your country",
+            text="Choose your country",
             manager=self.manager,
         )
 
@@ -123,12 +129,12 @@ class EngineUI:
 
         self.choose_selected = pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(0, 0, 520, 24),
-            text="selected: none",
+            text="SELECTED: none",
             manager=self.manager,
         )
         self.choose_button = pygame_gui.elements.UIButton(
             relative_rect=pygame.Rect(0, 0, 190, 38),
-            text="choose country",
+            text="Choose country",
             manager=self.manager,
         )
 
@@ -230,7 +236,7 @@ class EngineUI:
         )
         self.selection_title = pygame_gui.elements.UILabel(
             relative_rect=pygame.Rect(10, 8, self.selectionpanelwidth - 20, 22),
-            text="selected troops",
+            text="Troop Information",
             manager=self.manager,
             container=self.selection_panel,
         )
@@ -480,7 +486,7 @@ class EngineUI:
             else:
                 #print("dev mode off show cost")
                 self.recruit_cost_label.set_text(
-                    f"cost: {recruitgoldcost}g, {recruitpopulationcost} pop"
+                    f"Cost: {recruitgoldcost}g, {recruitpopulationcost} pop"
                 )
                 self.recruit_cost_label.show()
 
@@ -493,8 +499,8 @@ class EngineUI:
                 self.country_panel.show()
                 self.country_name.set_text(countrymenutarget)
                 alreadyatwar = countrymenutarget in countriesatwarset
-                self.country_status.set_text("status: at war" if alreadyatwar else "status: peace")
-                self.declare_war_button.set_text("already at war" if alreadyatwar else "declare war")
+                self.country_status.set_text("Status: at war" if alreadyatwar else "Status: peace")
+                self.declare_war_button.set_text("Already at war!" if alreadyatwar else "Declare War")
 
 
                 if alreadyatwar:
@@ -510,7 +516,7 @@ class EngineUI:
             if selectedentries:
                 self.selection_panel.show()
                 self.selection_summary.set_text(
-                    f"{len(selectedentries)} selected | total troops: {totaltroops}"
+                    f"{len(selectedentries)} selected (Total troops: {totaltroops})"
                 )
 
                 maxrows = len(self.selectionrowlabels)
@@ -527,15 +533,15 @@ class EngineUI:
 
                 if len(selectedentries) > maxrows:
                     overflowcount = len(selectedentries) - maxrows
-                    self.selectionrowlabels[-1].set_text(f"... and {overflowcount} more provinces")
+                    self.selectionrowlabels[-1].set_text(f" ----> AND {overflowcount} more provinces")
                     self.selectionrowlabels[-1].show()
 
                 if frontlineplacementmode:
                     self.selection_status.set_text("frontline: click highlighted border")
-                    self.frontline_button.set_text("cancel frontline")
+                    self.frontline_button.set_text("CANCEL!!")
                 else:
                     self.selection_status.set_text("")
-                    self.frontline_button.set_text("frontline")
+                    self.frontline_button.set_text("Set Frontline")
 
                 if totaltroops > 1:
                     self.split_button.enable()
@@ -760,6 +766,370 @@ def gui_drawhoverlabel(screen, fontobject, state, mouseposition):
         offset_y += text.get_height()
 
 
+def gui_shouldshowtroopbadges(zoomvalue, minimumzoom):
+    return zoomvalue >= minimumzoom * troopbadgevisiblezoommultiplier
+
+
+def gui_shouldshowcountrylabels(zoomvalue, minimumzoom):
+    return zoomvalue <= minimumzoom * countrylabelvisiblezoommultiplier
+
+
+def gui_rendertextwithspacing(fontobject, textvalue, textcolor, letterspacing=0):
+    if letterspacing <= 0:
+        return fontobject.render(textvalue, True, textcolor)
+
+    fontsurface_list = [fontobject.render(character, True, textcolor) for character in textvalue]
+    if not fontsurface_list:
+        return fontobject.render("", True, textcolor)
+
+    totalwidth = sum(surface.get_width() for surface in fontsurface_list)
+    totalwidth += max(0, len(fontsurface_list) - 1) * int(letterspacing)
+    totalheight = max(surface.get_height() for surface in fontsurface_list)
+    renderedsurface = pygame.Surface((max(1, totalwidth), max(1, totalheight)), pygame.SRCALPHA)
+
+    drawx = 0
+    for fontsurface in fontsurface_list:
+        drawy = (totalheight - fontsurface.get_height()) // 2
+        renderedsurface.blit(fontsurface, (drawx, drawy))
+        drawx += fontsurface.get_width() + int(letterspacing)
+
+    return renderedsurface
+
+
+def gui_buildoutlinedtext(
+    fontobject,
+    textvalue,
+    textcolor=(235, 235, 235),
+    outlinecolor=(26, 26, 26),
+    outlinewidth=2,
+    letterspacing=0,
+):
+    labelsurface = gui_rendertextwithspacing(fontobject, textvalue, textcolor, letterspacing=letterspacing)
+    width = labelsurface.get_width() + outlinewidth * 2
+    height = labelsurface.get_height() + outlinewidth * 2
+    renderedsurface = pygame.Surface((width, height), pygame.SRCALPHA)
+
+    outlinesurface = gui_rendertextwithspacing(fontobject, textvalue, outlinecolor, letterspacing=letterspacing)
+    for offsetx in range(-outlinewidth, outlinewidth + 1):
+        for offsety in range(-outlinewidth, outlinewidth + 1):
+            if offsetx == 0 and offsety == 0:
+                continue
+            renderedsurface.blit(outlinesurface, (offsetx + outlinewidth, offsety + outlinewidth))
+
+    renderedsurface.blit(labelsurface, (outlinewidth, outlinewidth))
+    return renderedsurface
+
+
+def gui_getcountrylabelsurface(labelcache, fontobject, textvalue, fontsize, letterspacing):
+    eso_fontcache = labelcache.setdefault("_eso_fontcache", {})
+    eso_baselabelcache = labelcache.setdefault("_baselabels", {})
+
+    fontsize = int(max(11, min(58, fontsize)))
+    letterspacing = int(max(0, min(16, letterspacing)))
+
+    fontentry = eso_fontcache.get(fontsize)
+    if fontentry is None:
+        fontname = pygame.font.get_default_font()
+        try:
+            fontname = fontobject.get_name()
+        except AttributeError:
+            pass
+        fontentry = pygame.font.SysFont(fontname, fontsize, bold=True)
+        eso_fontcache[fontsize] = fontentry
+
+    basekey = (textvalue, fontsize, letterspacing)
+    baselabelsurface = eso_baselabelcache.get(basekey)
+    if baselabelsurface is None:
+        outlinewidth = max(2, min(4, int(fontsize * 0.08)))
+        baselabelsurface = gui_buildoutlinedtext(
+            fontentry,
+            textvalue,
+            outlinewidth=outlinewidth,
+            letterspacing=letterspacing,
+        )
+        eso_baselabelcache[basekey] = baselabelsurface
+
+    baselabelsurface.set_alpha(128)
+    return baselabelsurface
+
+
+def gui_drawcountrylabels(
+    screen,
+    stateshapelist,
+    zoomvalue,
+    camerax,
+    cameray,
+    copyshiftlist,
+    screenrectangle,
+    fontobject,
+    labelcache,
+    gamephase,
+):
+    for copyshift in copyshiftlist:
+        drawcamerax = camerax + copyshift
+        countryanchorlookup = {}
+
+        for stateshape in stateshapelist:
+            staterect = stateshape["rectangle"]
+
+
+            countryname = stateshape.get("controllercountry", stateshape.get("country"))
+            if gamephase == "choosecountry":
+                countryname = stateshape.get("country", countryname)
+            if not countryname:
+                continue
+
+
+            centerx = staterect.centerx * zoomvalue + drawcamerax
+            centery = staterect.centery * zoomvalue + cameray
+            statewidth = max(1.0, staterect.width * zoomvalue)
+            stateheight = max(1.0, staterect.height * zoomvalue)
+            statearea = statewidth * stateheight
+            stateleft = staterect.x * zoomvalue + drawcamerax
+            statetop = staterect.y * zoomvalue + cameray
+            stateright = stateleft + statewidth
+            statebottom = statetop + stateheight
+            fixedentry = countryanchorlookup.get(countryname)
+
+
+
+
+            if fixedentry is None:
+                countryanchorlookup[countryname] = {
+                    "weightedx": centerx * statearea,
+                    "weightedy": centery * statearea,
+                    "weight": statearea,
+                    "minx": stateleft,
+                    "miny": statetop,
+                    "maxx": stateright,
+                    "maxy": statebottom,
+                }
+
+            else:
+                fixedentry["weightedx"] += centerx * statearea
+                fixedentry["weightedy"] += centery * statearea
+                fixedentry["weight"] += statearea
+                fixedentry["minx"] = min(fixedentry["minx"], stateleft)
+                fixedentry["miny"] = min(fixedentry["miny"], statetop)
+                fixedentry["maxx"] = max(fixedentry["maxx"], stateright)
+                fixedentry["maxy"] = max(fixedentry["maxy"], statebottom)
+
+        for countryname, fixedentry in countryanchorlookup.items():
+            labeltext = str(countryname).replace("_", " ")
+
+            weight = max(1.0, fixedentry["weight"])
+            centerx = fixedentry["weightedx"] / weight
+            centery = fixedentry["weightedy"] / weight
+            boxwidth = max(1.0, fixedentry["maxx"] - fixedentry["minx"])
+            boxheight = max(1.0, fixedentry["maxy"] - fixedentry["miny"])
+
+            if boxwidth < 50 or boxheight < 20:
+                continue
+
+            labelscale = math.sqrt((boxwidth * boxheight) / 12000.0)
+            fontsize = int(12 + labelscale * 13)
+            lettercount = max(3, len(labeltext.replace(" ", "")))
+            targetspacing = (boxwidth / lettercount) * 0.22
+            letterspacing = int(max(0, min(16, round(targetspacing))))
+
+            labelsurface = gui_getcountrylabelsurface(
+                labelcache,
+                fontobject,
+                labeltext,
+                fontsize,
+                letterspacing,
+            )
+
+            labelrectangle = labelsurface.get_rect(center=(int(centerx), int(centery)))
+            if not labelrectangle.colliderect(screenrectangle):
+                continue
+
+            countrybox = pygame.Rect(
+                int(fixedentry["minx"]),
+                int(fixedentry["miny"]),
+                max(1, int(boxwidth)),
+                max(1, int(boxheight)),
+            )
+            if labelrectangle.width > countrybox.width * 1.55 or labelrectangle.height > countrybox.height * 1.25:
+                continue
+            screen.blit(labelsurface, labelrectangle)
+
+
+def gui_arrowhead(screen, endpoint, directionvector, colorvalue, arrowsize, linewidth):
+    vectorlength = math.hypot(directionvector[0], directionvector[1])
+
+
+    #skip drawing arrowhead
+    normalizedx = directionvector[0] / vectorlength
+    normalizedy = directionvector[1] / vectorlength
+    sideangle = math.radians(24)
+    cosinevalue = math.cos(sideangle)
+    sinevalue = math.sin(sideangle)
+
+    leftx = normalizedx * cosinevalue - normalizedy * sinevalue # this is the left side of the arrowhead
+    lefty = normalizedx * sinevalue + normalizedy * cosinevalue 
+    rightx = normalizedx * cosinevalue + normalizedy * sinevalue # right
+    righty = -normalizedx * sinevalue + normalizedy * cosinevalue
+
+    leftpoint = (endpoint[0] - leftx * arrowsize, endpoint[1] - lefty * arrowsize)
+    rightpoint = (endpoint[0] - rightx * arrowsize, endpoint[1] - righty * arrowsize)
+
+    pygame.draw.polygon(screen, colorvalue, [endpoint, leftpoint, rightpoint])
+    pygame.draw.polygon(screen, (30, 30, 30), [endpoint, leftpoint, rightpoint], max(1, linewidth // 2))
+
+
+
+
+def gui_drawmovementorderpaths(
+    screen,
+    movementorderlist,
+    provincemap,
+    zoomvalue,
+    camerax,
+    cameray,
+    copyshiftlist,
+    screenrectangle,
+):
+    linewidth = max(2, min(6, int(zoomvalue * 3.0)))
+    arrowsize = max(7, min(16, int(zoomvalue * 10.0)))
+
+
+
+    for movementorder in movementorderlist:
+        pathlist = movementorder.get("path", [])
+        if len(pathlist) < 2:
+            continue
+
+        startindex = int(movementorder.get("index", 0))
+        if startindex < 0:
+            startindex = 0
+        if startindex >= len(pathlist) - 1:
+            continue
+
+
+
+        pathpointsworld = []
+        for provinceid in pathlist[startindex:]:
+            province = provincemap.get(provinceid)
+            if not province:
+                pathpointsworld = []
+                break
+            pathpointsworld.append(province.get("center", (province["rectangle"].centerx, province["rectangle"].centery)))
+
+        if len(pathpointsworld) < 2:
+            continue
+
+
+
+        basecolor = movementorder.get("countrycolor") or (124, 196, 255)
+        linecolor = gui_lightencolor(basecolor, 0.2)
+
+        for copyshift in copyshiftlist:
+            drawcamerax = camerax + copyshift
+            pathpointsscreen = [
+                (worldpoint[0] * zoomvalue + drawcamerax, worldpoint[1] * zoomvalue + cameray)
+                for worldpoint in pathpointsworld
+            ]
+
+
+
+            hasscreensegment = False
+            for segmentindex in range(len(pathpointsscreen) - 1):
+                segmentstart = pathpointsscreen[segmentindex]
+                segmentend = pathpointsscreen[segmentindex + 1]
+                segmentleft = int(min(segmentstart[0], segmentend[0])) - arrowsize
+                segmenttop = int(min(segmentstart[1], segmentend[1])) - arrowsize
+                segmentwidth = int(abs(segmentend[0] - segmentstart[0])) + arrowsize * 2
+                segmentheight = int(abs(segmentend[1] - segmentstart[1])) + arrowsize * 2
+                segmentrectangle = pygame.Rect(segmentleft, segmenttop, max(1, segmentwidth), max(1, segmentheight))
+                if segmentrectangle.colliderect(screenrectangle):
+                    hasscreensegment = True
+                    break
+
+
+
+            if not hasscreensegment:
+                continue
+
+
+
+            pygame.draw.lines(screen, linecolor, False, pathpointsscreen, linewidth)
+            for segmentindex in range(len(pathpointsscreen) - 1):
+                segmentstart = pathpointsscreen[segmentindex]
+                segmentend = pathpointsscreen[segmentindex + 1]
+                directionvector = (segmentend[0] - segmentstart[0], segmentend[1] - segmentstart[1])
+                gui_arrowhead(screen, segmentend, directionvector, linecolor, arrowsize, linewidth)
+
+
+
+def gui_drawcountryborders(
+    screen,
+    eso_bordersegmentlist,
+    zoomvalue,
+    camerax,
+    cameray,
+    copyshiftlist,
+    screenrectangle,
+):
+    if not eso_bordersegmentlist or zoomvalue <= 0:
+        return
+
+    borderwidth = max(1, min(4, int(zoomvalue * 1.2)))
+    bordercolor = (0, 0, 0)
+    minlengthsquared = 1.2 * 1.2
+
+
+
+    for copyshift in copyshiftlist:
+        drawcamerax = camerax + copyshift
+        visibleworldleft = (screenrectangle.left - drawcamerax) / zoomvalue
+        visibleworldright = (screenrectangle.right - drawcamerax) / zoomvalue
+        visibleworldtop = (screenrectangle.top - cameray) / zoomvalue
+        visibleworldbottom = (screenrectangle.bottom - cameray) / zoomvalue
+
+
+
+        for bordersegmententry in eso_bordersegmentlist:
+            if isinstance(bordersegmententry, dict):
+                if (
+                    bordersegmententry["maxx"] < visibleworldleft
+                    or bordersegmententry["minx"] > visibleworldright
+                    or bordersegmententry["maxy"] < visibleworldtop
+                    or bordersegmententry["miny"] > visibleworldbottom
+                ):
+                    continue
+                worldsegmentstart = bordersegmententry["start"]
+                worldsegmentend = bordersegmententry["end"]
+            else:
+                worldsegmentstart, worldsegmentend = bordersegmententry
+
+            segmentstart = (
+                worldsegmentstart[0] * zoomvalue + drawcamerax,
+                worldsegmentstart[1] * zoomvalue + cameray,
+            )
+            segmentend = (
+                worldsegmentend[0] * zoomvalue + drawcamerax,
+                worldsegmentend[1] * zoomvalue + cameray,
+            )
+
+
+
+            segmentleft = int(min(segmentstart[0], segmentend[0])) - borderwidth
+            segmenttop = int(min(segmentstart[1], segmentend[1])) - borderwidth
+            segmentwidth = int(abs(segmentend[0] - segmentstart[0])) + borderwidth * 2
+            segmentheight = int(abs(segmentend[1] - segmentstart[1])) + borderwidth * 2
+            segmentrectangle = pygame.Rect(segmentleft, segmenttop, max(1, segmentwidth), max(1, segmentheight))
+            if not segmentrectangle.colliderect(screenrectangle):
+                continue
+
+            dx = segmentend[0] - segmentstart[0] # avoid short segment
+            dy = segmentend[1] - segmentstart[1]
+            if dx * dx + dy * dy < minlengthsquared:
+                continue
+
+            pygame.draw.line(screen, bordercolor, segmentstart, segmentend, borderwidth)
+
+
 
 
 def gui_drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountry):
@@ -775,8 +1145,10 @@ def gui_drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedco
     screen.blit(helptext, helptext.get_rect(midtop=(windowwidth // 2, 58)))
 
     choosebuttonrectangle = pygame.Rect(windowwidth - 210, windowheight - 56, 190, 38)
+
     pygame.draw.rect(screen, (56, 116, 198), choosebuttonrectangle, border_radius=1)
     pygame.draw.rect(screen, (35, 35, 35), choosebuttonrectangle, width=1, border_radius=1)
+
     labelsurface = fontobject.render("choose country", True, (240, 240, 240))
     screen.blit(labelsurface, labelsurface.get_rect(center=choosebuttonrectangle.center))
 
@@ -787,7 +1159,7 @@ def gui_drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedco
     return choosebuttonrectangle, selectedcountry is not None
 
 
-def gui_drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetcountry, alreadyatwar):
+def gui_countryactionmenu(screen, fontobject, smallfontobject, targetcountry, alreadyatwar):
     placehldr, windowheight = screen.get_size()
     menuwidth = 280
     menuheight = 154

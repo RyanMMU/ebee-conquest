@@ -208,7 +208,7 @@ gui_drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountr
 - Sample output:
   (<pygame.Rect choose_button>, True/False can_choose_country)
 
-gui_drawcountryinteractionmenu(screen, fontobject, smallfontobject, targetcountry, alreadyatwar)
+gui_countryactionmenu(screen, fontobject, smallfontobject, targetcountry, alreadyatwar)
 - purpose: draw diplomacy menu
 - Sample output:
   (<pygame.Rect menu_rect>, <pygame.Rect declare_war_button>)

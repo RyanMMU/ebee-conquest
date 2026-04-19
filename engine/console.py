@@ -1,6 +1,6 @@
 import math
 import pygame
-
+clock = pygame.time.Clock()
 #dev console will not be included in the final 
 
 
@@ -329,7 +329,7 @@ class developmentconsole:
 
     def drawbutton(self, screen, rectangle, textvalue, fontobject, enabled=True, pulse=False):
         if enabled:
-            basecolor = (56, 116, 198) #blue
+            basecolor = (255, 20, 90) #blue
             if pulse:
                 timer = pygame.time.get_ticks() * 0.008
                 glowamount = 0.2 + 0.35 * (0.5 + 0.5 * math.sin(timer))
@@ -370,7 +370,7 @@ class developmentconsole:
     # the gui render code 
     #TODO: move this to gui.py
 
-    def draw(self, screen, fontobject, smallfontobject):
+    def draw(self, screen, fontobject, smallfontobject,clock, text):
         if not self.enabled:
             self.buttonrectangle = None
             self.panelrectangle = None
@@ -380,11 +380,11 @@ class developmentconsole:
         windowwidth, windowheight = screen.get_size()
         self.buttonrectangle = pygame.Rect(windowwidth - 132, 10, 122, 30)
 
-
+        currentfps = clock.get_fps()
         self.drawbutton(
             screen,
             self.buttonrectangle,
-            "dev console",
+            f"{text} {currentfps:.1f} FPS",
             smallfontobject,
             enabled=True,
             pulse=self.visible,

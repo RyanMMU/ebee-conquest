@@ -11,7 +11,16 @@ ctypes.windll.user32.SetProcessDPIAware()
 
 #Local module
 from engine.console import developmentconsole, loaddevmodeflag 
-from engine.gui import EngineUI, gui_lightencolor, gui_gettroopbadgerect
+from engine.gui import (
+    EngineUI,
+    gui_lightencolor,
+    gui_gettroopbadgerect,
+    gui_shouldshowtroopbadges,
+    gui_shouldshowcountrylabels,
+    gui_drawmovementorderpaths,
+    gui_drawcountrylabels,
+    gui_drawcountryborders,
+)
 from engine.diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
 from . import core as coremodule
 from . import movement as movementmodule
@@ -327,6 +336,46 @@ def getselectedtroopentries(selectedprovinceidset, selectedprovinceid, provincem
 
     entries.sort(key=lambda entry: (entry["provinceid"]))
     return entries
+
+
+def eso_buildcountryborderentries(provincemap, eso_provinceedgepairlist, eso_segmentcache):
+    borderentrylist = []
+    for firstprovinceid, secondprovinceid in eso_provinceedgepairlist:
+        firstprovince = provincemap.get(firstprovinceid)
+        secondprovince = provincemap.get(secondprovinceid)
+        if not firstprovince or not secondprovince:
+            continue
+
+        firstcontroller = getprovincecontroller(firstprovince)
+        secondcontroller = getprovincecontroller(secondprovince)
+        if firstcontroller is None or secondcontroller is None:
+            continue
+        if firstcontroller == secondcontroller:
+            continue
+
+        edgekey = (firstprovinceid, secondprovinceid)
+        worldsegmentlist = eso_segmentcache.get(edgekey)
+        if worldsegmentlist is None:
+            worldsegmentlist = movementmodule.getsharedbordersegments(firstprovince, secondprovince)
+            eso_segmentcache[edgekey] = worldsegmentlist
+
+        for segmentstart, segmentend in worldsegmentlist or ():
+            minx = min(segmentstart[0], segmentend[0])
+            maxx = max(segmentstart[0], segmentend[0])
+            miny = min(segmentstart[1], segmentend[1])
+            maxy = max(segmentstart[1], segmentend[1])
+            borderentrylist.append(
+                {
+                    "start": segmentstart,
+                    "end": segmentend,
+                    "minx": minx,
+                    "maxx": maxx,
+                    "miny": miny,
+                    "maxy": maxy,
+                }
+            )
+
+    return borderentrylist
 
 
 
@@ -747,6 +796,12 @@ def main(eventbus=None):
     if provincegraph is None:
         pygame.quit()
         return
+    eso_provinceedgepairlist = []
+    for firstprovinceid, neighboridset in provincegraph.items():
+        for secondprovinceid in neighboridset:
+            if firstprovinceid < secondprovinceid:
+                eso_provinceedgepairlist.append((firstprovinceid, secondprovinceid))
+
     totaledges = sum(len(neighborset) for neighborset in provincegraph.values()) // 2
     logstartupdiagnostics(
         startupbegintimestamp,
@@ -826,6 +881,9 @@ def main(eventbus=None):
     activefrontlineedgekeyset = set()
     frontlineassignmentlist = []
     frontlinebordersegmentcache = {}
+    eso_countrybordersegmentcache = {}
+    eso_countryborderentrylist = []
+    eso_countrybordersdirty = True
     countriesatwarset = set() # track countries at war
     countrymenutarget = None
 
@@ -853,6 +911,7 @@ def main(eventbus=None):
         mouseposition = pygame.mouse.get_pos()
         #this gives x and y (0 and 1)
         windowwidth, windowheight = screen.get_size()
+        minimumzoomforframe = cameramodule.getminimumzoomforheight(windowheight, mapbox)
 
         cameramodule.applyedgepan(
             camerastate,
@@ -1040,6 +1099,9 @@ def main(eventbus=None):
                     if not provincerectanglescreen.colliderect(screenrectangle):
                         continue
 
+                    if not gui_shouldshowtroopbadges(zoomvalue, minimumzoomforframe):
+                        continue
+
                     troopbadgelist.append((provincerectanglescreen.center, province["troops"]))
 
                     # for quick search: "troop badge hitbox"
@@ -1050,6 +1112,51 @@ def main(eventbus=None):
                             "rect": troopbadgerect,
                         }
                     )
+
+        if gamephase == "play" and movementorderlist:
+            gui_drawmovementorderpaths(
+                screen,
+                movementorderlist,
+                provincemap,
+                zoomvalue,
+                camerax,
+                cameray,
+                copyshiftlist,
+                screenrectangle,
+            )
+
+        if eso_countrybordersdirty:
+            eso_countryborderentrylist = eso_buildcountryborderentries(
+                provincemap,
+                eso_provinceedgepairlist,
+                eso_countrybordersegmentcache,
+            )
+            eso_countrybordersdirty = False
+
+        if gamephase == "play" and zoomvalue >= minimumzoomforframe * 1.08:
+            gui_drawcountryborders(
+                screen,
+                eso_countryborderentrylist,
+                zoomvalue,
+                camerax,
+                cameray,
+                copyshiftlist,
+                screenrectangle,
+            )
+
+        if gui_shouldshowcountrylabels(zoomvalue, minimumzoomforframe):
+            gui_drawcountrylabels(
+                screen,
+                stateshapelist,
+                zoomvalue,
+                camerax,
+                cameray,
+                copyshiftlist,
+                screenrectangle,
+                runtimeui.countrylabelfont,
+                runtimeui.countrylabelcache,
+                gamephase,
+            )
 
         frontlineborderedgelist = []
         frontlineedgebykey = {}
@@ -1193,7 +1300,7 @@ def main(eventbus=None):
 
 
         #DRAW GUIS, ON TOP
-        devconsole.draw(screen, normalfont, smallfont) # draw dev console after ui so that it appears on top
+        devconsole.draw(screen, normalfont, smallfont, clock, "dev console") # draw dev console after ui so that it appears on top
         newspopup.draw(screen, (titlefont, normalfont), newssystem.current)
 
 
@@ -1255,6 +1362,7 @@ def main(eventbus=None):
             # ON END TURN, process movement orders, apply economy, increment turn, emit next turn event
             if uiaction == EngineUI.actionendturn and gamephase == "play":
                 processmovementorders(movementorderlist, provincemap, emit=eventbus.emit)
+                eso_countrybordersdirty = True
                 playergold,playerpopulation = applyendturneconomy(
                     playercountry,
                     provincemap,
@@ -1361,6 +1469,7 @@ def main(eventbus=None):
                     if runtimeui.clickchoosebutton(event.pos) and pendingcountry:
                         playercountry = pendingcountry
                         gamephase = "play"
+                        eso_countrybordersdirty = True
                         expandedstateid = None
                         selectedprovinceid = None
                         selectedprovinceidset = set()

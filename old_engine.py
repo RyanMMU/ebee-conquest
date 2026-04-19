@@ -11,7 +11,7 @@ from svgelements import Path
 
 #Local module
 from engine.console import developmentconsole, loaddevmodeflag 
-from engine.gui import gui_drawchoosecountryoverlay, gui_drawgameplayhud, gui_drawtroopcountbadge, gui_lightencolor, gui_drawcountryinteractionmenu
+from engine.gui import gui_drawchoosecountryoverlay, gui_drawgameplayhud, gui_drawtroopcountbadge, gui_lightencolor, gui_countryactionmenu
 from engine.diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
 
 
@@ -1135,7 +1135,7 @@ def main():
 
             # TODO: REFACTOR TO SEPARATE STATE AND PROVINCE SELLECTION, right now you can only open country menu when you left click on enemy state and then right click on enemy province
             if countrymenutarget:
-                placehldr, declarewarbuttonrectangle = gui_drawcountryinteractionmenu(
+                placehldr, declarewarbuttonrectangle = gui_countryactionmenu(
                     screen, # screen is the display surface, value from main loop
                     normalfont,
                     smallfont,
