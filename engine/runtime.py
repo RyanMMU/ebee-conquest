@@ -263,27 +263,27 @@ def get_state_data(state_id, countries_full):
     return None
 
 
-    for countryindex, countryentry in enumerate(rawdata):
-        if not isinstance(countryentry, dict):
-            continue
-
-        countryname = str(countryentry.get("Country", "")).strip()
-        if not countryname:
-            continue
-
-        # No color in new format, assign default (CHATGPT)
-        parsedcolor = autocountrycolors[countryindex % len(autocountrycolors)]
-        countrytocolorlookup[countryname] = parsedcolor
-
-        statesdict = countryentry.get("States", {})
-        if not isinstance(statesdict, dict):
-            continue
-
-        for statename in statesdict.keys():
-            if isinstance(statename, str) and statename.strip():
-                statetocountrylookup[statename.strip()] = countryname
-
-    return statetocountrylookup, countrytocolorlookup
+    # for countryindex, countryentry in enumerate(rawdata):
+    #         if not isinstance(countryentry, dict):
+    #             continue
+    #
+    #         countryname = str(countryentry.get("Country", "")).strip()
+    #         if not countryname:
+    #             continue
+    #
+    #         # No color in new format, assign default (CHATGPT)
+    #         parsedcolor = autocountrycolors[countryindex % len(autocountrycolors)]
+    #         countrytocolorlookup[countryname] = parsedcolor
+    #
+    #         statesdict = countryentry.get("States", {})
+    #         if not isinstance(statesdict, dict):
+    #             continue
+    #
+    #         for statename in statesdict.keys():
+    #             if isinstance(statename, str) and statename.strip():
+    #                 statetocountrylookup[statename.strip()] = countryname
+    #
+    #     return statetocountrylookup, countrytocolorlookup
 
 # group subdivision to their parent state for rendering 
 
