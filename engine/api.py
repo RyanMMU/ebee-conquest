@@ -240,6 +240,98 @@ class EbeeEngine:
         }
 
 
+    def getprovincedetails(self, provinceid):
+        if not provinceid:
+            return {}
+
+        province = self.provincemap.get(provinceid)
+        if not province:
+            return {}
+
+        controllercountry = movement.getprovincecontroller(province)
+        ownercountry = movement.getprovinceowner(province)
+        parentstateid = province.get("parentid", province.get("parentstateid"))
+
+        return {
+            "id": province.get("id"),
+            "stateId": parentstateid,
+            "terrain": province.get("terrain"),
+            "troops": int(province.get("troops", 0)),
+            "ownerCountry": ownercountry,
+            "controllerCountry": controllercountry,
+            "countryColor": province.get("countrycolor"),
+            "center": province.get("center"),
+        }
+
+
+    def getstatedetails(self, stateid):
+        if not stateid:
+            return {}
+
+        state = next((entry for entry in self.stateshapelist if entry.get("id") == stateid), None)
+        if not state:
+            return {}
+
+        subdivisions = state.get("subdivisions", [])
+        provinceids = [province.get("id") for province in subdivisions if province.get("id")]
+
+        totalstatetroops = sum(int(province.get("troops", 0)) for province in subdivisions)
+        controllercountries = sorted(
+            {
+                movement.getprovincecontroller(province)
+                for province in subdivisions
+                if movement.getprovincecontroller(province) is not None
+            }
+        )
+
+        return {
+            "id": state.get("id"),
+            "ownerCountry": state.get("ownercountry", state.get("country")),
+            "controllerCountry": state.get("controllercountry", state.get("country")),
+            "countryColor": state.get("countrycolor"),
+            "provinceCount": len(provinceids),
+            "provinceIds": sorted(provinceids),
+            "controllerCountries": controllercountries,
+            "totalTroops": totalstatetroops,
+            "center": (state["rectangle"].centerx, state["rectangle"].centery),
+        }
+
+
+    def getdetailsatmouse(self, mouseposition, zoomvalue, camerax, cameray, screenrectangle=None, provincelist=None):
+        province = self.getprovinceatmouse(
+            mouseposition,
+            zoomvalue,
+            camerax,
+            cameray,
+            screenrectangle=screenrectangle,
+            provincelist=provincelist,
+        )
+
+        worldx = (mouseposition[0] - camerax) / zoomvalue
+        worldy = (mouseposition[1] - cameray) / zoomvalue
+
+        if not province:
+            return {
+                "mouseScreen": {"x": mouseposition[0], "y": mouseposition[1]},
+                "mouseWorld": {"x": worldx, "y": worldy},
+                "province": {},
+                "state": {},
+                "country": {},
+            }
+
+        provinceid = province.get("id")
+        parentstateid = province.get("parentid", province.get("parentstateid"))
+        controllercountry = movement.getprovincecontroller(province)
+
+        return {
+            "mouseScreen": {"x": mouseposition[0], "y": mouseposition[1]},
+            "mouseWorld": {"x": worldx, "y": worldy},
+            "province": self.getprovincedetails(provinceid),
+            "state": self.getstatedetails(parentstateid),
+            "country": self.getcountrydata(controllercountry) if controllercountry else {},
+        }
+
+
 
 
     def getprovinceatmouse(self, mouseposition, zoomvalue, camerax, cameray, screenrectangle=None, provincelist=None):

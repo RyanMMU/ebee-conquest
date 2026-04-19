@@ -36,7 +36,7 @@ from .apicalltest.newsbannereventtest import NewsSystem, NewsPopup # TEST API CA
 
 
 
-print("CURRENT VERSION - APRIL 17 2024")
+print("CURRENT VERSION - APRIL 19 2024")
 # MAIN GAME LOOP FILE
 
 
@@ -667,9 +667,9 @@ def main(eventbus=None):
     )
 
     if os.path.exists("dev.txt"):
-        pygame.display.set_caption("ebee engine playtest apr 1 - dev mode")
+        pygame.display.set_caption("EbeeEngine Dev Build - APRIL 19 2024")
     else:
-        pygame.display.set_caption("ebee engine playtest apr 1")
+        pygame.display.set_caption("EbeeEngine - APRIL 19 2024")
 
 
 

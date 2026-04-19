@@ -12,7 +12,7 @@ WIDTH,HEIGHT = 1280,720
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE | pygame.SCALED)
 
-pygame.display.set_caption('game menu') 
+pygame.display.set_caption('Ebee Conquest - Main Menu') 
 
 text= (255, 255, 255)
 

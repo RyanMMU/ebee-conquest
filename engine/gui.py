@@ -773,43 +773,19 @@ def gui_shouldshowtroopbadges(zoomvalue, minimumzoom):
 def gui_shouldshowcountrylabels(zoomvalue, minimumzoom):
     return zoomvalue <= minimumzoom * countrylabelvisiblezoommultiplier
 
-
-def gui_rendertextwithspacing(fontobject, textvalue, textcolor, letterspacing=0):
-    if letterspacing <= 0:
-        return fontobject.render(textvalue, True, textcolor)
-
-    fontsurface_list = [fontobject.render(character, True, textcolor) for character in textvalue]
-    if not fontsurface_list:
-        return fontobject.render("", True, textcolor)
-
-    totalwidth = sum(surface.get_width() for surface in fontsurface_list)
-    totalwidth += max(0, len(fontsurface_list) - 1) * int(letterspacing)
-    totalheight = max(surface.get_height() for surface in fontsurface_list)
-    renderedsurface = pygame.Surface((max(1, totalwidth), max(1, totalheight)), pygame.SRCALPHA)
-
-    drawx = 0
-    for fontsurface in fontsurface_list:
-        drawy = (totalheight - fontsurface.get_height()) // 2
-        renderedsurface.blit(fontsurface, (drawx, drawy))
-        drawx += fontsurface.get_width() + int(letterspacing)
-
-    return renderedsurface
-
-
 def gui_buildoutlinedtext(
     fontobject,
     textvalue,
     textcolor=(235, 235, 235),
     outlinecolor=(26, 26, 26),
     outlinewidth=2,
-    letterspacing=0,
 ):
-    labelsurface = gui_rendertextwithspacing(fontobject, textvalue, textcolor, letterspacing=letterspacing)
+    labelsurface = fontobject.render(textvalue, True, textcolor)
     width = labelsurface.get_width() + outlinewidth * 2
     height = labelsurface.get_height() + outlinewidth * 2
     renderedsurface = pygame.Surface((width, height), pygame.SRCALPHA)
 
-    outlinesurface = gui_rendertextwithspacing(fontobject, textvalue, outlinecolor, letterspacing=letterspacing)
+    outlinesurface = fontobject.render(textvalue, True, outlinecolor)
     for offsetx in range(-outlinewidth, outlinewidth + 1):
         for offsety in range(-outlinewidth, outlinewidth + 1):
             if offsetx == 0 and offsety == 0:
@@ -820,12 +796,11 @@ def gui_buildoutlinedtext(
     return renderedsurface
 
 
-def gui_getcountrylabelsurface(labelcache, fontobject, textvalue, fontsize, letterspacing):
+def gui_getcountrylabelsurface(labelcache, fontobject, textvalue, fontsize):
     eso_fontcache = labelcache.setdefault("_eso_fontcache", {})
     eso_baselabelcache = labelcache.setdefault("_baselabels", {})
 
     fontsize = int(max(11, min(58, fontsize)))
-    letterspacing = int(max(0, min(16, letterspacing)))
 
     fontentry = eso_fontcache.get(fontsize)
     if fontentry is None:
@@ -837,7 +812,7 @@ def gui_getcountrylabelsurface(labelcache, fontobject, textvalue, fontsize, lett
         fontentry = pygame.font.SysFont(fontname, fontsize, bold=True)
         eso_fontcache[fontsize] = fontentry
 
-    basekey = (textvalue, fontsize, letterspacing)
+    basekey = (textvalue, fontsize)
     baselabelsurface = eso_baselabelcache.get(basekey)
     if baselabelsurface is None:
         outlinewidth = max(2, min(4, int(fontsize * 0.08)))
@@ -845,7 +820,6 @@ def gui_getcountrylabelsurface(labelcache, fontobject, textvalue, fontsize, lett
             fontentry,
             textvalue,
             outlinewidth=outlinewidth,
-            letterspacing=letterspacing,
         )
         eso_baselabelcache[basekey] = baselabelsurface
 
@@ -928,16 +902,12 @@ def gui_drawcountrylabels(
 
             labelscale = math.sqrt((boxwidth * boxheight) / 12000.0)
             fontsize = int(12 + labelscale * 13)
-            lettercount = max(3, len(labeltext.replace(" ", "")))
-            targetspacing = (boxwidth / lettercount) * 0.22
-            letterspacing = int(max(0, min(16, round(targetspacing))))
 
             labelsurface = gui_getcountrylabelsurface(
                 labelcache,
                 fontobject,
                 labeltext,
                 fontsize,
-                letterspacing,
             )
 
             labelrectangle = labelsurface.get_rect(center=(int(centerx), int(centery)))
