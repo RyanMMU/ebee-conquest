@@ -36,6 +36,9 @@ A **Google Maps-style, 2D turn-based grand strategy war simulator** where player
 ![Current Progress for Ebee Engine](images/engineprogresschart.png)
 > **Figure 1:** Currently developed functions assosciated with Ebee Engine shown in a flowchart form. 
 
+![Gameplay Example](images/example.gif)
+> **Figure 2:** Example gameplay showing implemented A* pathfinding, and border highlighting using Kruskal's Algorithm. 
+
 ## 🚀 Quick Start
 
 ### Prerequisites
