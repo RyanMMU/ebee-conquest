@@ -1,4 +1,5 @@
-from . import core, movement, camera
+from . import core, movement, camera, npc
+from .economy import getdefaulteconomyconfig
 from .events import EngineEventType, EventBus
 
 
@@ -56,6 +57,8 @@ class EbeeEngine:
         self.playercountry = None
         self.currentturnnumber = 1
         self.countriesatwarset = set()
+        self.warpairset = set()
+        self.npcdirector = None
 
 
     def on(self, eventname, callback):
@@ -189,7 +192,16 @@ class EbeeEngine:
         if not attackercountry or not defendercountry or attackercountry == defendercountry:
             return None
 
-        self.countriesatwarset.add(defendercountry)
+        normalizedpair = self._normalizewarpair(attackercountry, defendercountry)
+        if normalizedpair is not None:
+            self.warpairset.add(normalizedpair)
+
+        if self.playercountry:
+            if attackercountry == self.playercountry:
+                self.countriesatwarset.add(defendercountry)
+            elif defendercountry == self.playercountry:
+                self.countriesatwarset.add(attackercountry)
+
         payload = {
             "attacker": attackercountry,
             "defender": defendercountry,
@@ -197,6 +209,131 @@ class EbeeEngine:
         }
         self.emit(EngineEventType.WARDECLARED, payload)
         return payload
+
+    def setupnpc(self, playercountry=None, economyconfig=None):
+        if economyconfig is None:
+            economyconfig = getdefaulteconomyconfig()
+
+        self.npcdirector = npc.NpcDirector(
+            self.provincemap,
+            self.provincegraph,
+            countrytocolorlookup=self.countrytocolorlookup,
+            emit=self.emit,
+            economyconfig=economyconfig,
+        )
+
+        if playercountry is not None:
+            self.playercountry = playercountry
+
+        self._rebuildplayerwarset()
+
+        self.npcdirector.setplayercountry(self.playercountry)
+        self.npcdirector.sync_player_wars(
+            self.playercountry,
+            self.countriesatwarset,
+            warpairset=self.warpairset,
+        )
+        return self.npcdirector
+
+    def syncnpcwars(self, playercountry=None, countriesatwarset=None, warpairset=None):
+        if self.npcdirector is None:
+            self.setupnpc(playercountry=playercountry)
+
+        if playercountry is not None:
+            self.playercountry = playercountry
+
+        if countriesatwarset is not None:
+            self.countriesatwarset = set(country for country in countriesatwarset if country)
+
+            if self.playercountry:
+                for enemycountry in self.countriesatwarset:
+                    normalizedpair = self._normalizewarpair(self.playercountry, enemycountry)
+                    if normalizedpair is not None:
+                        self.warpairset.add(normalizedpair)
+
+        if warpairset is not None:
+            normalizedwarpairs = set()
+            for warpair in warpairset:
+                if not isinstance(warpair, (tuple, list)) or len(warpair) != 2:
+                    continue
+                normalizedpair = self._normalizewarpair(warpair[0], warpair[1])
+                if normalizedpair is not None:
+                    normalizedwarpairs.add(normalizedpair)
+            self.warpairset = normalizedwarpairs
+
+        self._rebuildplayerwarset()
+
+        self.npcdirector.sync_player_wars(
+            self.playercountry,
+            self.countriesatwarset,
+            warpairset=self.warpairset,
+        )
+
+    def runnpcturn(self, movementorderlist, developmentmode=False):
+        if self.npcdirector is None:
+            self.setupnpc(playercountry=self.playercountry)
+
+        self._rebuildplayerwarset()
+        self.npcdirector.sync_player_wars(
+            self.playercountry,
+            self.countriesatwarset,
+            warpairset=self.warpairset,
+        )
+        summary = self.npcdirector.executeturn(
+            movementorderlist,
+            self.currentturnnumber,
+            developmentmode=developmentmode,
+        )
+        return summary
+
+    def _normalizewarpair(self, firstcountry, secondcountry):
+        if not firstcountry or not secondcountry:
+            return None
+
+        first = self._canonicalizecountry(firstcountry)
+        second = self._canonicalizecountry(secondcountry)
+        if not first or not second or first == second:
+            return None
+        if first <= second:
+            return (first, second)
+        return (second, first)
+
+    def _canonicalizecountry(self, countryname):
+        if countryname is None:
+            return None
+
+        countrytext = str(countryname).strip()
+        if not countrytext:
+            return None
+
+        aliaslookup = {}
+        for province in self.provincemap.values():
+            for key in ("ownercountry", "controllercountry", "country"):
+                knowncountry = province.get(key)
+                if not knowncountry:
+                    continue
+                knowntext = str(knowncountry).strip()
+                if not knowntext:
+                    continue
+                lowerknown = knowntext.lower()
+                if lowerknown not in aliaslookup:
+                    aliaslookup[lowerknown] = knowntext
+
+        return aliaslookup.get(countrytext.lower(), countrytext)
+
+    def _rebuildplayerwarset(self):
+        if not self.playercountry:
+            self.countriesatwarset = set()
+            return
+
+        playerset = set()
+        for firstcountry, secondcountry in self.warpairset:
+            if firstcountry == self.playercountry:
+                playerset.add(secondcountry)
+            elif secondcountry == self.playercountry:
+                playerset.add(firstcountry)
+
+        self.countriesatwarset = playerset
 
 
 

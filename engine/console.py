@@ -15,7 +15,16 @@ def loaddevmodeflag(filepath="dev.txt"):
 
 
 
-def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallbackcolor, troopbadgelist, eventbus=None):
+def rundevcommand(
+    commandline,
+    provincemap,
+    playercountry,
+    countrytocolor,
+    fallbackcolor,
+    troopbadgelist,
+    eventbus=None,
+    currentturnnumber=0,
+):
     commandparts = commandline.strip().split() # arguments
     if not commandparts:
         return "empty command"
@@ -34,6 +43,27 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
         return province.get("controllercountry", province.get("country"))
 
     validterrainset = {"plains", "forest", "hills", "mountains", "desert", "swamp", "urban"}
+
+    knowncountrylookup = {}
+    for province in provincemap.values():
+        for key in ("ownercountry", "controllercountry", "country"):
+            countryname = province.get(key)
+            if not countryname:
+                continue
+            countrytext = str(countryname).strip()
+            if not countrytext:
+                continue
+            lowercountry = countrytext.lower()
+            if lowercountry not in knowncountrylookup:
+                knowncountrylookup[lowercountry] = countrytext
+
+    def resolvecountry(rawtext):
+        if rawtext is None:
+            return None
+        countrytext = str(rawtext).strip()
+        if not countrytext:
+            return None
+        return knowncountrylookup.get(countrytext.lower())
 
 
 
@@ -263,6 +293,35 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
             },
         )
         return f"queued collapse news for {countryname}"
+
+    if commandname == "war" and len(commandparts) == 3:
+        if eventbus is None:
+            return "eventbus unavailable"
+
+        if not commandparts[1].strip() or not commandparts[2].strip():
+            return "usage: war [country1] [country2]"
+
+        attackercountry = resolvecountry(commandparts[1])
+        if attackercountry is None:
+            return f"unknown country: {commandparts[1]}"
+
+        defendercountry = resolvecountry(commandparts[2])
+        if defendercountry is None:
+            return f"unknown country: {commandparts[2]}"
+
+        if attackercountry.lower() == defendercountry.lower():
+            return "countries must differ"
+
+        eventbus.emit(
+            "wardeclared",
+            {
+                "attacker": attackercountry,
+                "defender": defendercountry,
+                "turn": int(currentturnnumber),
+                "source": "devconsole",
+            },
+        )
+        return f"ok war declared: {attackercountry} -> {defendercountry}"
     
 
     if commandname == "exit" and len(commandparts) == 1:
@@ -302,7 +361,7 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
         return (
             "commands: add_troops [province] [amount], remove_troops [province] [amount], annex [province], "
             "province [id], find [text], stats, country_stats [country], news [title | description], "
-            "collapse [country] [description], help:debug, help, exit"
+            "collapse [country] [description], war [country1] [country2], help:debug, help, exit"
         )
 
 
@@ -484,7 +543,17 @@ class developmentconsole:
         return False
 
 
-    def handlekeydown(self, keyboardevent, provincemap, playercountry, countrytocolor, fallbackcolor, troopbadgelist, eventbus=None):
+    def handlekeydown(
+        self,
+        keyboardevent,
+        provincemap,
+        playercountry,
+        countrytocolor,
+        fallbackcolor,
+        troopbadgelist,
+        eventbus=None,
+        currentturnnumber=0,
+    ):
         if not self.visible:
             return False
 
@@ -502,6 +571,7 @@ class developmentconsole:
                     fallbackcolor,
                     troopbadgelist,
                     eventbus=eventbus,
+                    currentturnnumber=currentturnnumber,
                 )
                 self.loglines.append(outputline)
             self.inputtext = ""
