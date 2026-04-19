@@ -1,4 +1,4 @@
-from .gameplay import getprovincecontroller
+from .movement import getprovincecontroller
 #PLEASE PUT ANYTHING RLEATED TO ECONOMY IN HERE
 
 #PLACEHOLDER, EACH COUNTRY WILL HAVE THEIR OWN ECONOMY CONFIG LATER

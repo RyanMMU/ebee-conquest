@@ -1,7 +1,6 @@
 import os
 import json
 import math
-import heapq
 import time
 import platform
 import pygame
@@ -12,10 +11,10 @@ ctypes.windll.user32.SetProcessDPIAware()
 
 #Local module
 from engine.console import developmentconsole, loaddevmodeflag 
-from engine.gui import EngineUI, gui_lightencolor
+from engine.gui import EngineUI, gui_lightencolor, gui_gettroopbadgerect
 from engine.diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
 from . import core as coremodule
-from . import gameplay as gameplaymodule
+from . import movement as movementmodule
 from . import economy as economymodule
 from . import api as apimodule
 from . import camera as cameramodule
@@ -25,7 +24,10 @@ from .events import EventBus, EngineEventType
 from .apicalltest.newsbannereventtest import NewsSystem, NewsPopup # TEST API CALL
 
 
-print("CURRENT VERSION - APRIL 8 2024")
+
+
+
+print("CURRENT VERSION - APRIL 17 2024")
 # MAIN GAME LOOP FILE
 
 
@@ -47,29 +49,6 @@ edgepanmargin = cameramodule.defaultpanconfig.margin
 edgepanspeed = cameramodule.defaultpanconfig.speed
 curvesamplestep = 1.5
 maxsegmentsteps = 48
-terrainmovecostlookup = {
-    "plains": 1.0,
-    "forest": 1.25,
-    "hills": 1.35,
-    "mountains": 1.8,
-    "desert": 1.2,
-    "swamp": 1.5,
-    "urban": 1.1,
-}
-autocountrycolors = [
-    (197, 92, 92),
-    (88, 157, 216),
-    (96, 176, 118),
-    (212, 154, 79),
-    (166, 120, 199),
-    (101, 187, 180),
-    (214, 124, 162),
-    (191, 196, 84),
-    (129, 144, 224),
-    (206, 138, 112),
-]
-
-
 
 
 # GAME LOGIC AND RENDERING STARTS
@@ -220,23 +199,25 @@ def parsecolorvalue(rawcolorvalue):
 
     return None
 
-#  from https://stackoverflow.com/a/29643643  
 
 
+# TROOP BADGE MULTISELECT
+
+def makerectfrompoints(startposition, endposition):
+    startx, starty = startposition
+    endx, endy = endposition
+    left = min(startx, endx)
+    top = min(starty, endy)
+    width = abs(endx - startx)
+    height = abs(endy - starty)
+    return pygame.Rect(left, top, width, height)
 
 
-def loadcountrydata(filepath):
-    try:
-        with open(filepath, "r", encoding="utf-8") as fileobject:
-            rawdata = json.load(fileobject)
-    except (OSError, json.JSONDecodeError):
-        return {}, {}
-
-    if not isinstance(rawdata, list):
-        return {}, {}
-
-    statetocountrylookup = {}
-    countrytocolorlookup = {}
+def getbadgehitprovinceid(mouseposition, badgehitlist):
+    for badgeentry in reversed(badgehitlist):
+        if badgeentry["rect"].collidepoint(mouseposition):
+            return badgeentry["provinceid"]
+    return None
 
 with open("countries.json", "r", encoding="utf-8") as f:
     countries_full = json.load(f)
@@ -284,6 +265,241 @@ def get_state_data(state_id, countries_full):
     #                 statetocountrylookup[statename.strip()] = countryname
     #
     #     return statetocountrylookup, countrytocolorlookup
+def getdragselectedprovinceids(selectionrect, badgehitlist, provincemap, playercountry):
+    selectedids = []
+    for badgeentry in badgehitlist:
+        provinceid = badgeentry["provinceid"]
+        province = provincemap.get(provinceid)
+        if not province:
+            continue
+        if getprovincecontroller(province) != playercountry:
+            continue
+        if badgeentry["rect"].colliderect(selectionrect):
+            selectedids.append(provinceid)
+    return selectedids
+
+
+def getprovinceundercursorinstate(mouseposition, stateid, stateshapelist, zoomvalue, camerax, cameray, copyshiftlist):
+    stateobject = next((state for state in stateshapelist if state["id"] == stateid), None)
+    if not stateobject:
+        return None
+
+    subdivisions = stateobject.get("subdivisions", [])
+    if not subdivisions:
+        return None
+
+    for copyshift in copyshiftlist:
+        drawcamerax = camerax + copyshift
+        for province in subdivisions:
+            for polygon in province.get("polygons", []):
+                polygonrectanglescreen = getscreenrectangle(polygon["rectangle"], zoomvalue, drawcamerax, cameray)
+                if not polygonrectanglescreen.collidepoint(mouseposition):
+                    continue
+
+                polygonpointsscreen = getscreenpoints(polygon["points"], zoomvalue, drawcamerax, cameray)
+                if ispointinsidepolygon(mouseposition, polygonpointsscreen):
+                    return province
+
+    return None
+
+
+def getselectedtroopentries(selectedprovinceidset, selectedprovinceid, provincemap, playercountry):
+    selectedids = []
+    if selectedprovinceidset:
+        selectedids.extend(sorted(selectedprovinceidset))
+    elif selectedprovinceid:
+        selectedids.append(selectedprovinceid)
+
+    entries = []
+    for provinceid in selectedids:
+        province = provincemap.get(provinceid)
+        if not province:
+            continue
+        if playercountry and getprovincecontroller(province) != playercountry:
+            continue
+        entries.append(
+            {
+                "provinceid": provinceid,
+                "troops": int(province.get("troops", 0)),
+                "stateid": province.get("parentid"),
+            }
+        )
+
+    entries.sort(key=lambda entry: (entry["provinceid"]))
+    return entries
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def getkruskalbridges(segmentlist, maxgapdistance=16.0):
+
+    if not segmentlist:
+        return []
+
+
+
+    maxgapsquared = maxgapdistance * maxgapdistance
+    endpointpositionlist = []
+    endpointsegmentindexlist = []
+
+
+    for segmentindex, segment in enumerate(segmentlist):
+        
+        segmentstart, segmentend = segment
+        endpointpositionlist.append(segmentstart)
+        endpointsegmentindexlist.append(segmentindex)
+        endpointpositionlist.append(segmentend)
+        endpointsegmentindexlist.append(segmentindex)
+
+    endpointcount = len(endpointpositionlist)
+
+
+    if endpointcount < 2:
+        return []
+
+    # First pass: collect all viable endpoint pairs within the gap threshold.
+    # This forms local "gap clusters" we can stitch using a minimum spanning bridge set.
+    candidateedgelist = []
+
+
+
+    for endpointindex in range(endpointcount):
+        endpointx, endpointy = endpointpositionlist[endpointindex]
+        endpointsegmentindex = endpointsegmentindexlist[endpointindex]
+        for candidateindex in range(endpointindex + 1, endpointcount):
+            if endpointsegmentindexlist[candidateindex] == endpointsegmentindex:
+                continue
+
+
+
+            candidatex, candidatey = endpointpositionlist[candidateindex]
+            offsetx = candidatex - endpointx
+            offsety = candidatey - endpointy
+            distancesquared = offsetx * offsetx + offsety * offsety
+
+
+            if distancesquared <= 1e-6 or distancesquared > maxgapsquared:
+                continue
+            candidateedgelist.append((distancesquared, endpointindex, candidateindex))
+
+
+    if not candidateedgelist:
+        return []
+
+    # KRUSKAL ALGORITHM
+    bridgeparent = list(range(endpointcount))
+    bridgerank = [0] * endpointcount
+
+
+
+
+    def findbridgeparent(index):
+        while bridgeparent[index] != index:
+            bridgeparent[index] = bridgeparent[bridgeparent[index]]
+            index = bridgeparent[index]
+        return index
+
+
+
+
+    def combinebridgegroup(firstindex, secondindex):
+        firstroot = findbridgeparent(firstindex)
+        secondroot = findbridgeparent(secondindex)
+        if firstroot == secondroot:
+            return False
+        if bridgerank[firstroot] < bridgerank[secondroot]:
+            bridgeparent[firstroot] = secondroot
+        elif bridgerank[firstroot] > bridgerank[secondroot]:
+            bridgeparent[secondroot] = firstroot
+        else:
+            bridgeparent[secondroot] = firstroot
+            bridgerank[firstroot] += 1
+        return True
+
+    bridgelines = []
+    bridgepairset = set()
+    candidateedgelist.sort(key=lambda edge: edge[0])
+
+
+
+    for distancesquared, endpointindex, candidateindex in candidateedgelist:
+        if not combinebridgegroup(endpointindex, candidateindex):
+            continue
+
+        pairkey = (endpointindex, candidateindex)
+        bridgepairset.add(pairkey)
+        bridgelines.append(
+            (
+                endpointpositionlist[endpointindex],
+                endpointpositionlist[candidateindex],
+            )
+        )
+
+    return bridgelines
+
+
+
+
+
+
+
+
+
+
+
+
+
+#  from https://stackoverflow.com/a/29643643  
+
+
+
+
+def loadcountrydata(filepath):
+    try:
+        with open(filepath, "r", encoding="utf-8") as fileobject:
+            rawdata = json.load(fileobject)
+    except (OSError, json.JSONDecodeError):
+        return {}, {}
+
+    if not isinstance(rawdata, list):
+        return {}, {}
+
+    statetocountrylookup = {}
+    countrytocolorlookup = {}
+
+
+    for countryindex, countryentry in enumerate(rawdata):
+        if not isinstance(countryentry, dict):
+            continue
+
+        countryname = str(countryentry.get("Country", "")).strip()
+        if not countryname:
+            continue
+
+        # No color in new format, assign default
+        parsedcolor = autocountrycolors[countryindex % len(autocountrycolors)]
+        countrytocolorlookup[countryname] = parsedcolor
+
+        statesdict = countryentry.get("States", {})
+        if not isinstance(statesdict, dict):
+            continue
+
+        for statename in statesdict.keys():
+            if isinstance(statename, str) and statename.strip():
+                statetocountrylookup[statename.strip()] = countryname
+
+    return statetocountrylookup, countrytocolorlookup
 
 # group subdivision to their parent state for rendering 
 
@@ -306,6 +522,17 @@ def groupsubdivisionsbystate(provincelist, statelist):
     return groupedlookup # stateid to list of provinces for example ("Malaya" -> [province1, province2])
 
 
+
+
+
+
+
+
+
+
+
+
+
 # check if rect are close to be considered adjacent to build provinece graph for path finding
 
 
@@ -322,281 +549,6 @@ def rectanglesclose(firstrectangle, secondrectangle, padding=1):
 def getshapecenter(shape):
     return (shape["rectangle"].centerx, shape["rectangle"].centery)
 
-
-
-
-def getprovincecontroller(province): # get the current controller
-    return province.get("controllercountry", province.get("country"))
-
-
-
-
-def getprovinceowner(province): # get the original owner
-    return province.get("ownercountry", province.get("country"))
-
-
-
-
-def setprovincecontroller(province, countryname, countrycolor=None): #set the controller of the provincewhen occupied or annexed
-    province["controllercountry"] = countryname
-    province["country"] = countryname  # compatibility alias
-    if countrycolor is not None:
-        province["countrycolor"] = countrycolor
-
-
-
-# Movement starts
-
-
-def prepareprovincemetadata(provincelist):
-    enrichedList = []
-    testCounter = 0  
-    for province in provincelist:
-        enrichedProvince = dict(province)
-        enrichedProvince["parentstateid"] = getparentstateidfromprovinceid(enrichedProvince["id"])
-        enrichedProvince["terrain"] = "plains"
-        enrichedProvince["troops"] = 0
-        enrichedProvince["center"] = getshapecenter(enrichedProvince)
-        enrichedProvince["ownercountry"] = None
-        enrichedProvince["controllercountry"] = None
-        enrichedProvince["country"] = None
-
-        
-        # print("Debug: province center =", enrichedProvince["center"])  
-        enrichedList.append(enrichedProvince)
-        testCounter += 1  
-
-    # print("Total provinces:", testCounter)
-    #print(enrichedList[0])
-    return enrichedList
-
-
-
-
-def buildprovinceadjacencygraph(provincemap, onprogress=None):
-    provinceidlist = list(provincemap.keys())
-    totalprovincecount = len(provinceidlist)
-
-
-    # TEST OPTIMIZATION 3 APRIL
-    totalprogresssteps = max(1, totalprovincecount * 2)
-    if onprogress and not onprogress(0, totalprogresssteps):
-        #print("PROGRES", totalprogresssteps)
-        return None
-
-    # larger cells will = faster but not as accurate
-    gridcellsize = 32.0
-    adjacencytestpadding = 1
-    gridlookup = {}
-    provinceentrylist = []
-
-    for provinceindex, provinceid in enumerate(provinceidlist):
-        #print(provinceindex, provinceid, provinceidlist[0])
-        provincerectangle = provincemap[provinceid]["rectangle"]
-        minimumgridx = int(math.floor((provincerectangle.left - adjacencytestpadding) / gridcellsize))
-        maximumgridx = int(math.floor((provincerectangle.right + adjacencytestpadding) / gridcellsize))
-        minimumgridy = int(math.floor((provincerectangle.top - adjacencytestpadding) / gridcellsize))
-        maximumgridy = int(math.floor((provincerectangle.bottom + adjacencytestpadding) / gridcellsize))
-
-        provinceentrylist.append((provinceid, provincerectangle, minimumgridx, maximumgridx, minimumgridy, maximumgridy))
-
-        for gridx in range(minimumgridx, maximumgridx + 1):
-            for gridy in range(minimumgridy, maximumgridy + 1):
-                gridlookup.setdefault((gridx, gridy), []).append(provinceindex)
-
-        #if onprogress and provinceindex % 100 == 0:
-        #    onprogress(provinceindex, totalprogresssteps)
-        #       if not onprogress(provinceindex, totalprogresssteps):
-        #          return None
-
-        if onprogress and (provinceindex == 0 or (provinceindex + 1) % 200 == 0 or (provinceindex + 1) == totalprovincecount):
-            if not onprogress(provinceindex + 1, totalprogresssteps):
-                return None
-
-    adjacencygraph = {provinceid: set() for provinceid in provinceidlist}
-    #print("graph adjacent", adjacencygraph)
-    for provinceindex, provinceentry in enumerate(provinceentrylist):
-        provinceid, firstrectangle, minimumgridx, maximumgridx, minimumgridy, maximumgridy = provinceentry
-        candidateindexset = set()
-
-        for gridx in range(minimumgridx, maximumgridx + 1):
-            for gridy in range(minimumgridy, maximumgridy + 1):
-                for candidateindex in gridlookup.get((gridx, gridy), ()):
-                    
-                    
-                    #compare each pair once only, but avoid storing a global pair set
-                    if candidateindex > provinceindex:
-                        candidateindexset.add(candidateindex)
-
-        for candidateindex in candidateindexset:
-            candidateprovinceid, secondrectangle, _, _, _, _ = provinceentrylist[candidateindex] 
-            if rectanglesclose(firstrectangle, secondrectangle, padding=adjacencytestpadding):
-                adjacencygraph[provinceid].add(candidateprovinceid)
-                adjacencygraph[candidateprovinceid].add(provinceid)
-
-        if onprogress and (provinceindex == 0 or (provinceindex + 1) % 100 == 0 or (provinceindex + 1) == totalprovincecount):
-            if not onprogress(totalprovincecount + provinceindex + 1, totalprogresssteps):
-                return None
-            
-
-    #print(adjacencygraph)
-    return adjacencygraph
-    
-    # optimization issue, cannot run on Benedict's AMD computer, might need to optimize the adjacency graph building 
-
-
-
-def getterrainmovecost(province):
-    return terrainmovecostlookup.get(province.get("terrain", "plains"), 1.0)
-
-
-
-
-
-
-# A* PATHFINDING ADAPTED FROM https://medium.com/@nicholas.w.swift/easy-a-star-pathfinding-7e6689c7f7b2
-
-def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph, allowedprovinceidset=None):
-    if startprovinceid not in provincemap or goalprovinceid not in provincemap:
-        return []
-    if allowedprovinceidset is not None:
-        if startprovinceid not in allowedprovinceidset or goalprovinceid not in allowedprovinceidset:
-            return []
-    if startprovinceid == goalprovinceid:
-        return [startprovinceid]
-
-
-
-
-
-    goalcenter = provincemap[goalprovinceid]["center"]
-    openheap = [(0.0, startprovinceid)]
-    parentlookup = {}
-    costlookup = {startprovinceid: 0.0}
-    visitedset = set()
-
-    #  A* 
-    while openheap:
-        _, currentprovinceid = heapq.heappop(openheap) # total province with lowest cost
-        if currentprovinceid in visitedset:
-            continue
-
-
-
-        if currentprovinceid == goalprovinceid:
-            pathlist = [goalprovinceid]
-            while pathlist[-1] in parentlookup:
-                pathlist.append(parentlookup[pathlist[-1]])
-            pathlist.reverse()
-            return pathlist
-
-        visitedset.add(currentprovinceid)
-        currentcenter = provincemap[currentprovinceid]["center"]
-
-        for nextprovinceid in provincegraph.get(currentprovinceid, ()):
-            if allowedprovinceidset is not None and nextprovinceid not in allowedprovinceidset:
-                continue
-            if nextprovinceid in visitedset:
-                continue
-
-            nextcenter = provincemap[nextprovinceid]["center"]
-            stepdistance = math.hypot(nextcenter[0] - currentcenter[0], nextcenter[1] - currentcenter[1])
-            moveenergy = stepdistance * getterrainmovecost(provincemap[nextprovinceid])
-            newcost = costlookup[currentprovinceid] + moveenergy
-
-            if newcost >= costlookup.get(nextprovinceid, float("inf")):
-                continue
-
-            parentlookup[nextprovinceid] = currentprovinceid
-            costlookup[nextprovinceid] = newcost
-            estimateddistance = math.hypot(goalcenter[0] - nextcenter[0], goalcenter[1] - nextcenter[1])
-            heapq.heappush(openheap, (newcost + estimateddistance, nextprovinceid))
-
-    return []
-
-
-
-
-# def processmovementorders(movementorderlist, provincemap):
-#     finishedorderlist = []
-# 
-# 
-# 
-#     for movementorder in movementorderlist:
-#         movementpoints = 1.0 * float(movementorder.get("speedmodifier", 1.0))
-#         pathlist = movementorder["path"]
-#         currentpathindex = movementorder["index"]
-#         movingcountry = movementorder.get("controllercountry", movementorder.get("country"))
-#         movingcountrycolor = movementorder.get("countrycolor")
-# 
-#         while currentpathindex < len(pathlist) - 1:
-# 
-# 
-#             nextprovinceid = pathlist[currentpathindex + 1]
-#             nextprovince = provincemap[nextprovinceid]
-#             movecost = getterrainmovecost(nextprovince)
-# 
-#             if movementpoints < movecost: # move next turn if not enough
-#                 break
-# 
-#             if movingcountry is None: 
-#                 movingcountry = getprovincecontroller(provincemap[pathlist[currentpathindex]])
-#                 movementorder["controllercountry"] = movingcountry
-#                 movementorder["country"] = movingcountry
-# 
-#             nextcountry = getprovincecontroller(nextprovince)
-#             if (
-#                 movingcountry is not None
-#                 and nextcountry is not None
-#                 and nextcountry != movingcountry
-#                 and nextprovince["troops"] > 0
-#             ):
-#                 attackers = movementorder["amount"]
-#                 defenders = nextprovince["troops"]
-#                 if attackers <= defenders:
-#                     nextprovince["troops"] = defenders - attackers
-#                     movementorder["amount"] = 0
-#                     break
-# 
-#                 movementorder["amount"] = attackers - defenders
-#                 nextprovince["troops"] = 0
-# 
-# 
-# 
-#             movementpoints -= movecost
-#             currentpathindex += 1
-# 
-#             if (
-#                 movingcountry is not None
-#                 and nextcountry is not None
-#                 and nextcountry != movingcountry
-#                 and nextprovince["troops"] <= 0
-#             ):
-#                 setprovincecontroller(nextprovince, movingcountry, movingcountrycolor)
-# 
-#         movementorder["index"] = currentpathindex
-#         movementorder["current"] = pathlist[currentpathindex]
-# 
-# 
-# 
-# 
-#         if movementorder["amount"] <= 0:
-#             finishedorderlist.append(movementorder)
-#         elif currentpathindex >= len(pathlist) - 1:
-#             destinationprovinceid = pathlist[-1]
-#             provincemap[destinationprovinceid]["troops"] += movementorder["amount"]
-#             finishedorderlist.append(movementorder)
-# 
-#     for finishedorder in finishedorderlist:
-#         movementorderlist.remove(finishedorder)
-
-
-
-
-# TODO: handle occupation, changing the province ownership when all enemy troops are removed and the player moves into the province, or the npc moves into the province or the players province
-
-
-# Movement ends
 # GAME LOGIC AND RENDERING ENDSS
 
 
@@ -854,6 +806,7 @@ def main(eventbus=None):
     clock = pygame.time.Clock()
     expandedstateid = None
     selectedprovinceid = None
+    selectedprovinceidset = set()
 
     gamephase = "choosecountry"
     pendingcountry = None
@@ -873,6 +826,10 @@ def main(eventbus=None):
 
     movementorderlist = []
     routepreviewset = set()
+    frontlineplacementmode = False
+    activefrontlineedgekeyset = set()
+    frontlineassignmentlist = []
+    frontlinebordersegmentcache = {}
     countriesatwarset = set() # track countries at war
     countrymenutarget = None
 
@@ -881,6 +838,11 @@ def main(eventbus=None):
     newssystem.start()
     newspopup = NewsPopup()
     runtimeui = EngineUI((windowwidth, windowheight))
+
+    dragselectstart = None
+    dragselectcurrent = None
+    isdragselecting = False
+    dragminimumdistance = 8
 
 
 
@@ -932,6 +894,7 @@ def main(eventbus=None):
         hoveredprovinceid = None
         screenrectangle = screen.get_rect()
         troopbadgelist = [] # store troop badge info
+        troopbadgehitlist = []
 
 
 
@@ -1023,6 +986,7 @@ def main(eventbus=None):
 
 
                     # determine fill color based on game state and interactions
+                    # province color
                     if gamephase == "choosecountry":
                         if stateshape.get("country"):
                             basefillcolor = stateshape.get("countrycolor", defaultshapecolor)
@@ -1035,7 +999,7 @@ def main(eventbus=None):
                             basefillcolor = gui_lightencolor(basefillcolor, pulsevalue)
 
 
-                    elif drawitem.get("id") == selectedprovinceid:
+                    elif drawitem.get("id") in selectedprovinceidset:
                         basefillcolor = (232, 214, 103)
 
 
@@ -1069,8 +1033,112 @@ def main(eventbus=None):
                         pygame.draw.polygon(screen, finalfillcolor, drawpolygon)
                         pygame.draw.polygon(screen, (50, 50, 50), drawpolygon, 1)
 
-                    if gamephase == "play" and "troops" in drawitem and drawitem["troops"] > 0 and itemrectanglescreen.colliderect(screenrectangle):
-                        troopbadgelist.append((itemrectanglescreen.center, drawitem["troops"])) #store as screen coords, troop count
+        if gamephase == "play":
+            for copyshift in copyshiftlist:
+                drawcamerax = camerax + copyshift
+                for provinceid, province in provincemap.items():
+                    if int(province.get("troops", 0)) <= 0:
+                        continue
+
+                    provincerectanglescreen = getscreenrectangle(province["rectangle"], zoomvalue, drawcamerax, cameray)
+                    if not provincerectanglescreen.colliderect(screenrectangle):
+                        continue
+
+                    troopbadgelist.append((provincerectanglescreen.center, province["troops"]))
+
+                    # for quick search: "troop badge hitbox"
+                    troopbadgerect = gui_gettroopbadgerect(provincerectanglescreen.center, province["troops"], runtimeui.troopbadgefont)
+                    troopbadgehitlist.append(
+                        {
+                            "provinceid": provinceid,
+                            "rect": troopbadgerect,
+                        }
+                    )
+
+        frontlineborderedgelist = []
+        frontlineedgebykey = {}
+        hoveredfrontlineedgekey = None
+        if gamephase == "play" and playercountry and (frontlineplacementmode or activefrontlineedgekeyset):
+            frontlineborderedgelist = getcountryborderedges(provincemap, provincegraph, playercountry)
+            frontlineedgebykey = {edge["edgekey"]: edge for edge in frontlineborderedgelist}
+            currentfrontlineedgekeyset = set(frontlineedgebykey.keys())
+            activefrontlineedgekeyset.intersection_update(currentfrontlineedgekeyset)
+
+            frontlineoverlaysegments = []
+            nearesthoverdistance = float("inf")
+            for copyshift in copyshiftlist:
+                drawcamerax = camerax + copyshift
+                for borderedge in frontlineborderedgelist:
+                    edgekey = borderedge["edgekey"]
+                    if not frontlineplacementmode and edgekey not in activefrontlineedgekeyset:
+                        continue
+
+                    worldsegmentlist = frontlinebordersegmentcache.get(edgekey)
+                    if worldsegmentlist is None:
+                        worldsegmentlist = getborderworldsegments(provincemap, borderedge)
+                        frontlinebordersegmentcache[edgekey] = worldsegmentlist
+
+                    for worldsegmentstart, worldsegmentend in worldsegmentlist:
+                        segmentstart, segmentend = getscreenpoints(
+                            [worldsegmentstart, worldsegmentend],
+                            zoomvalue,
+                            drawcamerax,
+                            cameray,
+                        )
+
+                        segmentleft = int(min(segmentstart[0], segmentend[0])) - 8
+                        segmenttop = int(min(segmentstart[1], segmentend[1])) - 8
+                        segmentwidth = int(abs(segmentend[0] - segmentstart[0])) + 16
+                        segmentheight = int(abs(segmentend[1] - segmentstart[1])) + 16
+                        segmentrect = pygame.Rect(segmentleft, segmenttop, max(1, segmentwidth), max(1, segmentheight))
+                        if not segmentrect.colliderect(screenrectangle):
+                            continue
+
+                        frontlineoverlaysegments.append((edgekey, segmentstart, segmentend))
+
+                        if frontlineplacementmode:
+                            hoverdistance = pointtosegmentdistance(mouseposition, segmentstart, segmentend)
+                            if hoverdistance <= 10.0 and hoverdistance < nearesthoverdistance:
+                                nearesthoverdistance = hoverdistance
+                                hoveredfrontlineedgekey = edgekey
+
+            for edgekey, segmentstart, segmentend in frontlineoverlaysegments:
+                isactivefrontline = edgekey in activefrontlineedgekeyset
+                ishoveredborder = frontlineplacementmode and edgekey == hoveredfrontlineedgekey
+
+                if frontlineplacementmode:
+                    bordercolor = (255, 236, 145) if ishoveredborder else (235, 205, 92)
+                    borderwidth = 4 if ishoveredborder else 2
+                    pygame.draw.line(screen, bordercolor, segmentstart, segmentend, borderwidth)
+
+                if isactivefrontline:
+                    pygame.draw.line(screen, (185, 24, 24), segmentstart, segmentend, 8)
+                    pygame.draw.line(screen, (220, 42, 42), segmentstart, segmentend, 5)
+                    pygame.draw.line(screen, (255, 96, 96), segmentstart, segmentend, 2)
+
+            if frontlineplacementmode:
+                placementsegmentlist = [(segmentstart, segmentend) for _, segmentstart, segmentend in frontlineoverlaysegments]
+                placementbridges = getkruskalbridges(placementsegmentlist, maxgapdistance=20.0)
+                for bridgestart, bridgeend in placementbridges:
+                    pygame.draw.line(screen, (235, 205, 92), bridgestart, bridgeend, 2)
+
+            activefrontlinesegmentlist = [
+                (segmentstart, segmentend)
+                for edgekey, segmentstart, segmentend in frontlineoverlaysegments
+                if edgekey in activefrontlineedgekeyset
+            ]
+            activefrontlinebridges = getkruskalbridges(activefrontlinesegmentlist, maxgapdistance=20.0)
+            for bridgestart, bridgeend in activefrontlinebridges:
+                pygame.draw.line(screen, (185, 24, 24), bridgestart, bridgeend, 8)
+                pygame.draw.line(screen, (220, 42, 42), bridgestart, bridgeend, 5)
+                pygame.draw.line(screen, (255, 96, 96), bridgestart, bridgeend, 2)
+
+        selectedtroopentries = getselectedtroopentries(
+            selectedprovinceidset,
+            selectedprovinceid,
+            provincemap,
+            playercountry,
+        )
 
         canrecruit = selectedprovinceid is not None and getprovincecontroller(provincemap[selectedprovinceid]) == playercountry
         recruitgoldcost, recruitpopulationcost = getrecruitcosts(
@@ -1102,12 +1170,27 @@ def main(eventbus=None):
             recruitpopulationcost,
             countrymenutarget,
             countriesatwarset,
+            selectedtroopentries,
+            frontlineplacementmode,
             hovertext,
             mouseposition,
             troopbadgelist,
         )
         runtimeui.update(elapsedseconds)
         runtimeui.draw(screen)
+
+
+
+
+
+        # DRAG SELECT RECTANGLE
+        if gamephase == "play" and isdragselecting and dragselectstart and dragselectcurrent:
+            selectionrect = makerectfrompoints(dragselectstart, dragselectcurrent)
+            if selectionrect.width > 0 or selectionrect.height > 0:
+                overlaysurface = pygame.Surface((selectionrect.width or 1, selectionrect.height or 1), pygame.SRCALPHA)
+                overlaysurface.fill((95, 145, 255, 45))
+                screen.blit(overlaysurface, selectionrect.topleft)
+                pygame.draw.rect(screen, (95, 145, 255), selectionrect, width=1)
 
 
 
@@ -1195,6 +1278,41 @@ def main(eventbus=None):
                 )
                 continue
 
+            if uiaction == EngineUI.actionsplit and gamephase == "play":
+                selectedids = [entry["provinceid"] for entry in selectedtroopentries]
+                splitresult = splitselectedtroops(
+                    provincemap,
+                    provincegraph,
+                    selectedids,
+                    playercountry,
+                )
+                if splitresult["success"]:
+                    selectedprovinceidset = set(splitresult["selectedprovinceids"])
+                    selectedprovinceid = splitresult["primaryprovinceid"]
+                    routepreviewset = set()
+                continue
+
+            if uiaction == EngineUI.actionmerge and gamephase == "play":
+                selectedids = [entry["provinceid"] for entry in selectedtroopentries]
+                mergeresult = mergeselectedtroops(
+                    provincemap,
+                    selectedids,
+                    playercountry,
+                    targetprovinceid=selectedprovinceid,
+                )
+                if mergeresult["success"]:
+                    selectedprovinceidset = set(mergeresult["selectedprovinceids"])
+                    selectedprovinceid = mergeresult["primaryprovinceid"]
+                    routepreviewset = set()
+                continue
+
+            if uiaction == EngineUI.actionfrontline and gamephase == "play":
+                hastroopsselected = any(int(entry.get("troops", 0)) > 0 for entry in selectedtroopentries)
+                frontlineplacementmode = bool(hastroopsselected) and not frontlineplacementmode
+                routepreviewset = set()
+                countrymenutarget = None
+                continue
+
             if event.type == pygame.QUIT:
                 isrunning = False
 
@@ -1249,7 +1367,12 @@ def main(eventbus=None):
                         gamephase = "play"
                         expandedstateid = None
                         selectedprovinceid = None
+                        selectedprovinceidset = set()
                         routepreviewset = set()
+                        frontlineplacementmode = False
+                        activefrontlineedgekeyset = set()
+                        frontlineassignmentlist = []
+                        frontlinebordersegmentcache = {}
                         countriesatwarset = set()
                         countrymenutarget = None
                         eventbus.emit(
@@ -1262,6 +1385,95 @@ def main(eventbus=None):
 
                     continue
 
+                if gamephase == "play" and frontlineplacementmode:
+                    if hoveredfrontlineedgekey and hoveredfrontlineedgekey in frontlineedgebykey:
+                        frontlineresult = createfrontline(
+                            provincemap,
+                            provincegraph,
+                            playercountry,
+                            [entry["provinceid"] for entry in selectedtroopentries],
+                            frontlineedgebykey[hoveredfrontlineedgekey],
+                        )
+                        if frontlineresult["success"]:
+                            frontlineassignmentlist.append(frontlineresult)
+                            activefrontlineedgekeyset.update(frontlineresult["frontlineedgekeys"])
+                            selectedprovinceidset = set(frontlineresult["frontlineprovinceids"])
+                            selectedprovinceid = frontlineresult["anchorprovinceid"]
+                            allowedprovinceidset = {
+                                provinceid
+                                for provinceid, province in provincemap.items()
+                                if getprovincecontroller(province) == playercountry
+                            }
+                            frontlinepathpreviewset = set()
+                            for transferentry in frontlineresult.get("transferplan", ()):
+                                sourceprovinceid = transferentry.get("sourceprovinceid")
+                                targetprovinceid = transferentry.get("targetprovinceid")
+                                transferamount = int(transferentry.get("amount", 0))
+                                if transferamount <= 0:
+                                    continue
+                                if not sourceprovinceid or not targetprovinceid:
+                                    continue
+                                if sourceprovinceid == targetprovinceid:
+                                    continue
+
+                                sourceprovince = provincemap.get(sourceprovinceid)
+                                if not sourceprovince:
+                                    continue
+                                if getprovincecontroller(sourceprovince) != playercountry:
+                                    continue
+
+                                foundpath = findprovincepath(
+                                    sourceprovinceid,
+                                    targetprovinceid,
+                                    provincemap,
+                                    provincegraph,
+                                    allowedprovinceidset=allowedprovinceidset,
+                                )
+                                if len(foundpath) < 2:
+                                    continue
+
+                                movingtroopcount = min(transferamount, int(sourceprovince.get("troops", 0)))
+                                if movingtroopcount <= 0:
+                                    continue
+
+                                sourceprovince["troops"] -= movingtroopcount
+                                movementorderlist.append(
+                                    {
+                                        "amount": movingtroopcount,
+                                        "path": foundpath,
+                                        "index": 0,
+                                        "current": foundpath[0],
+                                        "speedmodifier": 1.0,
+                                        "controllercountry": getprovincecontroller(sourceprovince),
+                                        "country": getprovincecontroller(sourceprovince),
+                                        "countrycolor": sourceprovince.get("countrycolor"),
+                                    }
+                                )
+                                frontlinepathpreviewset.update(foundpath)
+                                eventbus.emit(
+                                    EngineEventType.MOVEORDERCREATED,
+                                    {
+                                        "sourceProvinceId": sourceprovinceid,
+                                        "destinationProvinceId": targetprovinceid,
+                                        "path": list(foundpath),
+                                        "troops": movingtroopcount,
+                                        "country": getprovincecontroller(sourceprovince),
+                                        "turn": currentturnnumber,
+                                    },
+                                )
+                            selectedprovince = provincemap.get(selectedprovinceid) if selectedprovinceid else None
+                            if selectedprovince:
+                                expandedstateid = selectedprovince.get("parentid", expandedstateid)
+                            routepreviewset = frontlinepathpreviewset
+                            countrymenutarget = None
+                            frontlineplacementmode = False
+                        continue
+                    
+                    #fix click handlin
+                    # clicking away from a valid border cancels frontline placement mode,
+                    # then falls through to normal province click handling.
+                    frontlineplacementmode = False
+
 
 
                 # collidepoint checks button and country menu interacts
@@ -1270,17 +1482,34 @@ def main(eventbus=None):
                         countrymenutarget = None
                         continue
 
+                    dragselectstart = event.pos
+                    dragselectcurrent = event.pos
+                    isdragselecting = True
 
+            elif event.type == pygame.MOUSEMOTION:
+                if isdragselecting:
+                    dragselectcurrent = event.pos
 
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if gamephase != "play" or not isdragselecting:
+                    continue
 
+                dragselectcurrent = event.pos
+                selectionrect = makerectfrompoints(dragselectstart, dragselectcurrent)
+                isdragselecting = False
 
-                    if hoveredprovinceid:
-                        selectedprovince = provincemap.get(hoveredprovinceid)
-                        if selectedprovince and getprovincecontroller(selectedprovince) == playercountry:
-                            selectedprovinceid = hoveredprovinceid
-                            expandedstateid = selectedprovince.get("parentid", hoveredstateid)
-                            routepreviewset = set()
-                            countrymenutarget = None
+                hasdragdistance = max(selectionrect.width, selectionrect.height) >= dragminimumdistance
+                if hasdragdistance:
+                    selectedids = getdragselectedprovinceids(selectionrect, troopbadgehitlist, provincemap, playercountry)
+                    selectedprovinceidset = set(selectedids)
+
+                    if selectedids:
+                        selectedprovinceid = selectedids[0]
+                        selectedprovince = provincemap.get(selectedprovinceid)
+                        expandedstateid = selectedprovince.get("parentid") if selectedprovince else expandedstateid
+                        routepreviewset = set()
+                        countrymenutarget = None
+                        if selectedprovince:
                             eventbus.emit(
                                 EngineEventType.PROVINCESELECTED,
                                 {
@@ -1289,23 +1518,107 @@ def main(eventbus=None):
                                     "country": getprovincecontroller(selectedprovince),
                                 },
                             )
-                            continue
-
-                    if hoveredstateid is not None:
-                        expandedstateid = hoveredstateid
-                        eventbus.emit(
-                            EngineEventType.STATESELECTED,
-                            {
-                                "stateId": expandedstateid,
-                            },
-                        )
                     else:
-                        expandedstateid = None
                         selectedprovinceid = None
+                        selectedprovinceidset = set()
                         routepreviewset = set()
 
+                    dragselectstart = None
+                    dragselectcurrent = None
+                    continue
+
+                clickedbadgeprovinceid = getbadgehitprovinceid(event.pos, troopbadgehitlist)
+                if clickedbadgeprovinceid:
+                    selectedprovince = provincemap.get(clickedbadgeprovinceid)
+                    if selectedprovince and getprovincecontroller(selectedprovince) == playercountry:
+                        selectedprovinceid = clickedbadgeprovinceid
+                        selectedprovinceidset = {clickedbadgeprovinceid}
+                        expandedstateid = selectedprovince.get("parentid", hoveredstateid)
+                        routepreviewset = set()
+                        countrymenutarget = None
+                        eventbus.emit(
+                            EngineEventType.PROVINCESELECTED,
+                            {
+                                "provinceId": selectedprovinceid,
+                                "stateId": selectedprovince.get("parentid"),
+                                "country": getprovincecontroller(selectedprovince),
+                            },
+                        )
+                        dragselectstart = None
+                        dragselectcurrent = None
+                        continue
+
+                if hoveredprovinceid:
+                    selectedprovince = provincemap.get(hoveredprovinceid)
+                    if selectedprovince and getprovincecontroller(selectedprovince) == playercountry:
+                        selectedprovinceid = hoveredprovinceid
+                        selectedprovinceidset = {hoveredprovinceid}
+                        expandedstateid = selectedprovince.get("parentid", hoveredstateid)
+                        routepreviewset = set()
+                        countrymenutarget = None
+                        eventbus.emit(
+                            EngineEventType.PROVINCESELECTED,
+                            {
+                                "provinceId": selectedprovinceid,
+                                "stateId": selectedprovince.get("parentid"),
+                                "country": getprovincecontroller(selectedprovince),
+                            },
+                        )
+                        dragselectstart = None
+                        dragselectcurrent = None
+                        continue
+
+                if hoveredstateid is not None:
+                    expandedstateid = hoveredstateid
+
+
+                    hoveredstateprovince = getprovinceundercursorinstate(
+                        event.pos,
+                        hoveredstateid,
+                        stateshapelist,
+                        zoomvalue,
+                        camerax,
+                        cameray,
+                        copyshiftlist,
+                    )
+
+                    if hoveredstateprovince and getprovincecontroller(hoveredstateprovince) == playercountry:
+                        selectedprovinceid = hoveredstateprovince["id"]
+                        selectedprovinceidset = {selectedprovinceid}
+                        routepreviewset = set()
+                        countrymenutarget = None
+                        eventbus.emit(
+                            EngineEventType.PROVINCESELECTED,
+                            {
+                                "provinceId": selectedprovinceid,
+                                "stateId": hoveredstateprovince.get("parentid"),
+                                "country": getprovincecontroller(hoveredstateprovince),
+                            },
+                        )
+
+                    eventbus.emit(
+                        EngineEventType.STATESELECTED,
+                        {
+                            "stateId": expandedstateid,
+                        },
+                    )
+                else:
+                    expandedstateid = None
+                    selectedprovinceid = None
+                    selectedprovinceidset = set()
+                    routepreviewset = set()
+
+
+
+
+
+
+
+                dragselectstart = None
+                dragselectcurrent = None
+
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3: # right click for move orders
-                if devconsole.visible or gamephase != "play":
+                if devconsole.visible or gamephase != "play" or frontlineplacementmode:
                     continue
 
                 # Only open the country interaction menu when the click is on a state (no hovered province).
@@ -1366,23 +1679,43 @@ def main(eventbus=None):
                 # TODO: fix the issue that you cannot move through enemy provinces
 
 
+                # allows for multiple source provinces if you have multiple selected, prioritizes the hovered province if it is in the selection, then prioritizes the order of selection, then just goes through them in id order
+                sourceprovinceidlist = []
+                if selectedprovinceidset:
+                    sourceprovinceidlist.extend(sorted(provinceid for provinceid in selectedprovinceidset if provinceid in provincemap))
+                    if selectedprovinceid in sourceprovinceidlist:
+                        sourceprovinceidlist.remove(selectedprovinceid)
+                        sourceprovinceidlist.insert(0, selectedprovinceid)
+                elif selectedprovinceid:
+                    sourceprovinceidlist.append(selectedprovinceid)
+                else:
+                    continue
 
-                #Path findign
+                routepreviewset = set()
+                for sourceprovinceid in sourceprovinceidlist:
+                    if sourceprovinceid == hoveredprovinceid:
+                        continue
 
-                foundpath = findprovincepath(
-                    selectedprovinceid,
-                    hoveredprovinceid,
-                    provincemap,
-                    provincegraph,
-                    allowedprovinceidset=allowedprovinceidset,
-                )
+                    sourceprovince = provincemap.get(sourceprovinceid)
+                    if not sourceprovince:
+                        continue
+                    if getprovincecontroller(sourceprovince) != playercountry:
+                        continue
+                    if sourceprovince["troops"] <= 0:
+                        continue
 
+                    foundpath = findprovincepath(
+                        sourceprovinceid,
+                        hoveredprovinceid,
+                        provincemap,
+                        provincegraph,
+                        allowedprovinceidset=allowedprovinceidset,
+                    )
 
+                    routepreviewset.update(foundpath)
+                    if len(foundpath) < 2:
+                        continue
 
-
-
-                routepreviewset = set(foundpath)
-                if len(foundpath) >= 2:
                     movingtroopcount = sourceprovince["troops"]
                     sourceprovince["troops"] -= movingtroopcount
 
@@ -1401,7 +1734,7 @@ def main(eventbus=None):
                     eventbus.emit(
                         EngineEventType.MOVEORDERCREATED,
                         {
-                            "sourceProvinceId": selectedprovinceid,
+                            "sourceProvinceId": sourceprovinceid,
                             "destinationProvinceId": hoveredprovinceid,
                             "path": list(foundpath),
                             "troops": movingtroopcount,
@@ -1414,6 +1747,8 @@ def main(eventbus=None):
             elif event.type == pygame.MOUSEWHEEL:
                 if devconsole.visible:
                     continue
+
+                
                 mousex, mousey = pygame.mouse.get_pos()
                 cameramodule.applywheelzoom(camerastate, event.y, windowheight, mapbox, mousex, mousey)
                 
@@ -1496,14 +1831,20 @@ ispointinsidepolygon = coremodule.ispointinsidepolygon
 loadcountrydata = coremodule.loadcountrydata
 groupsubdivisionsbystate = coremodule.groupsubdivisionsbystate
 
-getprovincecontroller = gameplaymodule.getprovincecontroller
-getprovinceowner = gameplaymodule.getprovinceowner
-setprovincecontroller = gameplaymodule.setprovincecontroller
-prepareprovincemetadata = gameplaymodule.prepareprovincemetadata
-buildprovinceadjacencygraph = gameplaymodule.buildprovinceadjacencygraph
-getterrainmovecost = gameplaymodule.getterrainmovecost
-findprovincepath = gameplaymodule.findprovincepath
-processmovementorders = gameplaymodule.processmovementorders
+getprovincecontroller = movementmodule.getprovincecontroller
+getprovinceowner = movementmodule.getprovinceowner
+setprovincecontroller = movementmodule.setprovincecontroller
+prepareprovincemetadata = movementmodule.prepareprovincemetadata
+buildprovinceadjacencygraph = movementmodule.buildprovinceadjacencygraph
+getterrainmovecost = movementmodule.getterrainmovecost
+findprovincepath = movementmodule.findprovincepath
+processmovementorders = movementmodule.processmovementorders
+splitselectedtroops = movementmodule.splitselectedtroops
+mergeselectedtroops = movementmodule.mergeselectedtroops
+getcountryborderedges = movementmodule.getcountryborderedges
+getborderworldsegments = movementmodule.getborderworldsegments
+createfrontline = movementmodule.createfrontline
+pointtosegmentdistance = movementmodule.pointtosegmentdistance
 
 getrecruitcosts = economymodule.getrecruitcosts
 canrecruittroops = economymodule.canrecruittroops

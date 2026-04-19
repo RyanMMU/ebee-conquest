@@ -1,4 +1,4 @@
-from . import core, gameplay, camera
+from . import core, movement, camera
 from .events import EngineEventType, EventBus
 
 
@@ -128,7 +128,7 @@ class EbeeEngine:
             return False
 
 
-        self.provinceenrichedlist = gameplay.prepareprovincemetadata(provinceshapelist)
+        self.provinceenrichedlist = movement.prepareprovincemetadata(provinceshapelist)
 
 
         for province in self.provinceenrichedlist:
@@ -142,7 +142,7 @@ class EbeeEngine:
 
 
         self.provincemap = {province["id"]: province for province in self.provinceenrichedlist}
-        self.provincegraph = gameplay.buildprovinceadjacencygraph(self.provincemap, onprogress=onprogress)
+        self.provincegraph = movement.buildprovinceadjacencygraph(self.provincemap, onprogress=onprogress)
         
         
         if self.provincegraph is None:
@@ -163,7 +163,7 @@ class EbeeEngine:
                 ownercountry = stateshape.get("ownercountry", stateshape.get("country"));
                 controllercountry = stateshape.get("controllercountry", stateshape.get("country"))
                 province["ownercountry"] = ownercountry;
-                gameplay.setprovincecontroller(province, controllercountry, stateshape.get("countrycolor", (85, 85, 85)))
+                movement.setprovincecontroller(province, controllercountry, stateshape.get("countrycolor", (85, 85, 85)))
 
 
             stateshape["subdivisions"] = subdivisionsforstate
@@ -207,8 +207,8 @@ class EbeeEngine:
         if not countryname or not self.provincemap:
             return {}
 
-        ownedprovinces = [province for province in self.provincemap.values() if gameplay.getprovinceowner(province) == countryname]
-        controlledprovinces = [province for province in self.provincemap.values() if gameplay.getprovincecontroller(province) == countryname]
+        ownedprovinces = [province for province in self.provincemap.values() if movement.getprovinceowner(province) == countryname]
+        controlledprovinces = [province for province in self.provincemap.values() if movement.getprovincecontroller(province) == countryname]
         totaltroopscontrolled = sum(int(province.get("troops", 0)) for province in controlledprovinces)
 
         stateidsowned = sorted(

@@ -2,6 +2,7 @@ import os
 import json
 import math
 import time
+import random
 import xml.etree.ElementTree as elementtree
 import pygame
 from svgelements import Path
@@ -40,6 +41,12 @@ autocountrycolors = [
     (129, 144, 224),
     (206, 138, 112),
 ] #TODO: dynamic color generator based on number of countries and constrast
+
+
+dynamiccolorminchannel = 40
+dynamiccolormaxchannel = 230
+dynamiccolormindistance = 120.0
+dynamiccolorattempts = 128
 
 
 
@@ -162,7 +169,7 @@ def loadsvgshapes(filepath, onprogress=None):
     esocachelist = eso_loadcache(filepath)
 
     if esocachelist is not None:
-        print(f"local@EbeeEngine:~$ ESO cache hit for {os.path.basename(filepath)} with {len(esocachelist)} shapes!", flush=True)
+        print(f"local@EbeeEngine:~$   ESO cache hit for {os.path.basename(filepath)} with {len(esocachelist)} shapes!", flush=True)
         if onprogress and not onprogress(0, 1):
             return []
         if onprogress and not onprogress(1, 1):
@@ -396,6 +403,50 @@ def parsecolorvalue(rawcolorvalue):
 
     return None
 
+#dynamic color genrator
+def colorcontrastdistance(firstcolor, secondcolor):
+    firstred, firstgreen, firstblue = firstcolor
+    secondred, secondgreen, secondblue = secondcolor
+    redoffset = firstred - secondred
+    greenoffset = firstgreen - secondgreen
+    blueoffset = firstblue - secondblue
+    return math.sqrt(redoffset * redoffset + greenoffset * greenoffset + blueoffset * blueoffset)
+
+
+def getrandomcontrastingcolor(assignedcolors, randomgenerator):
+    bestcandidate = None
+    bestcontrastscore = -1.0
+
+
+    for fuck in range(dynamiccolorattempts):
+        candidatecolor = (
+            randomgenerator.randint(dynamiccolorminchannel, dynamiccolormaxchannel),
+            randomgenerator.randint(dynamiccolorminchannel, dynamiccolormaxchannel),
+            randomgenerator.randint(dynamiccolorminchannel, dynamiccolormaxchannel),
+        )
+
+        # avoid muddy near-gray colors 
+        if max(candidatecolor) - min(candidatecolor) < 30:
+            continue
+
+        if not assignedcolors:
+            return candidatecolor
+
+        minimumdistance = min(colorcontrastdistance(candidatecolor, existingcolor) for existingcolor in assignedcolors)
+
+        if minimumdistance > bestcontrastscore:
+            bestcontrastscore = minimumdistance
+            bestcandidate = candidatecolor
+
+        if minimumdistance >= dynamiccolormindistance:
+            return candidatecolor
+
+
+    if bestcandidate is not None:
+        return bestcandidate
+
+    return autocountrycolors[len(assignedcolors) % len(autocountrycolors)]
+
 
 
 
@@ -411,6 +462,8 @@ def loadcountrydata(filepath):
 
     statetocountrylookup = {}
     countrytocolorlookup = {}
+    assignedcolors = []
+    randomgenerator = random.Random()
 
     for countryindex, countryentry in enumerate(rawdata):
         if not isinstance(countryentry, dict):
@@ -420,8 +473,11 @@ def loadcountrydata(filepath):
         if not countryname:
             continue
 
-        parsedcolor = autocountrycolors[countryindex % len(autocountrycolors)]
-        countrytocolorlookup[countryname] = parsedcolor
+        existingcolor = countrytocolorlookup.get(countryname)
+        if existingcolor is None:
+            parsedcolor = getrandomcontrastingcolor(assignedcolors, randomgenerator)
+            countrytocolorlookup[countryname] = parsedcolor
+            assignedcolors.append(parsedcolor)
 
         statesdict = countryentry.get("States", {})
         if not isinstance(statesdict, dict):

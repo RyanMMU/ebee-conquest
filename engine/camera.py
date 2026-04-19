@@ -55,8 +55,6 @@ def getscreenrectangle(rectangle, zoomvalue, offsetx, offsety):
 
 
 def getminimumzoomforheight(windowheight, mapbox):
-    if mapbox["height"] <= 0:
-        return min(maximumzoomvalue, minimumzoomvalue)
     return min(maximumzoomvalue, max(minimumzoomvalue, windowheight / mapbox["height"]))
 
 
@@ -88,10 +86,6 @@ def clampzoomvalue(zoomvalue,minimumzoom):
 
 
 def zoomcameratoanchor(camerax, cameray, oldzoomvalue, newzoomvalue, anchorx, anchory):
-
-    
-    if oldzoomvalue <= 1e-9:
-        return camerax, cameray
     anchorworldx = (anchorx - camerax) / oldzoomvalue
     anchorworldy = (anchory - cameray) / oldzoomvalue
     return (

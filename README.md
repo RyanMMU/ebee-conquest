@@ -27,7 +27,7 @@
 ### Powered by the Ebee Engine (EE)
 
 A **Google Maps-style, 2D turn-based grand strategy war simulator** where players command nations and shape global history through conquest, diplomacy, and economic growth. Featuring **dNPC™ system**, non-player nations controlled by LLMs for dynamic, personality-driven geopolitics.
-> **Note:** This project was developed as a Mini IT Project. The main focus is modular architecture and the integration of modern AI agents into a war scenario game.
+> **Note:** This project was developed as an ongoing collaboration with MMU. The main focus is modular architecture and the integration of modern AI agents into a war scenario game.
 
 > [!WARNING]
 > **Attention:** This game currently only **supports Windows** and is still under **active development**. Please check the documentation below and proceed with caution.
@@ -164,9 +164,9 @@ Non-player nations aren't just scripts; they are agents.
 
 | Member | Role | Primary Contributions |
 | :--- | :--- | :--- |
-| **M. Ryan Haiqal** | Lead Developer | Engine Core, Performance, LLM Integration (Pydantic), Optimization. |
-| **Benedict Chin** | Game Logic & UI | UI/UX Design, Combat Math, Save/Load Systems. |
-| **Adam Syahmi** | Narrative Systems | Database setup, Prompt Engineering, NPC Personality Logic. |
+| **Ryan** | Lead Developer | Engine Core, Performance, LLM Integration (Pydantic), Optimization. |
+| **Benedict C.** | Game Logic & UI | UI/UX Design, Combat Math, Save/Load Systems. |
+| **Adam S.** | Narrative Systems | Database setup, Prompt Engineering, NPC Personality Logic. |
 
 -----
 
