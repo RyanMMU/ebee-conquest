@@ -15,7 +15,8 @@ class CameraState:
     x: float
     y: float
     zoom: float
-
+    targetzoom: float
+    
 
 
 
@@ -99,7 +100,7 @@ def createcamerastate(windowwidth, windowheight, mapbox):
     cameray = (windowheight - mapbox["height"] * zoomvalue) / 2 - mapbox["minimumy"] * zoomvalue
     cameray = clampverticalcamera(cameray, zoomvalue, windowheight, mapbox)
     camerax = wraphorizontalcamera(camerax, zoomvalue, mapbox)
-    return CameraState(camerax, cameray, zoomvalue)
+    return CameraState(camerax, cameray, zoomvalue, zoomvalue)
 
 
 def applyedgepan(camerastate, mousex, windowwidth, elapsedseconds, panmargin, panspeed):
@@ -136,17 +137,8 @@ def applywheelzoom(camerastate, wheeldelta, windowheight, mapbox, anchorx, ancho
     newzoomvalue = oldzoomvalue * (zoomstepvalue ** wheeldelta)
     minimumzoom = getminimumzoomforheight(windowheight, mapbox)
     newzoomvalue = clampzoomvalue(newzoomvalue, minimumzoom)
-    if newzoomvalue == oldzoomvalue:
-        return
-    camerastate.x, camerastate.y = zoomcameratoanchor(
-        camerastate.x,
-        camerastate.y,
-        oldzoomvalue,
-        newzoomvalue,
-        anchorx,
-        anchory,
-    )
-    camerastate.zoom = newzoomvalue
+    
+    camerastate.targetzoom = newzoomvalue
 
 
 def resizecamerastate(camerastate, oldwindowwidth, oldwindowheight, newwindowwidth, newwindowheight, mapbox):
@@ -161,3 +153,28 @@ def resizecamerastate(camerastate, oldwindowwidth, oldwindowheight, newwindowwid
         camerastate.zoom = minimumzoom
         camerastate.x = newwindowwidth * 0.5 - centerworldx * camerastate.zoom
         camerastate.y = newwindowheight * 0.5 - centerworldy * camerastate.zoom
+
+def updatesmoothzoom(camerastate, anchorx, anchory, dt):
+    speed = 8.0  # higher = more responsive
+
+    oldzoom = camerastate.zoom
+    target = camerastate.targetzoom
+    
+    # smooth + responsive interpolation
+    t = 1 - pow(0.001, dt * speed)
+    newzoom = oldzoom + (target - oldzoom) * t
+
+    # stop if it is the same
+    if abs(newzoom - target) < 0.0001:
+        newzoom = target
+
+    camerastate.x, camerastate.y = zoomcameratoanchor(
+        camerastate.x,
+        camerastate.y,
+        oldzoom,
+        newzoom,
+        anchorx,
+        anchory,
+    )
+
+    camerastate.zoom = newzoom

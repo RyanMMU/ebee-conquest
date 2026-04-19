@@ -58,6 +58,8 @@ def gui_lightencolor(colorvalue, amount):
     )
 
 
+
+
 class EngineUI:
     actionchoosecountry = "choosecountry"
     actionrecruit = "recruit"
@@ -611,12 +613,8 @@ class EngineUI:
         for badgecenter, badgetroops in self.troopbadgelist:
             gui_drawtroopcountbadge(screen, badgecenter, badgetroops, self.troopbadgefont)
         if self.hovertextcurrent:
-            hoverlabel = self.hoverfont.render("id:" + self.hovertextcurrent, True, (255, 255, 255))
             mousex, mousey = self.hovermousepos
-            drawx = min(mousex + 16, max(0, self.window_size[0] - hoverlabel.get_width()))
-            drawy = min(mousey + 16, max(0, self.window_size[1] - hoverlabel.get_height()))
-            screen.blit(hoverlabel, (drawx, drawy))
-
+            gui_drawhoverlabel(screen, self.hoverfont, self.hovertextcurrent, (mousex, mousey))
 
 
 
@@ -732,12 +730,36 @@ def gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
     screen.blit(labelsurface, labelsurface.get_rect(center=labelrectangle.center))
 
 
-def gui_drawhoverlabel(screen, fontobject, hovertext, mouseposition):
-    if not hovertext:
+def gui_drawhoverlabel(screen, fontobject, state, mouseposition):
+    if not state:
         return
 
-    labelsurface = fontobject.render("id:" + hovertext, True, (255, 255, 255))
-    screen.blit(labelsurface, (mouseposition[0] + 16, mouseposition[1] + 16))
+    padding = 8
+    x = mouseposition[0] + 16
+    y = mouseposition[1] + 16
+
+    lines = [
+        f"id: {state['name']}",
+        f"Population: {state['population']}",
+        f"Country: {state['country']}",
+        f"Terrain Type: {state['terrain']}",
+        f"Number of provinces: {state['province_count']}"
+    ]
+
+    text_surfaces = [fontobject.render(line, True, (255, 255, 255)) for line in lines]
+
+    width = max(text.get_width() for text in text_surfaces) + padding * 2
+    height = sum(text.get_height() for text in text_surfaces) + padding * 2
+
+    pygame.draw.rect(screen, (20, 20, 20), (x, y, width, height))
+    pygame.draw.rect(screen, (255, 200, 0), (x, y, width, height), 2)
+
+    offset_y = y + padding
+    for text in text_surfaces:
+        screen.blit(text, (x + padding, offset_y))
+        offset_y += text.get_height()
+
+
 
 
 def gui_drawchoosecountryoverlay(screen, titlefontobject, fontobject, selectedcountry):

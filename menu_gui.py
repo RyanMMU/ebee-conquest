@@ -59,7 +59,7 @@ def button(screen,x,y,w,h):
 clock = pygame.time.Clock()
 
 while run:
-    mouse = pygame.mouse.get_pos()
+    mouse = pygame.mouse.get_pos() #restored
     screen.blit(bg_image, (0, 0))
     
     for event in pygame.event.get():

@@ -55,6 +55,7 @@ maxsegmentsteps = 48
 
 
 
+
 def getsegmentsamplecount(segment):
     segmenttypename = type(segment).__name__
     if segmenttypename == "Move":
@@ -218,7 +219,52 @@ def getbadgehitprovinceid(mouseposition, badgehitlist):
             return badgeentry["provinceid"]
     return None
 
+with open("countries.json", "r", encoding="utf-8") as f:
+    countries_full = json.load(f)
 
+def get_state_data(state_id, countries_full):
+    for country in countries_full:
+        country_name = country["Country"]
+        states = country["States"]
+
+        for state_name, state_data in states.items():
+            if state_name.lower() == state_id.lower():
+
+                province_count = len(states)
+
+                return {
+                    "name": state_name,
+                    "country": country_name,
+                    "capital": state_data["capital"],
+                    "population": state_data["population"],
+                    "terrain": state_data["terrain"],
+                    "province_count": province_count
+                }
+
+    return None
+
+
+    # for countryindex, countryentry in enumerate(rawdata):
+    #         if not isinstance(countryentry, dict):
+    #             continue
+    #
+    #         countryname = str(countryentry.get("Country", "")).strip()
+    #         if not countryname:
+    #             continue
+    #
+    #         # No color in new format, assign default (CHATGPT)
+    #         parsedcolor = autocountrycolors[countryindex % len(autocountrycolors)]
+    #         countrytocolorlookup[countryname] = parsedcolor
+    #
+    #         statesdict = countryentry.get("States", {})
+    #         if not isinstance(statesdict, dict):
+    #             continue
+    #
+    #         for statename in statesdict.keys():
+    #             if isinstance(statename, str) and statename.strip():
+    #                 statetocountrylookup[statename.strip()] = countryname
+    #
+    #     return statetocountrylookup, countrytocolorlookup
 def getdragselectedprovinceids(selectionrect, badgehitlist, provincemap, playercountry):
     selectedids = []
     for badgeentry in badgehitlist:
@@ -829,6 +875,12 @@ def main(eventbus=None):
         """
 
         cameramodule.enforceminimumzoom(camerastate, windowwidth, windowheight, mapbox)
+        cameramodule.updatesmoothzoom(
+            camerastate,
+            mouseposition[0],
+            mouseposition[1],
+            elapsedseconds,
+        )
         cameramodule.clampcamerastate(camerastate, windowheight, mapbox)
 
         zoomvalue = camerastate.zoom
@@ -919,9 +971,16 @@ def main(eventbus=None):
                             if gamephase == "choosecountry" and not stateshape.get("country"):
                                 continue
                             itemhovered = True
-                            hovertext = drawitem["id"]
+
                             hoveredstateid = drawitem.get("parentid", stateshape["id"])
                             hoveredprovinceid = drawitem["id"] if "parentid" in drawitem else None
+
+                            statetocountry, _ = loadcountrydata("countries.json")
+
+                            if hoveredstateid:
+                                hovertext = get_state_data(hoveredstateid, countries_full)
+                            else:
+                                hovertext = None
 
 
 
@@ -1692,10 +1751,7 @@ def main(eventbus=None):
                 
                 mousex, mousey = pygame.mouse.get_pos()
                 cameramodule.applywheelzoom(camerastate, event.y, windowheight, mapbox, mousex, mousey)
-                cameramodule.clampcamerastate(camerastate, windowheight, mapbox)
-                zoomvalue = camerastate.zoom
-                camerax = camerastate.x
-                cameray = camerastate.y
+                
 
             elif event.type == pygame.KEYDOWN:
 
