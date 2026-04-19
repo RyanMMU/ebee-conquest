@@ -155,7 +155,7 @@ def resizecamerastate(camerastate, oldwindowwidth, oldwindowheight, newwindowwid
         camerastate.y = newwindowheight * 0.5 - centerworldy * camerastate.zoom
 
 def updatesmoothzoom(camerastate, anchorx, anchory, dt):
-    speed = 8.0  # higher = more responsive
+    speed = 2.5  # higher = more responsive
 
     oldzoom = camerastate.zoom
     target = camerastate.targetzoom
