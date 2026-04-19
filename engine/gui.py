@@ -45,26 +45,7 @@ def gui_lightencolor(colorvalue, amount):
         int(blue + (255 - blue) * amount),
     )
 
-def get_state_data(state_id):
-    for country in countries:
-        country_name = country["Country"]
-        states = country["States"]
 
-        for state_name, state_data in states.items():
-            if state_name.lower() == state_id.lower():
-
-                province_count = len(states)
-
-                return {
-                    "name": state_name,
-                    "country": country_name,
-                    "capital": state_data["capital"],
-                    "population": state_data["population"],
-                    "terrain": state_data["terrain"],
-                    "province_count": province_count
-                }
-
-    return None
 
 
 class EngineUI:
@@ -612,11 +593,7 @@ def gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
     screen.blit(labelsurface, labelsurface.get_rect(center=labelrectangle.center))
 
 
-def gui_drawhoverlabel(screen, fontobject, hovertext, mouseposition):
-    if not hovertext:
-        return
-
-    state = get_state_data(hovertext)
+def gui_drawhoverlabel(screen, fontobject, state, mouseposition):
     if not state:
         return
 
@@ -644,6 +621,7 @@ def gui_drawhoverlabel(screen, fontobject, hovertext, mouseposition):
     for text in text_surfaces:
         screen.blit(text, (x + padding, offset_y))
         offset_y += text.get_height()
+
 
 
 
