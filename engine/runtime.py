@@ -238,19 +238,27 @@ def loadcountrydata(filepath):
     statetocountrylookup = {}
     countrytocolorlookup = {}
 
-def get_state_data(state_id, statetocountry):
-    if state_id not in statetocountry:
-        return None
+def get_state_data(state_id, countries_full):
+    for country in countries_full:
+        country_name = country["Country"]
+        states = country["States"]
 
-    country_name = statetocountry[state_id]
+        for state_name, state_data in states.items():
+            if state_name.lower() == state_id.lower():
 
-    return {
-        "name": state_id,
-        "country": country_name,
-        "population": "Unknown",
-        "terrain": "Unknown",
-        "province_count": "N/A"
-    }
+                province_count = len(states)
+
+                return {
+                    "name": state_name,
+                    "country": country_name,
+                    "capital": state_data["capital"],
+                    "population": state_data["population"],
+                    "terrain": state_data["terrain"],
+                    "province_count": province_count
+                }
+
+    return None
+
 
     for countryindex, countryentry in enumerate(rawdata):
         if not isinstance(countryentry, dict):
