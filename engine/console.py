@@ -237,17 +237,46 @@ def rundevcommand(
 
 
     if commandname == "country_stats":
-        targetcountry = " ".join(commandparts[1:]).strip() if len(commandparts) >= 2 else (playercountry or "")
+        rawtargetcountry = " ".join(commandparts[1:]).strip() if len(commandparts) >= 2 else ""
 
+        if not rawtargetcountry:
+            countrystatlist = []
+            knowncountryset = set()
+            for province in provincemap.values():
+                owner = getowner(province)
+                controller = getcontroller(province)
+                if owner:
+                    knowncountryset.add(owner)
+                if controller:
+                    knowncountryset.add(controller)
 
-        if not targetcountry:
-            return "country pls"
+            for countryname in sorted(knowncountryset):
+                owned = [p for p in provincemap.values() if getowner(p) == countryname]
+                controlled = [p for p in provincemap.values() if getcontroller(p) == countryname]
+                controlledtroops = sum(max(0, int(p.get("troops", 0))) for p in controlled)
+                countrystatlist.append((countryname, len(owned), len(controlled), controlledtroops))
+
+            if not countrystatlist:
+                return "no countries"
+
+            countrystatlist.sort(key=lambda entry: (-entry[3], entry[0]))
+            maxrows = 8
+            visibleentries = countrystatlist[:maxrows]
+            summarytext = " ; ".join(
+                f"{name} owned={owned} controlled={controlled} controlled_troops={troops}"
+                for name, owned, controlled, troops in visibleentries
+            )
+            if len(countrystatlist) > maxrows:
+                summarytext += " ; ..."
+            return summarytext
+
+        targetcountry = resolvecountry(rawtargetcountry)
+        if targetcountry is None:
+            return f"unknown country: {rawtargetcountry}"
 
         owned = [p for p in provincemap.values() if getowner(p) == targetcountry]
         controlled = [p for p in provincemap.values() if getcontroller(p) == targetcountry]
         controlledtroops = sum(max(0, int(p.get("troops", 0))) for p in controlled)
-
-
 
         return (
             f"{targetcountry} | owned={len(owned)} controlled={len(controlled)} controlled_troops={controlledtroops}"

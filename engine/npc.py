@@ -39,6 +39,22 @@ class NpcDirector:
         self.invasiongarrison = max(3, self.minimumgarrison // 2)
         self.attritionattackthresholdratio = 0.8
         self.attritionattackcommitratio = 0.9
+        self.npcrecruitgoldcostmultiplier = max(
+            0.1,
+            float(self.economyconfig.get("npcrecruitgoldcostmultiplier", 1.0)),
+        )
+        self.npcrecruitpopulationcostmultiplier = max(
+            0.05,
+            float(self.economyconfig.get("npcrecruitpopulationcostmultiplier", 0.25)),
+        )
+        self.npcstategoldbonusperextrastate = max(
+            0,
+            int(self.economyconfig.get("npcstategoldbonusperextrastate", 1)),
+        )
+        self.npcstatepopulationbonusperextrastate = max(
+            0,
+            int(self.economyconfig.get("npcstatepopulationbonusperextrastate", 2)),
+        )
 
         self._initializecountryeconomy()
         self._refreshprovincetroopsintel()
@@ -136,7 +152,7 @@ class NpcDirector:
 
             summary["countriesProcessed"] += 1
 
-            self._applycountryeconomy(countryname, len(controlledprovinceids))
+            self._applycountryeconomy(countryname, controlledprovinceids)
 
             recruited = self._recruittroops(countryname, turnnumber, developmentmode=developmentmode)
             if recruited:
@@ -210,12 +226,34 @@ class NpcDirector:
         invadedids.sort()
         return invadedids
 
-    def _applycountryeconomy(self, countryname, controlledprovincecount):
+    def _countcontrolledstates(self, controlledprovinceids):
+        stateidset = set()
+        for provinceid in controlledprovinceids:
+            province = self.provincemap.get(provinceid)
+            if not province:
+                continue
+
+            stateid = province.get("parentstateid") or province.get("parentid")
+            if stateid is None:
+                continue
+            stateidset.add(stateid)
+
+        return len(stateidset)
+
+    def _applycountryeconomy(self, countryname, controlledprovinceids):
         economystate = self.countryeconomy.get(countryname)
         if not economystate:
             return
 
+        controlledprovincecount = len(controlledprovinceids)
+
         goldincome, populationgrowth = getendturneconomydelta(controlledprovincecount, economyconfig=self.economyconfig)
+
+        controlledstatecount = self._countcontrolledstates(controlledprovinceids)
+        extracontrolledstates = max(0, controlledstatecount - 1)
+        goldincome += extracontrolledstates * self.npcstategoldbonusperextrastate
+        populationgrowth += extracontrolledstates * self.npcstatepopulationbonusperextrastate
+
         economystate["gold"] += goldincome
         economystate["population"] += populationgrowth
 
@@ -252,6 +290,33 @@ class NpcDirector:
                 break
 
         return frontlineids
+
+    def _estimateadjacentenemythreat(self, countryname, provinceid, enemycountryset=None):
+        threatvalue = 0
+        for neighborprovinceid in self.provincegraph.get(provinceid, ()): 
+            neighborprovince = self.provincemap.get(neighborprovinceid)
+            if not neighborprovince:
+                continue
+
+            neighborcountry = getprovincecontroller(neighborprovince)
+            if not neighborcountry or neighborcountry == countryname:
+                continue
+            if enemycountryset is not None and neighborcountry not in enemycountryset:
+                continue
+
+            threatvalue += self._getestimateddefenders(neighborprovinceid)
+
+        return threatvalue
+
+    def _getfrontlinedesiredtroops(self, countryname, provinceid, enemycountryset=None):
+        enemythreat = self._estimateadjacentenemythreat(
+            countryname,
+            provinceid,
+            enemycountryset=enemycountryset,
+        )
+        recruitamount = int(self.economyconfig.get("recruitamount", 100))
+        pressurebuffer = max(2, recruitamount // 10)
+        return max(self.minimumgarrison, enemythreat + pressurebuffer)
 
     def _pickrecruitprovince(self, countryname):
         coreprovinceids = self._corecontrolledprovinceids(countryname)
@@ -293,11 +358,13 @@ class NpcDirector:
         recruitamount = int(self.economyconfig.get("recruitamount", 100))
         recruitgoldcostperunit = int(self.economyconfig.get("recruitgoldcostperunit", 1))
         recruitpopulationcostperunit = int(self.economyconfig.get("recruitpopulationcostperunit", 1))
-        requiredgold, requiredpopulation = getrecruitcosts(
+        basegoldcost, basepopulationcost = getrecruitcosts(
             recruitamount,
             recruitgoldcostperunit,
             recruitpopulationcostperunit,
         )
+        requiredgold = max(1, int(round(basegoldcost * self.npcrecruitgoldcostmultiplier)))
+        requiredpopulation = max(1, int(round(basepopulationcost * self.npcrecruitpopulationcostmultiplier)))
 
         if not canrecruittroops(
             economystate.get("gold", 0),
@@ -386,9 +453,24 @@ class NpcDirector:
             return 0
 
         targetprovinceidset = set(targetprovinceids)
-        sourceprovinceids = sorted(provinceid for provinceid in controlledprovinceidset if provinceid not in targetprovinceidset)
+        sourceprovinceids = sorted(
+            controlledprovinceidset,
+            key=lambda provinceid: int(self.provincemap[provinceid].get("troops", 0)),
+            reverse=True,
+        )
         if not sourceprovinceids:
             return 0
+
+        enemycountryset = set(self.warlookup.get(countryname, set()))
+        targetdesiredlookup = {
+            provinceid: self._getfrontlinedesiredtroops(
+                countryname,
+                provinceid,
+                enemycountryset=enemycountryset,
+            )
+            for provinceid in targetprovinceidset
+        }
+        incominglookup = {provinceid: 0 for provinceid in targetprovinceidset}
 
         orderscreated = 0
         for sourceprovinceid in sourceprovinceids:
@@ -396,29 +478,66 @@ class NpcDirector:
                 break
 
             sourceprovince = self.provincemap[sourceprovinceid]
-            sourcetroops = int(sourceprovince.get("troops", 0))
-            movabletroops = sourcetroops - self.minimumgarrison
-            if movabletroops <= 0:
-                continue
+            while orderscreated < maxorders:
+                sourcetroops = int(sourceprovince.get("troops", 0))
+                if sourceprovinceid in targetdesiredlookup:
+                    minholdingtroops = max(self.minimumgarrison, targetdesiredlookup[sourceprovinceid])
+                else:
+                    minholdingtroops = self.minimumgarrison
 
-            destinationprovinceid, path = self._findshortestpathtotarget(
-                sourceprovinceid,
-                targetprovinceidset,
-                controlledprovinceidset,
-            )
-            if not destinationprovinceid or len(path) < 2:
-                continue
+                movabletroops = sourcetroops - minholdingtroops
+                if movabletroops <= 0:
+                    break
 
-            sourceprovince["troops"] -= movabletroops
-            self._appendmovementorder(
-                movementorderlist,
-                countryname,
-                sourceprovinceid,
-                path,
-                movabletroops,
-                turnnumber,
-            )
-            orderscreated += 1
+                besttargetid = None
+                besttargetpath = []
+                besttargetscore = None
+
+                for targetprovinceid in sorted(targetprovinceidset):
+                    if targetprovinceid == sourceprovinceid:
+                        continue
+
+                    projectedtroops = int(self.provincemap[targetprovinceid].get("troops", 0)) + incominglookup[targetprovinceid]
+                    targetdeficit = targetdesiredlookup[targetprovinceid] - projectedtroops
+                    if targetdeficit <= 0:
+                        continue
+
+                    path = findprovincepath(
+                        sourceprovinceid,
+                        targetprovinceid,
+                        self.provincemap,
+                        self.provincegraph,
+                        allowedprovinceidset=controlledprovinceidset,
+                    )
+                    if len(path) < 2:
+                        continue
+
+                    targetscore = (targetdeficit * 100) - len(path)
+                    if besttargetscore is None or targetscore > besttargetscore:
+                        besttargetid = targetprovinceid
+                        besttargetpath = path
+                        besttargetscore = targetscore
+
+                if besttargetid is None or len(besttargetpath) < 2:
+                    break
+
+                projectedtroops = int(self.provincemap[besttargetid].get("troops", 0)) + incominglookup[besttargetid]
+                targetdeficit = targetdesiredlookup[besttargetid] - projectedtroops
+                movecount = min(movabletroops, max(1, targetdeficit))
+                if movecount <= 0:
+                    break
+
+                sourceprovince["troops"] -= movecount
+                self._appendmovementorder(
+                    movementorderlist,
+                    countryname,
+                    sourceprovinceid,
+                    besttargetpath,
+                    movecount,
+                    turnnumber,
+                )
+                incominglookup[besttargetid] += movecount
+                orderscreated += 1
 
         return orderscreated
 

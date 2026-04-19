@@ -86,3 +86,37 @@ def test_console_war_command_rejects_unknown_country():
 
     assert result == "unknown country: Atlantis"
     assert captured == []
+
+
+def test_country_stats_without_arg_lists_npc_troops():
+    provincemap = {
+        "P1": {
+            "id": "P1",
+            "ownercountry": "Malaysia",
+            "controllercountry": "Malaysia",
+            "country": "Malaysia",
+            "troops": 12,
+        },
+        "P2": {
+            "id": "P2",
+            "ownercountry": "Thailand",
+            "controllercountry": "Thailand",
+            "country": "Thailand",
+            "troops": 40,
+        },
+    }
+
+    result = rundevcommand(
+        "country_stats",
+        provincemap=provincemap,
+        playercountry="Malaysia",
+        countrytocolor={},
+        fallbackcolor=(0, 0, 0),
+        troopbadgelist=[],
+        eventbus=None,
+        currentturnnumber=1,
+    )
+
+    assert "Malaysia" in result
+    assert "Thailand" in result
+    assert "controlled_troops=40" in result
