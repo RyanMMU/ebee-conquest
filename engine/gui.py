@@ -475,12 +475,8 @@ class EngineUI:
         for badgecenter, badgetroops in self.troopbadgelist:
             gui_drawtroopcountbadge(screen, badgecenter, badgetroops, self.troopbadgefont)
         if self.hovertextcurrent:
-            hoverlabel = self.hoverfont.render("id:" + self.hovertextcurrent, True, (255, 255, 255))
             mousex, mousey = self.hovermousepos
-            drawx = min(mousex + 16, max(0, self.window_size[0] - hoverlabel.get_width()))
-            drawy = min(mousey + 16, max(0, self.window_size[1] - hoverlabel.get_height()))
-            screen.blit(hoverlabel, (drawx, drawy))
-
+            gui_drawhoverlabel(screen, self.hoverfont, self.hovertextcurrent, (mousex, mousey))
 
 
 
