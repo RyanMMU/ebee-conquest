@@ -36,7 +36,15 @@ class NpcDirector:
         self.maxdefenseordersperturn = 4
         self.maxinvasionordersperturn = 6
         self.maxinvasiontargetsperenemy = 2
+        self.npcrecruitslotsperturn = max(
+            1,
+            int(self.economyconfig.get("npcrecruitslotsperturn", 2)),
+        )
         self.invasiongarrison = max(3, self.minimumgarrison // 2)
+        self.frontlineoffensivereservefraction = max(
+            0.15,
+            min(0.9, float(self.economyconfig.get("npcfrontlineoffensivereservefraction", 0.45))),
+        )
         self.attritionattackthresholdratio = 0.8
         self.attritionattackcommitratio = 0.9
         self.npcrecruitgoldcostmultiplier = max(
@@ -133,6 +141,8 @@ class NpcDirector:
         return aliaslookup.get(countrytext.lower(), countrytext)
 
     def executeturn(self, movementorderlist, turnnumber, developmentmode=False):
+        # Keep signature compatibility; NPC behavior ignores development mode.
+        _ = developmentmode
         if movementorderlist is None:
             movementorderlist = []
 
@@ -142,6 +152,7 @@ class NpcDirector:
             "recruits": 0,
             "defenseOrders": 0,
             "invasionOrders": 0,
+            "idleBorderOrders": 0,
             "ordersCreated": 0,
         }
 
@@ -154,17 +165,29 @@ class NpcDirector:
 
             self._applycountryeconomy(countryname, controlledprovinceids)
 
-            recruited = self._recruittroops(countryname, turnnumber, developmentmode=developmentmode)
+            recruited = self._recruittroops(countryname, turnnumber)
             if recruited:
                 summary["recruits"] += 1
 
             defenseorders = self._reacttoinvasion(countryname, movementorderlist, turnnumber)
             invasionorders = self._invadecountry(countryname, movementorderlist, turnnumber)
+            idleborderorders = 0
+            if not set(self.warlookup.get(countryname, set())):
+                idleborderorders = self._buildupborderforceswhenidle(
+                    countryname,
+                    movementorderlist,
+                    turnnumber,
+                )
 
             summary["defenseOrders"] += defenseorders
             summary["invasionOrders"] += invasionorders
+            summary["idleBorderOrders"] += idleborderorders
 
-        summary["ordersCreated"] = summary["defenseOrders"] + summary["invasionOrders"]
+        summary["ordersCreated"] = (
+            summary["defenseOrders"]
+            + summary["invasionOrders"]
+            + summary["idleBorderOrders"]
+        )
         self._refreshprovincetroopsintel()
         return summary
 
@@ -318,10 +341,24 @@ class NpcDirector:
         pressurebuffer = max(2, recruitamount // 10)
         return max(self.minimumgarrison, enemythreat + pressurebuffer)
 
-    def _pickrecruitprovince(self, countryname):
+    def _getfrontlineoffensivebaseline(self, countryname, frontlineprovincecount):
+        if frontlineprovincecount <= 0:
+            return self.minimumgarrison
+
+        totalcountrytroops = 0
+        for provinceid in self._controlledprovinceids(countryname):
+            totalcountrytroops += int(self.provincemap[provinceid].get("troops", 0))
+
+        offensivereservetroops = int(totalcountrytroops * self.frontlineoffensivereservefraction)
+        return max(self.minimumgarrison, offensivereservetroops // frontlineprovincecount)
+
+    def _pickrecruitprovinceids(self, countryname, maxcount=1):
+        if maxcount <= 0:
+            return []
+
         coreprovinceids = self._corecontrolledprovinceids(countryname)
         if not coreprovinceids:
-            return None
+            return []
         coreprovinceidset = set(coreprovinceids)
 
         warenemyset = set(self.warlookup.get(countryname, set()))
@@ -333,22 +370,32 @@ class NpcDirector:
             ]
             candidateprovinceids = frontlinecoreprovinceids if frontlinecoreprovinceids else coreprovinceids
         else:
-            candidateprovinceids = coreprovinceids
+            peacebordercoreprovinceids = [
+                provinceid
+                for provinceid in sorted(self._frontlineprovinceids(countryname))
+                if provinceid in coreprovinceidset
+            ]
+            candidateprovinceids = peacebordercoreprovinceids if peacebordercoreprovinceids else coreprovinceids
 
-        if not candidateprovinceids:
-            return None
-
-        return min(
+        candidateprovinceids = sorted(
             candidateprovinceids,
             key=lambda provinceid: (
                 int(self.provincemap[provinceid].get("troops", 0)),
                 provinceid,
             ),
         )
+        return candidateprovinceids[:maxcount]
 
-    def _recruittroops(self, countryname, turnnumber, developmentmode=False):
-        targetprovinceid = self._pickrecruitprovince(countryname)
-        if not targetprovinceid:
+    def _pickrecruitprovince(self, countryname):
+        targetprovinceids = self._pickrecruitprovinceids(countryname, maxcount=1)
+        if not targetprovinceids:
+            return None
+
+        return targetprovinceids[0]
+
+    def _recruittroops(self, countryname, turnnumber):
+        targetprovinceids = self._pickrecruitprovinceids(countryname, maxcount=self.npcrecruitslotsperturn)
+        if not targetprovinceids:
             return False
 
         economystate = self.countryeconomy.get(countryname)
@@ -358,39 +405,49 @@ class NpcDirector:
         recruitamount = int(self.economyconfig.get("recruitamount", 100))
         recruitgoldcostperunit = int(self.economyconfig.get("recruitgoldcostperunit", 1))
         recruitpopulationcostperunit = int(self.economyconfig.get("recruitpopulationcostperunit", 1))
-        basegoldcost, basepopulationcost = getrecruitcosts(
-            recruitamount,
-            recruitgoldcostperunit,
-            recruitpopulationcostperunit,
-        )
-        requiredgold = max(1, int(round(basegoldcost * self.npcrecruitgoldcostmultiplier)))
-        requiredpopulation = max(1, int(round(basepopulationcost * self.npcrecruitpopulationcostmultiplier)))
+        recruitslotcount = max(1, min(len(targetprovinceids), int(self.npcrecruitslotsperturn)))
+        perprovincebase = recruitamount // recruitslotcount
+        remainder = recruitamount % recruitslotcount
 
-        if not canrecruittroops(
-            economystate.get("gold", 0),
-            economystate.get("population", 0),
-            requiredgold,
-            requiredpopulation,
-            developmentmode=developmentmode,
-        ):
-            return False
+        recruitedany = False
+        for recruitindex, targetprovinceid in enumerate(targetprovinceids[:recruitslotcount]):
+            provinceamount = perprovincebase + (1 if recruitindex < remainder else 0)
+            if provinceamount <= 0:
+                continue
 
-        self.provincemap[targetprovinceid]["troops"] += recruitamount
-        if not developmentmode:
+            basegoldcost, basepopulationcost = getrecruitcosts(
+                provinceamount,
+                recruitgoldcostperunit,
+                recruitpopulationcostperunit,
+            )
+            requiredgold = max(1, int(round(basegoldcost * self.npcrecruitgoldcostmultiplier)))
+            requiredpopulation = max(1, int(round(basepopulationcost * self.npcrecruitpopulationcostmultiplier)))
+
+            if not canrecruittroops(
+                economystate.get("gold", 0),
+                economystate.get("population", 0),
+                requiredgold,
+                requiredpopulation,
+            ):
+                continue
+
+            self.provincemap[targetprovinceid]["troops"] += provinceamount
             economystate["gold"] -= requiredgold
             economystate["population"] -= requiredpopulation
 
-        self._emit(
-            EngineEventType.TROOPSRECRUITED,
-            {
-                "country": countryname,
-                "provinceId": targetprovinceid,
-                "amount": recruitamount,
-                "turn": turnnumber,
-                "isNpc": True,
-            },
-        )
-        return True
+            self._emit(
+                EngineEventType.TROOPSRECRUITED,
+                {
+                    "country": countryname,
+                    "provinceId": targetprovinceid,
+                    "amount": provinceamount,
+                    "turn": turnnumber,
+                    "isNpc": True,
+                },
+            )
+            recruitedany = True
+
+        return recruitedany
 
     def _findshortestpathtotarget(self, sourceprovinceid, targetprovinceids, allowedprovinceidset):
         bestpath = []
@@ -462,23 +519,28 @@ class NpcDirector:
             return 0
 
         enemycountryset = set(self.warlookup.get(countryname, set()))
+        offensivebaseline = self._getfrontlineoffensivebaseline(countryname, len(targetprovinceidset))
         targetdesiredlookup = {
-            provinceid: self._getfrontlinedesiredtroops(
-                countryname,
-                provinceid,
-                enemycountryset=enemycountryset,
+            provinceid: max(
+                self._getfrontlinedesiredtroops(
+                    countryname,
+                    provinceid,
+                    enemycountryset=enemycountryset,
+                ),
+                offensivebaseline,
             )
             for provinceid in targetprovinceidset
         }
         incominglookup = {provinceid: 0 for provinceid in targetprovinceidset}
 
+        dynamicmaxorders = max(maxorders, len(targetprovinceidset) * 3)
         orderscreated = 0
         for sourceprovinceid in sourceprovinceids:
-            if orderscreated >= maxorders:
+            if orderscreated >= dynamicmaxorders:
                 break
 
             sourceprovince = self.provincemap[sourceprovinceid]
-            while orderscreated < maxorders:
+            while orderscreated < dynamicmaxorders:
                 sourcetroops = int(sourceprovince.get("troops", 0))
                 if sourceprovinceid in targetdesiredlookup:
                     minholdingtroops = max(self.minimumgarrison, targetdesiredlookup[sourceprovinceid])
@@ -541,6 +603,20 @@ class NpcDirector:
 
         return orderscreated
 
+    def _buildupborderforceswhenidle(self, countryname, movementorderlist, turnnumber):
+        borderprovinceids = sorted(self._frontlineprovinceids(countryname))
+        if not borderprovinceids:
+            return 0
+
+        maxidleorders = max(2, min(10, len(borderprovinceids) * 2))
+        return self._movereservestotargets(
+            countryname,
+            borderprovinceids,
+            movementorderlist,
+            turnnumber,
+            maxorders=maxidleorders,
+        )
+
     def _reacttoinvasion(self, countryname, movementorderlist, turnnumber):
         warenemyset = set(self.warlookup.get(countryname, set()))
         if not warenemyset:
@@ -585,6 +661,25 @@ class NpcDirector:
                     targetids.add(neighborprovinceid)
 
         return sorted(targetids)
+
+    def _getcountrystrengthscore(self, countryname):
+        controlledprovinceids = self._controlledprovinceids(countryname)
+        if not controlledprovinceids:
+            return 0
+
+        controlledtroops = sum(
+            int(self.provincemap[provinceid].get("troops", 0))
+            for provinceid in controlledprovinceids
+        )
+        controlledstatecount = self._countcontrolledstates(controlledprovinceids)
+
+        provinceweight = max(2, self.minimumgarrison // 2)
+        stateweight = max(6, self.minimumgarrison)
+        return (
+            controlledtroops
+            + (len(controlledprovinceids) * provinceweight)
+            + (controlledstatecount * stateweight)
+        )
 
     def _buildattackplans(self, countryname, enemycountry, targetprovinceid):
         allowedprovinceidset = {
@@ -633,14 +728,33 @@ class NpcDirector:
         if not warenemyset:
             return 0
 
+        invasionorderlimit = max(
+            self.maxinvasionordersperturn * max(1, len(warenemyset)),
+            len(warenemyset) * max(2, self.maxinvasiontargetsperenemy) * 3,
+        )
         orderscreated = 0
         for enemycountry in warenemyset:
-            if orderscreated >= self.maxinvasionordersperturn:
+            if orderscreated >= invasionorderlimit:
                 break
+
+            attackerstrength = float(self._getcountrystrengthscore(countryname))
+            enemystrength = float(self._getcountrystrengthscore(enemycountry))
+            strengthratio = (attackerstrength + 1.0) / (enemystrength + 1.0)
+            enemyaggression = max(1.0, min(2.2, strengthratio))
+            enemyorderlimit = max(2, int(self.maxinvasionordersperturn * enemyaggression))
+            enemyorderscreated = 0
 
             targetprovinceids = self._enemybordertargetids(countryname, enemycountry)
             if not targetprovinceids:
                 continue
+
+            targetcountlimit = max(
+                self.maxinvasiontargetsperenemy,
+                min(
+                    len(targetprovinceids),
+                    max(2, int(len(targetprovinceids) * (0.55 + 0.35 * enemyaggression))),
+                ),
+            )
 
             prioritizedtargetids = sorted(
                 targetprovinceids,
@@ -648,10 +762,10 @@ class NpcDirector:
                     self._getestimateddefenders(provinceid),
                     provinceid,
                 ),
-            )[: self.maxinvasiontargetsperenemy]
+            )[:targetcountlimit]
 
             for targetprovinceid in prioritizedtargetids:
-                if orderscreated >= self.maxinvasionordersperturn:
+                if orderscreated >= invasionorderlimit or enemyorderscreated >= enemyorderlimit:
                     break
 
                 attackplanlist = self._buildattackplans(countryname, enemycountry, targetprovinceid)
@@ -659,21 +773,44 @@ class NpcDirector:
                     continue
 
                 defendercount = self._getestimateddefenders(targetprovinceid)
+                currentdefendercount = int(self.provincemap[targetprovinceid].get("troops", 0))
+                hasfreshdefenderdrop = currentdefendercount < defendercount
                 totalattackers = sum(plan["troops"] for plan in attackplanlist)
 
                 cancapture = totalattackers > defendercount
+                bonuscapturecommitratio = 1.0 + max(0.0, min(0.65, (enemyaggression - 1.0) * 0.4))
                 if cancapture:
-                    troopssendneeded = defendercount + 1
+                    troopssendneeded = max(
+                        defendercount + 1,
+                        int(defendercount * bonuscapturecommitratio) + 1,
+                    )
                 else:
-                    minimumattritionforce = max(1, int(defendercount * self.attritionattackthresholdratio))
+                    # If current defenders dropped far below previous intel this turn,
+                    # avoid instant opportunistic attrition attacks; require capture-level force.
+                    if hasfreshdefenderdrop:
+                        continue
+
+                    effectiveattritionthreshold = max(
+                        0.45,
+                        self.attritionattackthresholdratio - ((enemyaggression - 1.0) * 0.25),
+                    )
+                    minimumattritionforce = max(1, int(defendercount * effectiveattritionthreshold))
                     if totalattackers < minimumattritionforce:
                         continue
 
-                    targetassaultforce = max(1, int(defendercount * self.attritionattackcommitratio))
+                    effectivecommitratio = min(
+                        1.35,
+                        self.attritionattackcommitratio + ((enemyaggression - 1.0) * 0.2),
+                    )
+                    targetassaultforce = max(1, int(defendercount * effectivecommitratio))
                     troopssendneeded = min(totalattackers, targetassaultforce)
 
+                troopssendneeded = min(totalattackers, max(1, troopssendneeded))
                 for attackplan in attackplanlist:
-                    if orderscreated >= self.maxinvasionordersperturn:
+                    if (
+                        orderscreated >= invasionorderlimit
+                        or enemyorderscreated >= enemyorderlimit
+                    ):
                         break
 
                     sourceprovinceid = attackplan["sourceProvinceId"]
@@ -683,7 +820,15 @@ class NpcDirector:
                     if movabletroops <= 0:
                         continue
 
-                    movingtroops = min(movabletroops, max(1, troopssendneeded))
+                    recruitamount = int(self.economyconfig.get("recruitamount", 100))
+                    wavesizebase = max(
+                        1,
+                        int(max(recruitamount // 2, defendercount * (0.35 + (enemyaggression - 1.0) * 0.15))),
+                    )
+                    movingtroops = min(
+                        movabletroops,
+                        max(1, min(troopssendneeded, wavesizebase)),
+                    )
                     sourceprovince["troops"] -= movingtroops
                     self._appendmovementorder(
                         movementorderlist,
@@ -694,6 +839,7 @@ class NpcDirector:
                         turnnumber,
                     )
                     orderscreated += 1
+                    enemyorderscreated += 1
                     troopssendneeded -= movingtroops
 
                     if troopssendneeded <= 0:

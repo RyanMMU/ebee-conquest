@@ -67,6 +67,48 @@ def test_npc_recruits_for_non_player_country():
     assert totaltroops_b == 15
 
 
+def test_npc_recruitment_splits_across_multiple_core_provinces():
+    provincemap = {
+        "A1": _province("A1", "A", troops=0, center=(0.0, 0.0)),
+        "B1": _province("B1", "B", troops=0, center=(1.0, 0.0)),
+        "B2": _province("B2", "B", troops=0, center=(2.0, 0.0)),
+    }
+    provincegraph = {
+        "A1": set(),
+        "B1": {"B2"},
+        "B2": {"B1"},
+    }
+
+    director, _events = _director(provincemap, provincegraph, playercountry="A", wars=set())
+    movementorderlist = []
+    summary = director.executeturn(movementorderlist, turnnumber=1)
+
+    assert summary["recruits"] == 1
+    assert provincemap["B1"]["troops"] == 5
+    assert provincemap["B2"]["troops"] == 5
+
+
+def test_npc_idle_recruit_prefers_border_core_province():
+    provincemap = {
+        "A1": _province("A1", "A", troops=0, center=(0.0, 0.0)),
+        "B1": _province("B1", "B", troops=80, center=(1.0, 0.0)),
+        "B2": _province("B2", "B", troops=0, center=(1.0, 1.0)),
+    }
+    provincegraph = {
+        "A1": {"B1"},
+        "B1": {"A1", "B2"},
+        "B2": {"B1"},
+    }
+
+    director, _events = _director(provincemap, provincegraph, playercountry="A", wars=set())
+    movementorderlist = []
+    summary = director.executeturn(movementorderlist, turnnumber=1)
+
+    assert summary["recruits"] == 1
+    # Border province B1 should still receive recruits even when interior is weaker.
+    assert provincemap["B1"]["troops"] >= 85
+
+
 def test_npc_recruit_uses_gold_and_slight_population_cost():
     economyconfig = _economy_config()
     economyconfig.update(
@@ -109,6 +151,46 @@ def test_npc_recruit_uses_gold_and_slight_population_cost():
     # Gold uses full recruit cost, population uses a lighter NPC recruit cost.
     assert director.countryeconomy["B"]["gold"] == beforegold - 20
     assert director.countryeconomy["B"]["population"] == beforepopulation - 5
+
+
+def test_npc_development_mode_does_not_bypass_recruit_costs():
+    economyconfig = _economy_config()
+    economyconfig.update(
+        {
+            "startinggold": 0,
+            "startingpopulation": 0,
+            "recruitamount": 10,
+            "recruitgoldcostperunit": 10,
+            "recruitpopulationcostperunit": 10,
+            "mingoldincome": 0,
+            "goldincomedivisor": 9999,
+            "minpopulationgrowth": 0,
+            "populationgrowthdivisor": 9999,
+        }
+    )
+
+    provincemap = {
+        "A1": _province("A1", "A", troops=0, center=(0.0, 0.0)),
+        "B1": _province("B1", "B", troops=0, center=(1.0, 0.0)),
+    }
+    provincegraph = {
+        "A1": {"B1"},
+        "B1": {"A1"},
+    }
+
+    director, _events = _director(
+        provincemap,
+        provincegraph,
+        playercountry="A",
+        wars=set(),
+        economy_config=economyconfig,
+    )
+    movementorderlist = []
+
+    summary = director.executeturn(movementorderlist, turnnumber=1, developmentmode=True)
+
+    assert summary["recruits"] == 0
+    assert provincemap["B1"]["troops"] == 0
 
 
 def test_npc_economy_slightly_favors_more_states():
@@ -346,3 +428,92 @@ def test_npc_distributes_single_large_reserve_across_frontline():
     assert summary["ordersCreated"] >= 2
     assert "B2" in frontline_destinations
     assert "B3" in frontline_destinations
+
+
+def test_npc_idle_buildup_moves_interior_reserve_to_border():
+    provincemap = {
+        "A1": _province("A1", "A", controllercountry="A", troops=0, center=(0.0, 0.0)),
+        "B1": _province("B1", "B", controllercountry="B", troops=120, center=(1.0, 0.0)),
+        "B2": _province("B2", "B", controllercountry="B", troops=0, center=(2.0, 0.0)),
+    }
+    provincegraph = {
+        "A1": {"B2"},
+        "B1": {"B2"},
+        "B2": {"B1", "A1"},
+    }
+
+    director, _events = _director(provincemap, provincegraph, playercountry="A", wars=set())
+    movementorderlist = []
+    summary = director.executeturn(movementorderlist, turnnumber=9)
+
+    borderorders = [
+        order
+        for order in movementorderlist
+        if order["country"] == "B"
+        and order["path"][0] == "B1"
+        and order["path"][-1] == "B2"
+    ]
+    assert summary["idleBorderOrders"] >= 1
+    assert len(borderorders) >= 1
+
+
+def test_npc_large_stack_attacks_multiple_enemy_targets():
+    provincemap = {
+        "A1": _province("A1", "A", controllercountry="A", troops=0, center=(0.0, 0.0)),
+        "B1": _province("B1", "B", controllercountry="B", troops=120, center=(1.0, 0.0)),
+        "C1": _province("C1", "C", controllercountry="C", troops=12, center=(2.0, 0.0)),
+        "C2": _province("C2", "C", controllercountry="C", troops=10, center=(2.0, 1.0)),
+    }
+    provincegraph = {
+        "A1": set(),
+        "B1": {"C1", "C2"},
+        "C1": {"B1"},
+        "C2": {"B1"},
+    }
+
+    director, _events = _director(provincemap, provincegraph, playercountry="A", wars=set())
+    director.sync_player_wars("A", set(), warpairset={("B", "C")})
+
+    movementorderlist = []
+    summary = director.executeturn(movementorderlist, turnnumber=10)
+
+    invadedtargets = {
+        order["path"][-1]
+        for order in movementorderlist
+        if order["country"] == "B" and order["path"][-1] in {"C1", "C2"}
+    }
+    assert summary["invasionOrders"] >= 2
+    assert "C1" in invadedtargets
+    assert "C2" in invadedtargets
+
+
+def test_npc_dominant_country_sends_multiple_waves_on_single_front():
+    provincemap = {
+        "A1": _province("A1", "A", controllercountry="A", troops=0, center=(0.0, 0.0)),
+        "B1": _province("B1", "B", controllercountry="B", troops=180, center=(1.0, 0.0)),
+        "B2": _province("B2", "B", controllercountry="B", troops=60, center=(1.0, 1.0)),
+        "C1": _province("C1", "C", controllercountry="C", troops=90, center=(2.0, 0.0)),
+    }
+    provincegraph = {
+        "A1": set(),
+        "B1": {"C1", "B2"},
+        "B2": {"B1"},
+        "C1": {"B1"},
+    }
+
+    director, _events = _director(provincemap, provincegraph, playercountry="A", wars=set())
+    director.sync_player_wars("A", set(), warpairset={("B", "C")})
+
+    movementorderlist = []
+    summary = director.executeturn(movementorderlist, turnnumber=11)
+
+    frontlinewaves = [
+        order
+        for order in movementorderlist
+        if order["country"] == "B" and order["path"][-1] == "C1"
+    ]
+    totalcommitted = sum(order["amount"] for order in frontlinewaves)
+
+    assert summary["invasionOrders"] >= 2
+    assert len(frontlinewaves) >= 2
+    assert totalcommitted > 90

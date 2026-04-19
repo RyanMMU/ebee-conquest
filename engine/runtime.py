@@ -1536,7 +1536,6 @@ def main(eventbus=None):
                 npcdirector.executeturn(
                     movementorderlist,
                     currentturnnumber,
-                    developmentmode=developmentmode,
                 )
                 currentturnnumber += 1
                 routepreviewset = set()

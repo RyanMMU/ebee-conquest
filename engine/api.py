@@ -270,6 +270,8 @@ class EbeeEngine:
         )
 
     def runnpcturn(self, movementorderlist, developmentmode=False):
+        # Keep signature compatibility; NPC behavior ignores development mode.
+        _ = developmentmode
         if self.npcdirector is None:
             self.setupnpc(playercountry=self.playercountry)
 
@@ -282,7 +284,6 @@ class EbeeEngine:
         summary = self.npcdirector.executeturn(
             movementorderlist,
             self.currentturnnumber,
-            developmentmode=developmentmode,
         )
         return summary
 
