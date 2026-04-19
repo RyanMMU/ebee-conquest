@@ -238,6 +238,9 @@ def loadcountrydata(filepath):
     statetocountrylookup = {}
     countrytocolorlookup = {}
 
+with open("countries.json", "r", encoding="utf-8") as f:
+    countries_full = json.load(f)
+
 def get_state_data(state_id, countries_full):
     for country in countries_full:
         country_name = country["Country"]
