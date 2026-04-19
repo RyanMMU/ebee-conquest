@@ -1012,7 +1012,7 @@ def main(eventbus=None):
                             statetocountry, _ = loadcountrydata("countries.json")
 
                             if hoveredstateid:
-                                hovertext = get_state_data(hoveredstateid, statetocountry)
+                                hovertext = get_state_data(hoveredstateid, countries_full)
                             else:
                                 hovertext = None
 
