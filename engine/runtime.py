@@ -984,9 +984,15 @@ def main(eventbus=None):
                             if gamephase == "choosecountry" and not stateshape.get("country"):
                                 continue
                             itemhovered = True
-                            hovertext = drawitem["id"]
+
                             hoveredstateid = drawitem.get("parentid", stateshape["id"])
                             hoveredprovinceid = drawitem["id"] if "parentid" in drawitem else None
+
+                            # change hovertext into FULL DATA
+                            if hoveredstateid:
+                                hovertext = get_state_data(hoveredstateid, countries)
+                            else:
+                                hovertext = None
 
 
 
