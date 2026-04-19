@@ -391,6 +391,8 @@ def eso_buildcountryborderentries(provincemap, eso_provinceedgepairlist, eso_seg
 
 
 
+
+
 def getkruskalbridges(segmentlist, maxgapdistance=16.0):
 
     if not segmentlist:
@@ -496,7 +498,6 @@ def getkruskalbridges(segmentlist, maxgapdistance=16.0):
         )
 
     return bridgelines
-
 
 
 
@@ -1164,6 +1165,7 @@ def main(eventbus=None):
         if gamephase == "play" and playercountry and (frontlineplacementmode or activefrontlineedgekeyset):
             frontlineborderedgelist = getcountryborderedges(provincemap, provincegraph, playercountry)
             frontlineedgebykey = {edge["edgekey"]: edge for edge in frontlineborderedgelist}
+
             currentfrontlineedgekeyset = set(frontlineedgebykey.keys())
             activefrontlineedgekeyset.intersection_update(currentfrontlineedgekeyset)
 

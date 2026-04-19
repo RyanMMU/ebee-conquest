@@ -927,6 +927,8 @@ def gui_drawcountrylabels(
 
 def gui_arrowhead(screen, endpoint, directionvector, colorvalue, arrowsize, linewidth):
     vectorlength = math.hypot(directionvector[0], directionvector[1])
+    if vectorlength <= 1e-9: # divide by zero error
+        return
 
 
     #skip drawing arrowhead
@@ -1028,6 +1030,8 @@ def gui_drawmovementorderpaths(
                 segmentstart = pathpointsscreen[segmentindex]
                 segmentend = pathpointsscreen[segmentindex + 1]
                 directionvector = (segmentend[0] - segmentstart[0], segmentend[1] - segmentstart[1])
+                if abs(directionvector[0]) <= 1e-9 and abs(directionvector[1]) <= 1e-9:
+                    continue
                 gui_arrowhead(screen, segmentend, directionvector, linecolor, arrowsize, linewidth)
 
 

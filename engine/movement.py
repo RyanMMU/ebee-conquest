@@ -53,6 +53,7 @@ def prepareprovincemetadata(provincelist):
 def buildprovinceadjacencygraph(provincemap, onprogress=None):
     provinceidlist = list(provincemap.keys())
     totalprovincecount = len(provinceidlist)
+
     # TEST OPTIMIZATION 3 APRIL
     totalprogresssteps = max(1, totalprovincecount * 2)
     if onprogress and not onprogress(0, totalprogresssteps):
@@ -62,6 +63,8 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
     adjacencytestpadding = 1
     gridlookup = {}
     provinceentrylist = []
+
+
     for provinceindex, provinceid in enumerate(provinceidlist):
         provincerectangle = provincemap[provinceid]["rectangle"]
         minimumgridx = int(math.floor((provincerectangle.left - adjacencytestpadding) / gridcellsize))
@@ -81,6 +84,8 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
         provinceid, firstrectangle, minimumgridx, maximumgridx, minimumgridy, maximumgridy = provinceentry
         candidateindexset = set()
 
+
+
         for gridx in range(minimumgridx, maximumgridx + 1):
             for gridy in range(minimumgridy, maximumgridy + 1):
                 for candidateindex in gridlookup.get((gridx, gridy), ()): 
@@ -88,15 +93,35 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
                     if candidateindex > provinceindex:
                         candidateindexset.add(candidateindex)
 
+
+
+
         for candidateindex in candidateindexset:
-            candidateprovinceid, secondrectangle, _, _, _, _ = provinceentrylist[candidateindex]
+            candidateprovinceid, secondrectangle, dontneed, dontneed, dontneed, dontneed = provinceentrylist[candidateindex]
             if rectanglesclose(firstrectangle, secondrectangle, padding=adjacencytestpadding):
+                firstprovince = provincemap.get(provinceid)
+                secondprovince = provincemap.get(candidateprovinceid)
+                if not firstprovince or not secondprovince:
+                    continue
+
+                # require a real shared border to avoid false positives from bounding-box proximity.
+                sharedsegments = getsharedbordersegments(
+                    firstprovince,
+                    secondprovince,
+                    linetolerancee=0.9,
+                    alignmenttolerance=0.16,
+                    minlength=0.48 * 0.4, # HIGHER WILL CAUSE BORDER ISSUES, LOWER WILL CAUSE PERFORMANCE ISSUES, 0.48 is the length of a diagonal of a grid cell, so this means the shared border must be at least 40% of that diagonal to count as adjacent
+                )
+                if not sharedsegments:
+                    continue
+
                 adjacencygraph[provinceid].add(candidateprovinceid)
                 adjacencygraph[candidateprovinceid].add(provinceid)
 
         if onprogress and (provinceindex == 0 or (provinceindex + 1) % 100 == 0 or (provinceindex + 1) == totalprovincecount):
             if not onprogress(totalprovincecount + provinceindex + 1, totalprogresssteps):
                 return None
+
 
     return adjacencygraph
     # optimization issue, cannot run on Benedict's AMD computer, might need to optimize the adjacency graph building
@@ -251,6 +276,9 @@ def processmovementorders(movementorderlist, provincemap, emit):
                             "newController": movingcountry,
                         },
                     )  #link to event
+
+            # Move at most one hop per turn so units cannot skip provinces.
+            break
 
         movementorder["index"] = currentpathindex
         movementorder["current"] = pathlist[currentpathindex]
@@ -944,12 +972,12 @@ def createfrontline(provincemap, provincegraph, playercountry, selectedprovincei
     frontlineedgekeys = set()
     frontlineedgelist = []
 
-
     for playerprovinceid in assignedprovinceids:
         for foreignprovinceid in provincegraph.get(playerprovinceid, ()):
             foreignprovince = provincemap.get(foreignprovinceid)
             if not foreignprovince:
                 continue
+
             foreigncountry = getprovincecontroller(foreignprovince)
             if foreigncountry == playercountry:
                 continue
