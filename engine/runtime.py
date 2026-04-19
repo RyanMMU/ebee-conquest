@@ -238,26 +238,19 @@ def loadcountrydata(filepath):
     statetocountrylookup = {}
     countrytocolorlookup = {}
 
-def get_state_data(state_id, countries):
-    for country in countries:
-        country_name = country["Country"]
-        states = country["States"]
+def get_state_data(state_id, statetocountry):
+    if state_id not in statetocountry:
+        return None
 
-        for state_name, state_data in states.items():
-            if state_name.lower() == state_id.lower():
+    country_name = statetocountry[state_id]
 
-                province_count = len(states)
-
-                return {
-                    "name": state_name,
-                    "country": country_name,
-                    "capital": state_data["capital"],
-                    "population": state_data["population"],
-                    "terrain": state_data["terrain"],
-                    "province_count": province_count
-                }
-    return None
-
+    return {
+        "name": state_id,
+        "country": country_name,
+        "population": "Unknown",
+        "terrain": "Unknown",
+        "province_count": "N/A"
+    }
 
     for countryindex, countryentry in enumerate(rawdata):
         if not isinstance(countryentry, dict):
@@ -1008,9 +1001,10 @@ def main(eventbus=None):
                             hoveredstateid = drawitem.get("parentid", stateshape["id"])
                             hoveredprovinceid = drawitem["id"] if "parentid" in drawitem else None
 
-                            # change hovertext into FULL DATA
+                            statetocountry, _ = loadcountrydata("countries.json")
+
                             if hoveredstateid:
-                                hovertext = get_state_data(hoveredstateid, countries)
+                                hovertext = get_state_data(hoveredstateid, statetocountry)
                             else:
                                 hovertext = None
 
