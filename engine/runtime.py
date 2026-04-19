@@ -476,7 +476,6 @@ def loadcountrydata(filepath):
         return {}, {}
 
     statetocountrylookup = {}
-    countrytocolorlookup = {}
 
 
     for countryindex, countryentry in enumerate(rawdata):
@@ -487,9 +486,6 @@ def loadcountrydata(filepath):
         if not countryname:
             continue
 
-        # No color in new format, assign default
-        parsedcolor = autocountrycolors[countryindex % len(autocountrycolors)]
-        countrytocolorlookup[countryname] = parsedcolor
 
         statesdict = countryentry.get("States", {})
         if not isinstance(statesdict, dict):
@@ -499,7 +495,7 @@ def loadcountrydata(filepath):
             if isinstance(statename, str) and statename.strip():
                 statetocountrylookup[statename.strip()] = countryname
 
-    return statetocountrylookup, countrytocolorlookup
+    return statetocountrylookup
 
 # group subdivision to their parent state for rendering 
 
