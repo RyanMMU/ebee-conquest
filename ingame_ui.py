@@ -1,7 +1,8 @@
 import pygame
 import sys
 
-
+import ctypes
+ctypes.windll.user32.SetProcessDPIAware()
 
 class panel:
     def __init__(self, x, y, w, h, color=(40,40,40)):
