@@ -767,12 +767,18 @@ def main(eventbus=None):
 
     logstartupdiagnostics(startupbegintimestamp, "states loaded", f"count={len(stateshapelist)}")
     statetocountrylookup, countrytocolorlookup = loadcountrydata(countrydatafilepath)
+    allowedstateidset = set(statetocountrylookup.keys())
+
+    stateshapelist = [stateshape for stateshape in stateshapelist if stateshape["id"] in allowedstateidset]
+    if not stateshapelist:
+        pygame.quit()
+        return
 
 
     logstartupdiagnostics(
         startupbegintimestamp,
         "countries loaded",
-        f"state_links={len(statetocountrylookup)} country_colors={len(countrytocolorlookup)}",
+        f"state_links={len(statetocountrylookup)} country_colors={len(countrytocolorlookup)} visible_states={len(stateshapelist)}",
     )
     for stateshape in stateshapelist: # to prepare to load province data and assign countries to state 
         statecountry = statetocountrylookup.get(stateshape["id"])
@@ -833,6 +839,15 @@ def main(eventbus=None):
     if not provinceshapelist:
         pygame.quit()
         return
+
+    provinceshapelist = [
+        province
+        for province in provinceshapelist
+        if getparentstateidfromprovinceid(province["id"]) in allowedstateidset
+    ]
+    if not provinceshapelist:
+        pygame.quit()
+        return
     
 
 
@@ -868,14 +883,33 @@ def main(eventbus=None):
         "Compiling province graph..",
         onlog=appendloadinglog,
     )
-    provincegraph = buildprovinceadjacencygraph(
-        provincemap,
-        # if not graphprogresscallback:
-        #     pygame.quit()
-        #     return
+    provincegraph = coremodule.eso_loadprovincegraphcache(provincefilepath, allowedstateidset)
+    if provincegraph is not None:
+        cachedprovinceidset = set(provincegraph.keys())
+        expectedprovinceidset = set(provincemap.keys())
+        if cachedprovinceidset != expectedprovinceidset:
+            provincegraph = None
+        else:
+            for provinceid, neighborids in provincegraph.items():
+                if not neighborids.issubset(expectedprovinceidset):
+                    provincegraph = None
+                    break
 
-        onprogress=graphprogresscallback,
-    )
+    if provincegraph is not None:
+        appendloadinglog(f"ESO cache hit for province graph with {len(provincegraph)} nodes!")
+        if graphprogresscallback and not graphprogresscallback(0, 1):
+            pygame.quit()
+            return
+        if graphprogresscallback and not graphprogresscallback(1, 1):
+            pygame.quit()
+            return
+    else:
+        provincegraph = buildprovinceadjacencygraph(
+            provincemap,
+            onprogress=graphprogresscallback,
+        )
+        if provincegraph is not None:
+            coremodule.eso_storeprovincegraphcache(provincefilepath, provincegraph, allowedstateidset)
 
 
 
@@ -1116,8 +1150,6 @@ def main(eventbus=None):
 
                             hoveredstateid = drawitem.get("parentid", stateshape["id"])
                             hoveredprovinceid = drawitem["id"] if "parentid" in drawitem else None
-
-                            statetocountry, _ = loadcountrydata("countries.json")
 
                             if hoveredstateid:
                                 hovertext = get_state_data(hoveredstateid, countries_full)

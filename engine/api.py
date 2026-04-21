@@ -112,6 +112,10 @@ class EbeeEngine:
 
 
         self.statetocountrylookup, self.countrytocolorlookup = core.loadcountrydata(self.countrydatafilepath)
+        allowedstateidset = set(self.statetocountrylookup.keys())
+        self.stateshapelist = [stateshape for stateshape in self.stateshapelist if stateshape["id"] in allowedstateidset]
+        if not self.stateshapelist:
+            return False
 
         for stateshape in self.stateshapelist:
 
@@ -124,6 +128,14 @@ class EbeeEngine:
 
 
         provinceshapelist = core.loadsvgshapes(self.provincefilepath, onprogress=onprogress)
+        if not provinceshapelist:
+            return False
+
+        provinceshapelist = [
+            province
+            for province in provinceshapelist
+            if core.getparentstateidfromprovinceid(province["id"]) in allowedstateidset
+        ]
         if not provinceshapelist:
             return False
 
@@ -142,7 +154,22 @@ class EbeeEngine:
 
 
         self.provincemap = {province["id"]: province for province in self.provinceenrichedlist}
-        self.provincegraph = movement.buildprovinceadjacencygraph(self.provincemap, onprogress=onprogress)
+        self.provincegraph = core.eso_loadprovincegraphcache(self.provincefilepath, allowedstateidset)
+        if self.provincegraph is not None:
+            cachedprovinceidset = set(self.provincegraph.keys())
+            expectedprovinceidset = set(self.provincemap.keys())
+            if cachedprovinceidset != expectedprovinceidset:
+                self.provincegraph = None
+            else:
+                for provinceid, neighborids in self.provincegraph.items():
+                    if not neighborids.issubset(expectedprovinceidset):
+                        self.provincegraph = None
+                        break
+
+        if self.provincegraph is None:
+            self.provincegraph = movement.buildprovinceadjacencygraph(self.provincemap, onprogress=onprogress)
+            if self.provincegraph is not None:
+                core.eso_storeprovincegraphcache(self.provincefilepath, self.provincegraph, allowedstateidset)
         
         
         if self.provincegraph is None:
