@@ -767,7 +767,10 @@ def gui_drawhoverlabel(screen, fontobject, state, mouseposition):
 
 
 def gui_shouldshowtroopbadges(zoomvalue, minimumzoom):
-    return zoomvalue >= minimumzoom * troopbadgevisiblezoommultiplier
+    # made badge visiblity relative to zoom instead of fixed
+    basezoomthreshold = minimumzoom * troopbadgevisiblezoommultiplier
+    cappedzoomthreshold = minimumzoom + 0.9
+    return zoomvalue >= min(basezoomthreshold, cappedzoomthreshold)
 
 
 def gui_shouldshowcountrylabels(zoomvalue, minimumzoom):

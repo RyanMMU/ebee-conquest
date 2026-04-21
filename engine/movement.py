@@ -16,6 +16,12 @@ terrainmovecostlookup = {
 }
 
 
+# Keep border rendering/selection aligned with adjacency builder tolerances.
+sharedLineTolerance = 0.9
+sharedAlignmentTolerance = 0.16
+sharedMinLength = 0.48 * 0.4
+
+
 def getprovincecontroller(province):
     # get the current controller
     return province.get("controllercountry", province.get("country"))
@@ -699,7 +705,13 @@ def getcountryborderedges(provincemap, provincegraph, countryname):
             if foreigncountry == countryname:
                 continue
 
-            sharedsegments = getsharedbordersegments(province, foreignprovince)
+            sharedsegments = getsharedbordersegments(
+                province,
+                foreignprovince,
+                linetolerancee=sharedLineTolerance,
+                alignmenttolerance=sharedAlignmentTolerance,
+                minlength=sharedMinLength,
+            )
             if not sharedsegments:
                 continue
 
@@ -738,7 +750,13 @@ def getborderworldsegments(provincemap, borderedge):
     if not playerprovince or not foreignprovince:
         return []
 
-    sharedsegments = getsharedbordersegments(playerprovince, foreignprovince)
+    sharedsegments = getsharedbordersegments(
+        playerprovince,
+        foreignprovince,
+        linetolerancee=sharedLineTolerance,
+        alignmenttolerance=sharedAlignmentTolerance,
+        minlength=sharedMinLength,
+    )
     if sharedsegments:
         return sharedsegments
 

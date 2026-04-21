@@ -356,7 +356,13 @@ def eso_buildcountryborderentries(provincemap, eso_provinceedgepairlist, eso_seg
         edgekey = (firstprovinceid, secondprovinceid)
         worldsegmentlist = eso_segmentcache.get(edgekey)
         if worldsegmentlist is None:
-            worldsegmentlist = movementmodule.getsharedbordersegments(firstprovince, secondprovince)
+            worldsegmentlist = movementmodule.getsharedbordersegments(
+                firstprovince,
+                secondprovince,
+                linetolerancee=movementmodule.sharedLineTolerance,
+                alignmenttolerance=movementmodule.sharedAlignmentTolerance,
+                minlength=movementmodule.sharedMinLength,
+            )
             eso_segmentcache[edgekey] = worldsegmentlist
 
         for segmentstart, segmentend in worldsegmentlist or ():
@@ -769,16 +775,11 @@ def main(eventbus=None):
     statetocountrylookup, countrytocolorlookup = loadcountrydata(countrydatafilepath)
     allowedstateidset = set(statetocountrylookup.keys())
 
-    stateshapelist = [stateshape for stateshape in stateshapelist if stateshape["id"] in allowedstateidset]
-    if not stateshapelist:
-        pygame.quit()
-        return
-
 
     logstartupdiagnostics(
         startupbegintimestamp,
         "countries loaded",
-        f"state_links={len(statetocountrylookup)} country_colors={len(countrytocolorlookup)} visible_states={len(stateshapelist)}",
+        f"state_links={len(statetocountrylookup)} country_colors={len(countrytocolorlookup)} visible_states={len(allowedstateidset)} total_states={len(stateshapelist)}",
     )
     for stateshape in stateshapelist: # to prepare to load province data and assign countries to state 
         statecountry = statetocountrylookup.get(stateshape["id"])
@@ -836,15 +837,6 @@ def main(eventbus=None):
             provincefilepath if False else provincefilepath,
             onprogress=provinceprogresscallback,
         )
-    if not provinceshapelist:
-        pygame.quit()
-        return
-
-    provinceshapelist = [
-        province
-        for province in provinceshapelist
-        if getparentstateidfromprovinceid(province["id"]) in allowedstateidset
-    ]
     if not provinceshapelist:
         pygame.quit()
         return
@@ -917,8 +909,23 @@ def main(eventbus=None):
     if provincegraph is None:
         pygame.quit()
         return
+    playableprovinceidset = {
+        provinceid
+        for provinceid, province in provincemap.items()
+        if province.get("parentstateid") in allowedstateidset
+    }
+    playableprovincemap = {provinceid: provincemap[provinceid] for provinceid in playableprovinceidset}
+    playableprovincegraph = {
+        provinceid: {
+            neighborid
+            for neighborid in provincegraph.get(provinceid, set())
+            if neighborid in playableprovinceidset
+        }
+        for provinceid in playableprovinceidset
+    }
+
     eso_provinceedgepairlist = []
-    for firstprovinceid, neighboridset in provincegraph.items():
+    for firstprovinceid, neighboridset in playableprovincegraph.items():
         for secondprovinceid in neighboridset:
             if firstprovinceid < secondprovinceid:
                 eso_provinceedgepairlist.append((firstprovinceid, secondprovinceid))
@@ -1085,11 +1092,14 @@ def main(eventbus=None):
             drawcamerax = camerax + copyshift
 
             for stateshape in stateshapelist:
+                isplayablestate = stateshape["id"] in allowedstateidset
                 staterectanglescreen = getscreenrectangle(stateshape["rectangle"], zoomvalue, drawcamerax, cameray)
                 if not staterectanglescreen.colliderect(screenrectangle):
                     continue
 
-                if gamephase == "choosecountry":
+                if not isplayablestate:
+                    drawitemlist = [stateshape]
+                elif gamephase == "choosecountry":
                     drawitemlist = [stateshape]
                 else:
                     subdivisions = stateshape.get("subdivisions", [])
@@ -1144,6 +1154,8 @@ def main(eventbus=None):
 
 
                         if not itemhovered and polygonrectanglescreen.collidepoint(mouseposition) and ispointinsidepolygon(mouseposition, polygonpointsscreen):
+                            if not isplayablestate:
+                                continue
                             if gamephase == "choosecountry" and not stateshape.get("country"):
                                 continue
                             itemhovered = True
@@ -1161,7 +1173,9 @@ def main(eventbus=None):
 
                     # determine fill color based on game state and interactions
                     # province color
-                    if gamephase == "choosecountry":
+                    if not isplayablestate:
+                        basefillcolor = (0, 0, 0)
+                    elif gamephase == "choosecountry":
                         if stateshape.get("country"):
                             basefillcolor = stateshape.get("countrycolor", defaultshapecolor)
 
@@ -1205,12 +1219,15 @@ def main(eventbus=None):
                     finalfillcolor = hovercolor if itemhovered else basefillcolor
                     for drawpolygon in drawpolygonlist:
                         pygame.draw.polygon(screen, finalfillcolor, drawpolygon)
-                        pygame.draw.polygon(screen, (50, 50, 50), drawpolygon, 1)
+                        if isplayablestate:
+                            pygame.draw.polygon(screen, (50, 50, 50), drawpolygon, 1)
 
         if gamephase == "play":
             for copyshift in copyshiftlist:
                 drawcamerax = camerax + copyshift
                 for provinceid, province in provincemap.items():
+                    if province.get("parentstateid") not in allowedstateidset:
+                        continue
                     if int(province.get("troops", 0)) <= 0:
                         continue
 
@@ -1246,7 +1263,7 @@ def main(eventbus=None):
 
         if eso_countrybordersdirty:
             eso_countryborderentrylist = eso_buildcountryborderentries(
-                provincemap,
+                playableprovincemap,
                 eso_provinceedgepairlist,
                 eso_countrybordersegmentcache,
             )
@@ -1281,7 +1298,7 @@ def main(eventbus=None):
         frontlineedgebykey = {}
         hoveredfrontlineedgekey = None
         if gamephase == "play" and playercountry and (frontlineplacementmode or activefrontlineedgekeyset):
-            frontlineborderedgelist = getcountryborderedges(provincemap, provincegraph, playercountry)
+            frontlineborderedgelist = getcountryborderedges(playableprovincemap, playableprovincegraph, playercountry)
             frontlineedgebykey = {edge["edgekey"]: edge for edge in frontlineborderedgelist}
 
             currentfrontlineedgekeyset = set(frontlineedgebykey.keys())
@@ -1298,7 +1315,7 @@ def main(eventbus=None):
 
                     worldsegmentlist = frontlinebordersegmentcache.get(edgekey)
                     if worldsegmentlist is None:
-                        worldsegmentlist = getborderworldsegments(provincemap, borderedge)
+                        worldsegmentlist = getborderworldsegments(playableprovincemap, borderedge)
                         frontlinebordersegmentcache[edgekey] = worldsegmentlist
 
                     for worldsegmentstart, worldsegmentend in worldsegmentlist:
@@ -1613,8 +1630,8 @@ def main(eventbus=None):
                 if gamephase == "play" and frontlineplacementmode:
                     if hoveredfrontlineedgekey and hoveredfrontlineedgekey in frontlineedgebykey:
                         frontlineresult = createfrontline(
-                            provincemap,
-                            provincegraph,
+                            playableprovincemap,
+                            playableprovincegraph,
                             playercountry,
                             [entry["provinceid"] for entry in selectedtroopentries],
                             frontlineedgebykey[hoveredfrontlineedgekey],
