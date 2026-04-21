@@ -209,6 +209,67 @@ def parsecolorvalue(rawcolorvalue):
     return None
 
 
+def blackworld(nonplayablestateshapelist, mapbox):
+    if not nonplayablestateshapelist:
+        return None
+
+    surfacewidth = max(1, int(math.ceil(mapbox["width"])) + 2)
+    surfaceheight = max(1, int(math.ceil(mapbox["height"])) + 2)
+    worldsurface = pygame.Surface((surfacewidth, surfaceheight), pygame.SRCALPHA)
+
+    offsetx = -mapbox["minimumx"]
+    offsety = -mapbox["minimumy"]
+
+    for stateshape in nonplayablestateshapelist:
+        for polygon in stateshape.get("polygons", ()): 
+            worldpoints = polygon.get("points", ())
+            if len(worldpoints) < 3:
+                continue
+            shiftedpoints = [
+                (int(pointx + offsetx), int(pointy + offsety))
+                for pointx, pointy in worldpoints
+            ]
+            if len(shiftedpoints) >= 3:
+                pygame.draw.polygon(worldsurface, (0, 0, 0, 255), shiftedpoints)
+
+    return worldsurface
+
+
+def blitblackworldslice(screen, worldsurface, mapbox, zoomvalue, drawcamerax, cameray):
+    screenwidth, screenheight = screen.get_size()
+
+    minimumworldx = (0.0 - drawcamerax) / zoomvalue
+    maximumworldx = (screenwidth - drawcamerax) / zoomvalue
+    minimumworldy = (0.0 - cameray) / zoomvalue
+    maximumworldy = (screenheight - cameray) / zoomvalue
+
+    sourceleft = int(math.floor(minimumworldx - mapbox["minimumx"]))
+    sourceright = int(math.ceil(maximumworldx - mapbox["minimumx"]))
+    sourcetop = int(math.floor(minimumworldy - mapbox["minimumy"]))
+    sourcebottom = int(math.ceil(maximumworldy - mapbox["minimumy"]))
+
+    sourceleft = max(0, min(worldsurface.get_width(), sourceleft))
+    sourceright = max(0, min(worldsurface.get_width(), sourceright))
+    sourcetop = max(0, min(worldsurface.get_height(), sourcetop))
+    sourcebottom = max(0, min(worldsurface.get_height(), sourcebottom))
+
+    sourcewidth = sourceright - sourceleft
+    sourceheight = sourcebottom - sourcetop
+    if sourcewidth <= 0 or sourceheight <= 0:
+        return
+
+    sourcesurface = worldsurface.subsurface(pygame.Rect(sourceleft, sourcetop, sourcewidth, sourceheight))
+    targetwidth = max(1, int(sourcewidth * zoomvalue))
+    targetheight = max(1, int(sourceheight * zoomvalue))
+    scaledslice = pygame.transform.scale(sourcesurface, (targetwidth, targetheight))
+
+    sourceworldx = mapbox["minimumx"] + sourceleft
+    sourceworldy = mapbox["minimumy"] + sourcetop
+    blitx = int(sourceworldx * zoomvalue + drawcamerax)
+    blity = int(sourceworldy * zoomvalue + cameray)
+    screen.blit(scaledslice, (blitx, blity))
+
+
 
 # TROOP BADGE MULTISELECT
 
@@ -875,17 +936,29 @@ def main(eventbus=None):
         "Compiling province graph..",
         onlog=appendloadinglog,
     )
+    graphcacheloadstart = time.perf_counter()
+    graphcachevalidationstatus = "miss"
     provincegraph = coremodule.eso_loadprovincegraphcache(provincefilepath, allowedstateidset)
     if provincegraph is not None:
         cachedprovinceidset = set(provincegraph.keys())
         expectedprovinceidset = set(provincemap.keys())
         if cachedprovinceidset != expectedprovinceidset:
+            graphcachevalidationstatus = "messedUPNODE"
             provincegraph = None
         else:
             for provinceid, neighborids in provincegraph.items():
                 if not neighborids.issubset(expectedprovinceidset):
+                    graphcachevalidationstatus = "NOTneighborref"
                     provincegraph = None
                     break
+            if provincegraph is not None:
+                graphcachevalidationstatus = "hit"
+    graphcacheloadelapsed = time.perf_counter() - graphcacheloadstart
+    logstartupdiagnostics(
+        startupbegintimestamp,
+        "province graph cache check",
+        f"status={graphcachevalidationstatus} elapsed={graphcacheloadelapsed:.3f}s nodes={(0 if provincegraph is None else len(provincegraph))}",
+    )
 
     if provincegraph is not None:
         appendloadinglog(f"ESO cache hit for province graph with {len(provincegraph)} nodes!")
@@ -896,12 +969,26 @@ def main(eventbus=None):
             pygame.quit()
             return
     else:
+        graphbuildstart = time.perf_counter()
         provincegraph = buildprovinceadjacencygraph(
             provincemap,
             onprogress=graphprogresscallback,
         )
+        graphbuildelapsed = time.perf_counter() - graphbuildstart
+        logstartupdiagnostics(
+            startupbegintimestamp,
+            "province graph build",
+            f"elapsed={graphbuildelapsed:.3f}s nodes={(0 if provincegraph is None else len(provincegraph))}",
+        )
         if provincegraph is not None:
+            graphcachestorestart = time.perf_counter()
             coremodule.eso_storeprovincegraphcache(provincefilepath, provincegraph, allowedstateidset)
+            graphcachestoreelapsed = time.perf_counter() - graphcachestorestart
+            logstartupdiagnostics(
+                startupbegintimestamp,
+                "province graph cache store",
+                f"elapsed={graphcachestoreelapsed:.3f}s nodes={len(provincegraph)}",
+            )
 
 
 
@@ -939,7 +1026,17 @@ def main(eventbus=None):
 
 
 
+    subdivisiongroupstart = time.perf_counter()
     groupedsubdivisionlookup = groupsubdivisionsbystate(provinceenrichedlist, stateshapelist)
+    subdivisiongroupelapsed = time.perf_counter() - subdivisiongroupstart
+
+    playablestateshapelist = [stateshape for stateshape in stateshapelist if stateshape["id"] in allowedstateidset]
+    nonplayablestateshapelist = [stateshape for stateshape in stateshapelist if stateshape["id"] not in allowedstateidset]
+    logstartupdiagnostics(
+        startupbegintimestamp,
+        "world partitioned",
+        f"playable_states={len(playablestateshapelist)} non_playable_states={len(nonplayablestateshapelist)} grouping_elapsed={subdivisiongroupelapsed:.3f}s",
+    )
 
     for stateshape in stateshapelist:
 
@@ -955,6 +1052,25 @@ def main(eventbus=None):
 
 
     mapbox = getmapbox(stateshapelist)
+    blackedbuildstart = time.perf_counter()
+    blackedoutworldsurface = blackworld(nonplayablestateshapelist, mapbox)
+    blackedbuildelapsed = time.perf_counter() - blackedbuildstart
+    blackedpolygoncount = sum(len(stateshape.get("polygons", ())) for stateshape in nonplayablestateshapelist)
+    blackedsurfacesize = "none"
+    if blackedoutworldsurface is not None:
+        blackedsurfacesize = f"{blackedoutworldsurface.get_width()}x{blackedoutworldsurface.get_height()}"
+    logstartupdiagnostics(
+        startupbegintimestamp,
+        "blacked world prepared",
+        f"states={len(nonplayablestateshapelist)} polygons={blackedpolygoncount} surface={blackedsurfacesize} elapsed={blackedbuildelapsed:.3f}s",
+    )
+    blackedoutscaledsurface = None
+    blackedoutscaledzoombucket = None
+    logstartupdiagnostics(
+        startupbegintimestamp,
+        "blacked render config",
+        "bucket_step=0.03 close_zoom_threshold=1.45",
+    )
     logstartupdiagnostics(
         startupbegintimestamp,
         "startup complete",
@@ -1088,18 +1204,35 @@ def main(eventbus=None):
         else:
             copyshiftlist = [0]
 
+        if blackedoutworldsurface is not None:
+            if zoomvalue <= 1.45:
+                zoomstep = 0.03
+                currentzoombucket = round(zoomvalue / zoomstep) * zoomstep
+                if blackedoutscaledzoombucket is None or abs(blackedoutscaledzoombucket - currentzoombucket) > 1e-9:
+                    scaledwidth = max(1, int(blackedoutworldsurface.get_width() * currentzoombucket))
+                    scaledheight = max(1, int(blackedoutworldsurface.get_height() * currentzoombucket))
+                    blackedoutscaledsurface = pygame.transform.scale(blackedoutworldsurface, (scaledwidth, scaledheight))
+                    blackedoutscaledzoombucket = currentzoombucket
+
+                for copyshift in copyshiftlist:
+                    drawcamerax = camerax + copyshift
+                    blitx = int(mapbox["minimumx"] * currentzoombucket + drawcamerax)
+                    blity = int(mapbox["minimumy"] * currentzoombucket + cameray)
+                    screen.blit(blackedoutscaledsurface, (blitx, blity))
+            else:
+                for copyshift in copyshiftlist:
+                    drawcamerax = camerax + copyshift
+                    blitblackworldslice(screen, blackedoutworldsurface, mapbox, zoomvalue, drawcamerax, cameray)
+
         for copyshift in copyshiftlist:
             drawcamerax = camerax + copyshift
 
-            for stateshape in stateshapelist:
-                isplayablestate = stateshape["id"] in allowedstateidset
+            for stateshape in playablestateshapelist:
                 staterectanglescreen = getscreenrectangle(stateshape["rectangle"], zoomvalue, drawcamerax, cameray)
                 if not staterectanglescreen.colliderect(screenrectangle):
                     continue
 
-                if not isplayablestate:
-                    drawitemlist = [stateshape]
-                elif gamephase == "choosecountry":
+                if gamephase == "choosecountry":
                     drawitemlist = [stateshape]
                 else:
                     subdivisions = stateshape.get("subdivisions", [])
@@ -1154,8 +1287,6 @@ def main(eventbus=None):
 
 
                         if not itemhovered and polygonrectanglescreen.collidepoint(mouseposition) and ispointinsidepolygon(mouseposition, polygonpointsscreen):
-                            if not isplayablestate:
-                                continue
                             if gamephase == "choosecountry" and not stateshape.get("country"):
                                 continue
                             itemhovered = True
@@ -1173,9 +1304,7 @@ def main(eventbus=None):
 
                     # determine fill color based on game state and interactions
                     # province color
-                    if not isplayablestate:
-                        basefillcolor = (0, 0, 0)
-                    elif gamephase == "choosecountry":
+                    if gamephase == "choosecountry":
                         if stateshape.get("country"):
                             basefillcolor = stateshape.get("countrycolor", defaultshapecolor)
 
@@ -1219,8 +1348,7 @@ def main(eventbus=None):
                     finalfillcolor = hovercolor if itemhovered else basefillcolor
                     for drawpolygon in drawpolygonlist:
                         pygame.draw.polygon(screen, finalfillcolor, drawpolygon)
-                        if isplayablestate:
-                            pygame.draw.polygon(screen, (50, 50, 50), drawpolygon, 1)
+                        pygame.draw.polygon(screen, (50, 50, 50), drawpolygon, 1)
 
         if gamephase == "play":
             for copyshift in copyshiftlist:
@@ -1283,7 +1411,7 @@ def main(eventbus=None):
         if gui_shouldshowcountrylabels(zoomvalue, minimumzoomforframe):
             gui_drawcountrylabels(
                 screen,
-                stateshapelist,
+                playablestateshapelist,
                 zoomvalue,
                 camerax,
                 cameray,
