@@ -293,27 +293,10 @@ def getbadgehitprovinceid(mouseposition, badgehitlist):
 
 with open("countries.json", "r", encoding="utf-8") as f:
     countries_full = json.load(f)
-
-def get_state_data(state_id, countries_full):
-    for country in countries_full:
-        country_name = country["Country"]
-        states = country["States"]
-
-        for state_name, state_data in states.items():
-            if state_name.lower() == state_id.lower():
-
-                province_count = len(states)
-
-                return {
-                    "name": state_name,
-                    "country": country_name,
-                    "capital": state_data["capital"],
-                    "population": state_data["population"],
-                    "terrain": state_data["terrain"],
-                    "province_count": province_count
-                }
-
-    return None
+# ESO optimization 22/04
+# O(c*s) --> O(1)
+# build state lookup once and reuse for hover data
+state_data_lookup = esomodule.buildstatedatalookup(countries_full)
 
 
     # for countryindex, countryentry in enumerate(rawdata):
@@ -942,6 +925,13 @@ def main(eventbus=None):
         for provinceid, province in provincemap.items()
         if province.get("parentstateid") in allowedstateidset
     }
+
+
+    # ESO optimization 22/04
+    # O(cp) --> O(p)
+    # iterate only playable provinces instead of all provinces
+
+
     playableprovincemap = {provinceid: provincemap[provinceid] for provinceid in playableprovinceidset}
     playableprovincegraph = {
         provinceid: {
@@ -1140,6 +1130,17 @@ def main(eventbus=None):
         troopbadgehitlist = []
 
 
+        # ESO optimization 22/04
+        # O(d*m) --> O(d+m)
+        # build moving province id set once per frame
+        movingprovinceidset = esomodule.buildmovingprovinceidset(movementorderlist) if movementorderlist else set()
+
+        # ESO optimization 22/04
+        # O(cp*k) --> O(p*k)
+        # skip badge loop entirely when badges are hidden this frame
+        showtroopbadges = gui_shouldshowtroopbadges(zoomvalue, minimumzoomforframe)
+
+
 
         tilewidth = mapbox["width"] * zoomvalue
         if tilewidth > 1:
@@ -1239,7 +1240,12 @@ def main(eventbus=None):
                             hoveredprovinceid = drawitem["id"] if "parentid" in drawitem else None
 
                             if hoveredstateid:
-                                hovertext = get_state_data(hoveredstateid, countries_full)
+
+                                # ESO optimization 22/04
+                                # O(c*s) --> O(1)
+                                # use precomputed state lookup for hover tooltip
+                                hovertext = esomodule.getstatedata(hoveredstateid, state_data_lookup)
+                            
                             else:
                                 hovertext = None
 
@@ -1268,7 +1274,12 @@ def main(eventbus=None):
                         basefillcolor = (95, 145, 255)
 
 
-                    elif any(order["current"] == drawitem.get("id") for order in movementorderlist):
+                    # ESO optimization 22/04
+                    # O(d*m) --> O(d+m)
+                    # use set membership instead of scanning movement orders for each draw item
+                    
+                    
+                    elif drawitem.get("id") in movingprovinceidset:
                         basefillcolor = (132, 96, 226)
 
 
@@ -1294,20 +1305,19 @@ def main(eventbus=None):
                         pygame.draw.polygon(screen, finalfillcolor, drawpolygon)
                         pygame.draw.polygon(screen, (50, 50, 50), drawpolygon, 1)
 
-        if gamephase == "play":
+        # ESO optimization 22/04
+        # O(cp*k) --> O(p*k)
+        # badge pass now runs only when needed and only on playable provinces
+        
+        if gamephase == "play" and showtroopbadges:
             for copyshift in copyshiftlist:
                 drawcamerax = camerax + copyshift
-                for provinceid, province in provincemap.items():
-                    if province.get("parentstateid") not in allowedstateidset:
-                        continue
+                for provinceid, province in playableprovincemap.items():
                     if int(province.get("troops", 0)) <= 0:
                         continue
 
                     provincerectanglescreen = getscreenrectangle(province["rectangle"], zoomvalue, drawcamerax, cameray)
                     if not provincerectanglescreen.colliderect(screenrectangle):
-                        continue
-
-                    if not gui_shouldshowtroopbadges(zoomvalue, minimumzoomforframe):
                         continue
 
                     troopbadgelist.append((provincerectanglescreen.center, province["troops"]))
