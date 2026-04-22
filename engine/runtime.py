@@ -20,6 +20,7 @@ from engine.gui import (
     gui_drawmovementorderpaths,
     gui_drawcountrylabels,
     gui_drawcountryborders,
+    drawdevfpsgraph,
 )
 from engine.diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
 from . import core as coremodule
@@ -27,6 +28,7 @@ from . import movement as movementmodule
 from . import economy as economymodule
 from . import api as apimodule
 from . import camera as cameramodule
+from . import eso as esomodule
 from .events import EventBus, EngineEventType
 
 
@@ -397,67 +399,6 @@ def getselectedtroopentries(selectedprovinceidset, selectedprovinceid, provincem
 
     entries.sort(key=lambda entry: (entry["provinceid"]))
     return entries
-
-
-def eso_buildcountryborderentries(provincemap, eso_provinceedgepairlist, eso_segmentcache):
-    borderentrylist = []
-    for firstprovinceid, secondprovinceid in eso_provinceedgepairlist:
-        firstprovince = provincemap.get(firstprovinceid)
-        secondprovince = provincemap.get(secondprovinceid)
-        if not firstprovince or not secondprovince:
-            continue
-
-        firstcontroller = getprovincecontroller(firstprovince)
-        secondcontroller = getprovincecontroller(secondprovince)
-        if firstcontroller is None or secondcontroller is None:
-            continue
-        if firstcontroller == secondcontroller:
-            continue
-
-        edgekey = (firstprovinceid, secondprovinceid)
-        worldsegmentlist = eso_segmentcache.get(edgekey)
-        if worldsegmentlist is None:
-            worldsegmentlist = movementmodule.getsharedbordersegments(
-                firstprovince,
-                secondprovince,
-                linetolerancee=movementmodule.sharedLineTolerance,
-                alignmenttolerance=movementmodule.sharedAlignmentTolerance,
-                minlength=movementmodule.sharedMinLength,
-            )
-            eso_segmentcache[edgekey] = worldsegmentlist
-
-        for segmentstart, segmentend in worldsegmentlist or ():
-            minx = min(segmentstart[0], segmentend[0])
-            maxx = max(segmentstart[0], segmentend[0])
-            miny = min(segmentstart[1], segmentend[1])
-            maxy = max(segmentstart[1], segmentend[1])
-            borderentrylist.append(
-                {
-                    "start": segmentstart,
-                    "end": segmentend,
-                    "minx": minx,
-                    "maxx": maxx,
-                    "miny": miny,
-                    "maxy": maxy,
-                }
-            )
-
-    return borderentrylist
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def getkruskalbridges(segmentlist, maxgapdistance=16.0):
@@ -938,7 +879,7 @@ def main(eventbus=None):
     )
     graphcacheloadstart = time.perf_counter()
     graphcachevalidationstatus = "miss"
-    provincegraph = coremodule.eso_loadprovincegraphcache(provincefilepath, allowedstateidset)
+    provincegraph = esomodule.loadprovincegraphcache(provincefilepath, allowedstateidset)
     if provincegraph is not None:
         cachedprovinceidset = set(provincegraph.keys())
         expectedprovinceidset = set(provincemap.keys())
@@ -982,7 +923,7 @@ def main(eventbus=None):
         )
         if provincegraph is not None:
             graphcachestorestart = time.perf_counter()
-            coremodule.eso_storeprovincegraphcache(provincefilepath, provincegraph, allowedstateidset)
+            esomodule.storeprovincegraphcache(provincefilepath, provincegraph, allowedstateidset)
             graphcachestoreelapsed = time.perf_counter() - graphcachestorestart
             logstartupdiagnostics(
                 startupbegintimestamp,
@@ -1011,11 +952,11 @@ def main(eventbus=None):
         for provinceid in playableprovinceidset
     }
 
-    eso_provinceedgepairlist = []
+    provinceedgepairlist = []
     for firstprovinceid, neighboridset in playableprovincegraph.items():
         for secondprovinceid in neighboridset:
             if firstprovinceid < secondprovinceid:
-                eso_provinceedgepairlist.append((firstprovinceid, secondprovinceid))
+                provinceedgepairlist.append((firstprovinceid, secondprovinceid))
 
     totaledges = sum(len(neighborset) for neighborset in provincegraph.values()) // 2
     logstartupdiagnostics(
@@ -1099,6 +1040,8 @@ def main(eventbus=None):
 
 
     clock = pygame.time.Clock()
+    fpshistory = []
+    fpshistorymaxsamples = 180
     expandedstateid = None
     selectedprovinceid = None
     selectedprovinceidset = set()
@@ -1125,9 +1068,9 @@ def main(eventbus=None):
     activefrontlineedgekeyset = set()
     frontlineassignmentlist = []
     frontlinebordersegmentcache = {}
-    eso_countrybordersegmentcache = {}
-    eso_countryborderentrylist = []
-    eso_countrybordersdirty = True
+    countrybordersegmentcache = {}
+    countryborderentrylist = []
+    countrybordersdirty = True
     countriesatwarset = set() # track countries at war
     countrymenutarget = None
 
@@ -1152,6 +1095,7 @@ def main(eventbus=None):
     isrunning = True
     while isrunning:
         elapsedseconds = clock.tick(60) / 1000.0
+        esomodule.updaterollingfpshistory(fpshistory, clock.get_fps(), fpshistorymaxsamples)
         mouseposition = pygame.mouse.get_pos()
         #this gives x and y (0 and 1)
         windowwidth, windowheight = screen.get_size()
@@ -1389,18 +1333,18 @@ def main(eventbus=None):
                 screenrectangle,
             )
 
-        if eso_countrybordersdirty:
-            eso_countryborderentrylist = eso_buildcountryborderentries(
+        if countrybordersdirty:
+            countryborderentrylist = esomodule.buildcountryborderentries(
                 playableprovincemap,
-                eso_provinceedgepairlist,
-                eso_countrybordersegmentcache,
+                provinceedgepairlist,
+                countrybordersegmentcache,
             )
-            eso_countrybordersdirty = False
+            countrybordersdirty = False
 
         if gamephase == "play" and zoomvalue >= minimumzoomforframe * 1.08:
             gui_drawcountryborders(
                 screen,
-                eso_countryborderentrylist,
+                countryborderentrylist,
                 zoomvalue,
                 camerax,
                 cameray,
@@ -1546,6 +1490,8 @@ def main(eventbus=None):
         )
         runtimeui.update(elapsedseconds)
         runtimeui.draw(screen)
+        if developmentmode and gamephase == "play":
+            drawdevfpsgraph(screen, smallfont, fpshistory)
 
 
 
@@ -1627,7 +1573,7 @@ def main(eventbus=None):
             # ON END TURN, process movement orders, apply economy, increment turn, emit next turn event
             if uiaction == EngineUI.actionendturn and gamephase == "play":
                 processmovementorders(movementorderlist, provincemap, emit=eventbus.emit)
-                eso_countrybordersdirty = True
+                countrybordersdirty = True
                 playergold,playerpopulation = applyendturneconomy(
                     playercountry,
                     provincemap,
@@ -1734,7 +1680,7 @@ def main(eventbus=None):
                     if runtimeui.clickchoosebutton(event.pos) and pendingcountry:
                         playercountry = pendingcountry
                         gamephase = "play"
-                        eso_countrybordersdirty = True
+                        countrybordersdirty = True
                         expandedstateid = None
                         selectedprovinceid = None
                         selectedprovinceidset = set()

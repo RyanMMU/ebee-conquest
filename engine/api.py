@@ -1,4 +1,5 @@
 from . import core, movement, camera
+from . import eso as esomodule
 from .events import EngineEventType, EventBus
 
 
@@ -154,7 +155,7 @@ class EbeeEngine:
 
 
         self.provincemap = {province["id"]: province for province in self.provinceenrichedlist}
-        self.provincegraph = core.eso_loadprovincegraphcache(self.provincefilepath, allowedstateidset)
+        self.provincegraph = esomodule.loadprovincegraphcache(self.provincefilepath, allowedstateidset)
         if self.provincegraph is not None:
             cachedprovinceidset = set(self.provincegraph.keys())
             expectedprovinceidset = set(self.provincemap.keys())
@@ -169,7 +170,7 @@ class EbeeEngine:
         if self.provincegraph is None:
             self.provincegraph = movement.buildprovinceadjacencygraph(self.provincemap, onprogress=onprogress)
             if self.provincegraph is not None:
-                core.eso_storeprovincegraphcache(self.provincefilepath, self.provincegraph, allowedstateidset)
+                esomodule.storeprovincegraphcache(self.provincefilepath, self.provincegraph, allowedstateidset)
         
         
         if self.provincegraph is None:

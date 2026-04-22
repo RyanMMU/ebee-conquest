@@ -7,6 +7,7 @@ import xml.etree.ElementTree as elementtree
 import pygame
 from svgelements import Path
 from engine.diagnostics import logslowpath
+from . import eso as esomodule
 from .camera import (
     getscreenpoints,
     getscreenrectangle,
@@ -16,18 +17,9 @@ from .camera import (
 )
 
 
-# 12 april optimization
-from pathlib import Path as filepathpath
-import pickle
-
 #initial config
 curvesamplestep = 1.5
 maxsegmentsteps = 32
-
-# Ebee Super Optimization (ESO) config
-esoversion = 1
-esodirectory = ".ebee_super_optimization"
-
 
 autocountrycolors = [
     (197, 92, 92),
@@ -52,206 +44,8 @@ dynamiccolorattempts = 128
 
 
 
-# EBEE SUPER OPTIMIZATION (ESO) FUNCTIONS 
-
-
-def eso_getpath(sourcefilepath):
-    return sourcefilepath.parent / esodirectory / f"{sourcefilepath.stem}.ebeecache_v{esoversion}.pkl"
-
-
-def eso_getnamedpath(sourcefilepath, cachelabel):
-    return sourcefilepath.parent / esodirectory / f"{sourcefilepath.stem}.{cachelabel}.ebeecache_v{esoversion}.pkl"
-
-
-
-def eso_loadcache(filepath):
-    sourcefilepath = filepathpath(filepath).resolve()
-    try:
-        sourcestat = sourcefilepath.stat()
-        #print(sourcestat, sourcefilepath)
-
-    except OSError:
-        return None
-
-    cachefilepath = eso_getpath(sourcefilepath)
-
-
-    try:
-        with open(cachefilepath, "rb") as cachefileobject:
-            cacheready = pickle.load(cachefileobject)
-            #print(cacheready)
-#   except (OSError, ValueError, TypeError):
-#       return None
-    except (OSError):
-        return None
-    
-
-
-    if not isinstance(cacheready, dict):
-        return None
-    
-
-    cachemeta = cacheready.get("meta")
-    #print(cachemeta)
-    esocachelist = cacheready.get("shapes")
-    if not isinstance(cachemeta, dict) or not isinstance(esocachelist, list):
-        return None
-
-
-
-    testmeta = {
-#            "sourcepath": str(sourcefilepath),
-#        "sourcesize": sourcestat.st_size,
-#        "sourcemtime": sourcestat.st_mtime_ns,
-#        "curvesamplestep": curvesamplestep,
-#        "maxsegmentsteps": maxsegmentsteps,
-        "formatversion": esoversion,
-    } 
-    #print(testmeta)
-
-
-
-    for k, expectedvalue in testmeta.items():
-        if cachemeta.get(k) != expectedvalue:
-            return None
-    return esocachelist
-
-
-
-
-
-
-def eso_storecache(filepath, shapelist):
-    sourcefilepath = filepathpath(filepath).resolve()
-    #print(sourcefilepath)
-
-
-    try:
-        sourcestat = sourcefilepath.stat()
-        #print(sourcestat, sourcefilepath)
-    except OSError:
-        return
-
-
-
-    cachefilepath = eso_getpath(sourcefilepath)
-    temppath = cachefilepath.with_suffix(cachefilepath.suffix + ".ebeetemp")
-
-    cacheready = {
-        "meta": {
-#            "sourcepath": str(sourcefilepath),
-#            "sourcesize": sourcestat.st_size,
-#            "sourcemtime": sourcestat.st_mtime_ns,
-#            "curvesamplestep": curvesamplestep,
-#            "maxsegmentsteps": maxsegmentsteps,
-            "formatversion": esoversion,
-        },
-        "shapes": shapelist,
-    }
-    #print(cacheready)
-
-
-    try:
-        cachefilepath.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(temppath, "wb") as cachefileobject:
-            pickle.dump(cacheready, cachefileobject, protocol=pickle.HIGHEST_PROTOCOL)
-
-        os.replace(temppath, cachefilepath)
-
-    except (OSError):
-        try:
-            if temppath.exists():
-                temppath.unlink()
-        except OSError:
-            pass
-
-
-def eso_loadprovincegraphcache(filepath, allowedstateidset=None):
-    sourcefilepath = filepathpath(filepath).resolve()
-    cachefilepath = eso_getnamedpath(sourcefilepath, "provincegraph")
-
-    try:
-        with open(cachefilepath, "rb") as cachefileobject:
-            cacheready = pickle.load(cachefileobject)
-    except OSError:
-        return None
-
-    if not isinstance(cacheready, dict):
-        return None
-
-    cachemeta = cacheready.get("meta")
-    cachedgraph = cacheready.get("graph")
-    if not isinstance(cachemeta, dict) or not isinstance(cachedgraph, dict):
-        return None
-
-    if cachemeta.get("formatversion") != esoversion:
-        return None
-    if cachemeta.get("cachetype") != "provincegraph":
-        return None
-
-    expectedstateidlist = sorted(allowedstateidset) if allowedstateidset is not None else None
-    if expectedstateidlist is not None and cachemeta.get("allowedstateids") != expectedstateidlist:
-        return None
-
-    normalizedgraph = {}
-    for provinceid, neighborids in cachedgraph.items():
-        if not isinstance(provinceid, str):
-            return None
-        if not isinstance(neighborids, (set, list, tuple)):
-            return None
-        try:
-            normalizedgraph[provinceid] = {str(neighborid) for neighborid in neighborids}
-        except Exception:
-            return None
-
-    return normalizedgraph
-
-
-def eso_storeprovincegraphcache(filepath, provincegraph, allowedstateidset=None):
-    sourcefilepath = filepathpath(filepath).resolve()
-    cachefilepath = eso_getnamedpath(sourcefilepath, "provincegraph")
-    temppath = cachefilepath.with_suffix(cachefilepath.suffix + ".ebeetemp")
-
-    if not isinstance(provincegraph, dict):
-        return
-
-    serializedgraph = {}
-    for provinceid, neighborids in provincegraph.items():
-        if not isinstance(provinceid, str):
-            return
-        if not isinstance(neighborids, (set, list, tuple)):
-            return
-        serializedgraph[provinceid] = set(neighborids)
-
-    cacheready = {
-        "meta": {
-            "formatversion": esoversion,
-            "cachetype": "provincegraph",
-            "allowedstateids": sorted(allowedstateidset) if allowedstateidset is not None else None,
-        },
-        "graph": serializedgraph,
-    }
-
-    try:
-        cachefilepath.parent.mkdir(parents=True, exist_ok=True)
-
-        with open(temppath, "wb") as cachefileobject:
-            pickle.dump(cacheready, cachefileobject, protocol=pickle.HIGHEST_PROTOCOL)
-
-        os.replace(temppath, cachefilepath)
-    except OSError:
-        try:
-            if temppath.exists():
-                temppath.unlink()
-        except OSError:
-            pass
-
-
-
-
 def loadsvgshapes(filepath, onprogress=None):
-    esocachelist = eso_loadcache(filepath)
+    esocachelist = esomodule.loadcache(filepath)
 
     if esocachelist is not None:
         print(f"local@EbeeEngine:~$   ESO cache hit for {os.path.basename(filepath)} with {len(esocachelist)} shapes!", flush=True)
@@ -321,7 +115,7 @@ def loadsvgshapes(filepath, onprogress=None):
             if not onprogress(currentindex, totalcount):
                 return []
 
-    eso_storecache(filepath, shapelist) #eso
+    esomodule.storecache(filepath, shapelist)
     return shapelist
 
 # svg loading ends

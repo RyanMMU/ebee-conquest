@@ -488,7 +488,7 @@ def getborderedgekey(firstprovinceid, secondprovinceid):
     return (secondprovinceid, firstprovinceid)
 
 
-eso_bordersegmentcache = {}
+bordersegmentcache = {}
 
 
 
@@ -638,7 +638,7 @@ def getsharedbordersegments(
             playerprovinceid if playerprovinceid <= foreignprovinceid else foreignprovinceid,
             foreignprovinceid if playerprovinceid <= foreignprovinceid else playerprovinceid,
         )
-        cachedsegments = eso_bordersegmentcache.get(cachekey)
+        cachedsegments = bordersegmentcache.get(cachekey)
         if cachedsegments is not None:
             return list(cachedsegments)
 
@@ -679,7 +679,7 @@ def getsharedbordersegments(
 
     sharedsegmentlist = list(sharedsegmentlookup.values())
     if playerprovinceid and foreignprovinceid:
-        eso_bordersegmentcache[cachekey] = list(sharedsegmentlist)
+        bordersegmentcache[cachekey] = list(sharedsegmentlist)
     return sharedsegmentlist
 
 

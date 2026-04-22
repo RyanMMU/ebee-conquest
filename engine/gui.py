@@ -800,12 +800,12 @@ def gui_buildoutlinedtext(
 
 
 def gui_getcountrylabelsurface(labelcache, fontobject, textvalue, fontsize):
-    eso_fontcache = labelcache.setdefault("_eso_fontcache", {})
-    eso_baselabelcache = labelcache.setdefault("_baselabels", {})
+    fontcache = labelcache.setdefault("_fontcache", {})
+    baselabelcache = labelcache.setdefault("_baselabels", {})
 
     fontsize = int(max(11, min(58, fontsize)))
 
-    fontentry = eso_fontcache.get(fontsize)
+    fontentry = fontcache.get(fontsize)
     if fontentry is None:
         fontname = pygame.font.get_default_font()
         try:
@@ -813,10 +813,10 @@ def gui_getcountrylabelsurface(labelcache, fontobject, textvalue, fontsize):
         except AttributeError:
             pass
         fontentry = pygame.font.SysFont(fontname, fontsize, bold=True)
-        eso_fontcache[fontsize] = fontentry
+        fontcache[fontsize] = fontentry
 
     basekey = (textvalue, fontsize)
-    baselabelsurface = eso_baselabelcache.get(basekey)
+    baselabelsurface = baselabelcache.get(basekey)
     if baselabelsurface is None:
         outlinewidth = max(2, min(4, int(fontsize * 0.08)))
         baselabelsurface = gui_buildoutlinedtext(
@@ -824,7 +824,7 @@ def gui_getcountrylabelsurface(labelcache, fontobject, textvalue, fontsize):
             textvalue,
             outlinewidth=outlinewidth,
         )
-        eso_baselabelcache[basekey] = baselabelsurface
+        baselabelcache[basekey] = baselabelsurface
 
     baselabelsurface.set_alpha(128)
     return baselabelsurface
@@ -1039,16 +1039,72 @@ def gui_drawmovementorderpaths(
 
 
 
+def drawdevfpsgraph(screen, fontobject, fpshistory):
+    if len(fpshistory) < 2:
+        return
+
+    graphwidth = 220
+    graphheight = 96
+    marginleft = 10
+    marginbottom = 10
+    graphx = marginleft
+    graphy = screen.get_height() - graphheight - marginbottom
+    graphrect = pygame.Rect(graphx, graphy, graphwidth, graphheight)
+
+    graphsurface = pygame.Surface((graphwidth, graphheight), pygame.SRCALPHA)
+    graphsurface.fill((8, 12, 16, 120))
+    pygame.draw.rect(graphsurface, (170, 200, 240, 92), graphsurface.get_rect(), width=1)
+
+    innerleft = 8
+    innertop = 8
+    innerright = graphwidth - 8
+    innerbottom = graphheight - 20
+    innerwidth = max(1, innerright - innerleft)
+    innerheight = max(1, innerbottom - innertop)
+
+    maxfps = max(10.0, max(fpshistory))
+    maxfps = maxfps * 1.10
+    minfps = 0.0
+
+    gridlinecolor = (130, 165, 195, 48)
+    for ratio in (0.25, 0.5, 0.75):
+        gridy = int(innerbottom - innerheight * ratio)
+        pygame.draw.line(graphsurface, gridlinecolor, (innerleft, gridy), (innerright, gridy), 1)
+
+    pointcount = len(fpshistory)
+    stepx = innerwidth / max(1, pointcount - 1)
+    graphpoints = []
+    for index, samplefps in enumerate(fpshistory):
+        normalized = (samplefps - minfps) / max(1e-6, (maxfps - minfps))
+        normalized = max(0.0, min(1.0, normalized))
+        pointx = innerleft + int(index * stepx)
+        pointy = innerbottom - int(normalized * innerheight)
+        graphpoints.append((pointx, pointy))
+
+    pygame.draw.lines(graphsurface, (95, 210, 145, 220), False, graphpoints, 2)
+
+    currentfps = fpshistory[-1]
+    minrecentfps = min(fpshistory)
+    summarylabel = fontobject.render(
+        f"FPS {currentfps:4.1f} | low {minrecentfps:4.1f}",
+        True,
+        (228, 236, 248),
+    )
+    graphsurface.blit(summarylabel, (innerleft, graphheight - 16))
+
+    screen.blit(graphsurface, graphrect.topleft)
+
+
 def gui_drawcountryborders(
     screen,
-    eso_bordersegmentlist,
+    bordersegmentlist,
     zoomvalue,
     camerax,
     cameray,
     copyshiftlist,
     screenrectangle,
 ):
-    if not eso_bordersegmentlist or zoomvalue <= 0:
+    if not bordersegmentlist or zoomvalue <= 0:
         return
 
     borderwidth = max(1, min(4, int(zoomvalue * 1.2)))
@@ -1066,7 +1122,7 @@ def gui_drawcountryborders(
 
 
 
-        for bordersegmententry in eso_bordersegmentlist:
+        for bordersegmententry in bordersegmentlist:
             if isinstance(bordersegmententry, dict):
                 if (
                     bordersegmententry["maxx"] < visibleworldleft
