@@ -32,6 +32,9 @@ class sidebar:
         pygame.draw.rect(surface, (50, 50, 50), self.rect)
         
         for i, item in enumerate(self.items):
+
+            if not item.strip(): 
+                continue
           
             x = self.rect.x + 10
             y = self.rect.y + 60 + (i * 50)
@@ -71,6 +74,7 @@ class page:
     
         self.sidebar = sidebar(0, 0, 250, 720)
         self.sidebar.word('             CLEAR ALL    ')
+        self.sidebar.word('')
         self.sidebar.word('NOTIFICATION')
         self.sidebar.word('LOGISTICS')
         self.sidebar.word('COMBAT')
