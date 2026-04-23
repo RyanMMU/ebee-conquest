@@ -72,8 +72,8 @@ class page:
         self.title_font = pygame.font.SysFont('Verdana', 16,bold= True)
         self.font = pygame.font.SysFont('Verdana', 14)
     
-        self.sidebar = sidebar(0, 0, 250, 720)
-        self.sidebar.word('             CLEAR ALL    ')
+        self.sidebar = sidebar(0, 0, 180, 720)
+        self.sidebar.word('      CLEAR ALL    ')
         self.sidebar.word('')
         self.sidebar.word('NOTIFICATIONS')
         self.sidebar.word('LOGISTICS')
@@ -81,7 +81,7 @@ class page:
         self.sidebar.word('INTEL')
 
         self.topbar = panel(0, 0, 1280, 50, (35,35,35))
-        self.rightbar = panel(1030, 50, 250, 620, (0,0,0))
+        self.rightbar = panel(1030, 50,180, 620, (0,0,0))
         self.bottombar = panel(0, 670, 1280, 50, (35,35,35))
 
         self.bottom_buttons = b_buttons(self.bottombar.rect)
