@@ -40,16 +40,27 @@ class sidebar:
 
             rect = pygame.Rect(x, y, w, h)
 
-            if rect.collidepoint(mouse):
-                color = (0, 200, 0)
+            if 'CLEAR ALL' in item:
+                if rect.collidepoint(mouse):
+                 color = (0,120, 0)  
+                else:
+                    color = (0,220, 0)   
+            elif rect.collidepoint(mouse):
+                    color = (0, 200, 0)
             else:
-                color = (30, 30, 30)
+                    color = (30, 30, 30)
 
             pygame.draw.rect(surface, color, rect)
 
-            text = font.render(item, True, (255, 255, 255))
+            if 'CLEAR ALL' in item:
+                text_color = (0, 0, 0)
+            else:
+                text_color = (255, 255, 255)
+
+            text = font.render(item, True, text_color)
             surface.blit(text, (x + 10, y + 10))
 
+            
 class page:
     def __init__(self):
         pygame.init()
@@ -59,6 +70,7 @@ class page:
         self.font = pygame.font.SysFont('Verdana', 14)
     
         self.sidebar = sidebar(0, 0, 250, 720)
+        self.sidebar.word('             CLEAR ALL    ')
         self.sidebar.word('NOTIFICATION')
         self.sidebar.word('LOGISTICS')
         self.sidebar.word('COMBAT')
@@ -117,6 +129,7 @@ class b_buttons:
             x = start_x + (i * (w + spacing))
             y = self.rect.y + 10
             rect = pygame.Rect(x, y, w, h)
+            
 
             if rect.collidepoint(mouse):
                 color = (0, 200, 0)
