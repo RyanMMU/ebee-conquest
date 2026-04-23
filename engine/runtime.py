@@ -1099,6 +1099,14 @@ def main(eventbus=None):
             edgepanmargin,
             edgepanspeed,
         )
+        #cameramodule.applyverticalpan(
+        #    camerastate,
+        #    mouseposition[1],
+        #    windowheight,
+        #    elapsedseconds,
+        #    edgepanmargin,
+        #    edgepanspeed,
+        #)
 
         """ disabled for now, because everytime i click any button near the edge the camera will pan and itis getting annoying
         if mouseposition[1] <= edgepanmargin:
