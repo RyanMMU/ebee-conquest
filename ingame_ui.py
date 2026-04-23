@@ -75,7 +75,7 @@ class page:
         self.sidebar = sidebar(0, 0, 250, 720)
         self.sidebar.word('             CLEAR ALL    ')
         self.sidebar.word('')
-        self.sidebar.word('NOTIFICATION')
+        self.sidebar.word('NOTIFICATIONS')
         self.sidebar.word('LOGISTICS')
         self.sidebar.word('COMBAT')
         self.sidebar.word('INTEL')
