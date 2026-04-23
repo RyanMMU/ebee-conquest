@@ -16,6 +16,10 @@ terrainmovecostlookup = {
 }
 
 
+entrenchmentturnrequired = 3
+entrenchmentdefensemultiplier = 1.33
+
+
 # Keep border rendering/selection aligned with adjacency builder tolerances.
 sharedLineTolerance = 0.9
 sharedAlignmentTolerance = 0.16
@@ -40,6 +44,28 @@ def setprovincecontroller(province, countryname, countrycolor=None):
         province["countrycolor"] = countrycolor
 
 
+def markprovincetroopactivity(province, currentturnnumber):
+    if currentturnnumber is None or province is None:
+        return
+    province["lasttroopactivityturn"] = int(currentturnnumber)
+
+
+def getprovinceentrenchmentturns(province, currentturnnumber):
+    if province is None or currentturnnumber is None:
+        return 0
+
+    troopcount = int(province.get("troops", 0))
+    if troopcount <= 0:
+        return 0
+
+    lastactivityturn = int(province.get("lasttroopactivityturn", 0))
+    return max(0, int(currentturnnumber) - lastactivityturn)
+
+
+def isprovinceentrenched(province, currentturnnumber):
+    return getprovinceentrenchmentturns(province, currentturnnumber) >= entrenchmentturnrequired
+
+
 # Movement starts
 def prepareprovincemetadata(provincelist):
     enrichedlist = []
@@ -52,6 +78,7 @@ def prepareprovincemetadata(provincelist):
         enrichedprovince["ownercountry"] = None
         enrichedprovince["controllercountry"] = None
         enrichedprovince["country"] = None
+        enrichedprovince["lasttroopactivityturn"] = 0
         enrichedlist.append(enrichedprovince)
     return enrichedlist
 
@@ -194,11 +221,40 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
     return []
 
 
-def processmovementorders(movementorderlist, provincemap, emit):
+def processmovementorders(movementorderlist, provincemap, emit, currentturnnumber=None):
     # MOVEMENT processing
     finishedorderlist = []
 
+    def markorderfinished(movementorder, reasontext):
+        if movementorder not in finishedorderlist:
+            finishedorderlist.append(movementorder)
+        movementorder["_finishreason"] = reasontext
+
+    def interruptdefendingorders(targetprovinceid, defendingcountry, excludedorder):
+        interruptedorderlist = []
+        totalmovingdefenders = 0
+        for candidateorder in movementorderlist:
+            if candidateorder is excludedorder:
+                continue
+            if int(candidateorder.get("amount", 0)) <= 0:
+                continue
+            if candidateorder.get("current") != targetprovinceid:
+                continue
+
+            candidatecountry = candidateorder.get("controllercountry", candidateorder.get("country"))
+            if candidatecountry != defendingcountry:
+                continue
+
+            totalmovingdefenders += int(candidateorder.get("amount", 0))
+            interruptedorderlist.append(candidateorder)
+
+        return interruptedorderlist, totalmovingdefenders
+
     for movementorder in movementorderlist:
+        if int(movementorder.get("amount", 0)) <= 0:
+            markorderfinished(movementorder, movementorder.get("_finishreason", "depleted"))
+            continue
+
         movementpoints = 1.0 * float(movementorder.get("speedmodifier", 1.0))
         pathlist = movementorder["path"]
         currentpathindex = movementorder["index"]
@@ -223,12 +279,32 @@ def processmovementorders(movementorderlist, provincemap, emit):
                 movingcountry is not None
                 and nextcountry is not None
                 and nextcountry != movingcountry
-                and nextprovince["troops"] > 0
+                and nextprovince["troops"] >= 0
             ):
                 attackers = movementorder["amount"]
-                defenders = nextprovince["troops"]
-                if attackers <= defenders:
-                    nextprovince["troops"] = defenders - attackers
+                interruptedorderlist, movingdefenders = interruptdefendingorders(
+                    nextprovinceid,
+                    nextcountry,
+                    movementorder,
+                )
+
+                basedefenders = int(nextprovince.get("troops", 0))
+                defenders = basedefenders + movingdefenders
+
+                entrenched = isprovinceentrenched(nextprovince, currentturnnumber)
+                defensemultiplier = entrenchmentdefensemultiplier if entrenched else 1.0
+                effectivedefenders = int(math.ceil(defenders * defensemultiplier))
+
+                if defenders > 0 and attackers <= effectivedefenders:
+                    remainingeffective = effectivedefenders - attackers
+                    remainingdefenders = int(math.ceil(remainingeffective / defensemultiplier)) if remainingeffective > 0 else 0
+                    nextprovince["troops"] = max(0, min(defenders, remainingdefenders))
+
+                    for interruptedorder in interruptedorderlist:
+                        interruptedorder["amount"] = 0
+                        markorderfinished(interruptedorder, "interrupted_defense")
+
+                    markprovincetroopactivity(nextprovince, currentturnnumber)
 
                     # combat resolved
                     if emit is not None:
@@ -240,27 +316,39 @@ def processmovementorders(movementorderlist, provincemap, emit):
                                 "defendersBefore": defenders,
                                 "attackersAfter": 0,
                                 "defendersAfter": nextprovince["troops"],
+                                "defenseMultiplier": defensemultiplier,
+                                "defendersEntrenched": entrenched,
                             },
                         )
 
                     movementorder["amount"] = 0
+                    markorderfinished(movementorder, "defeated")
                     break
 
-                movementorder["amount"] = attackers - defenders
-                nextprovince["troops"] = 0
+                if defenders > 0:
+                    movementorder["amount"] = max(0, int(math.ceil(attackers - effectivedefenders)))
+                    nextprovince["troops"] = 0
 
-                #comabt resolved
-                if emit is not None:
-                    emit(
-                        EngineEventType.COMBATRESOLVED,
-                        {
-                            "provinceId": nextprovinceid,
-                            "attackersBefore": attackers,
-                            "defendersBefore": defenders,
-                            "attackersAfter": movementorder["amount"],
-                            "defendersAfter": 0,
-                        },
-                    )
+                    for interruptedorder in interruptedorderlist:
+                        interruptedorder["amount"] = 0
+                        markorderfinished(interruptedorder, "interrupted_defense")
+
+                    markprovincetroopactivity(nextprovince, currentturnnumber)
+
+                    #comabt resolved
+                    if emit is not None:
+                        emit(
+                            EngineEventType.COMBATRESOLVED,
+                            {
+                                "provinceId": nextprovinceid,
+                                "attackersBefore": attackers,
+                                "defendersBefore": defenders,
+                                "attackersAfter": movementorder["amount"],
+                                "defendersAfter": 0,
+                                "defenseMultiplier": defensemultiplier,
+                                "defendersEntrenched": entrenched,
+                            },
+                        )
 
             movementpoints -= movecost
             currentpathindex += 1
@@ -273,6 +361,7 @@ def processmovementorders(movementorderlist, provincemap, emit):
             ):
                 previouscontroller = nextcountry
                 setprovincecontroller(nextprovince, movingcountry, movingcountrycolor)
+                markprovincetroopactivity(nextprovince, currentturnnumber)
                 if emit is not None:
                     emit(
                         EngineEventType.PROVINCECONTROLCHANGED,
@@ -290,7 +379,7 @@ def processmovementorders(movementorderlist, provincemap, emit):
         movementorder["current"] = pathlist[currentpathindex]
 
         if movementorder["amount"] <= 0:
-            finishedorderlist.append(movementorder)
+            markorderfinished(movementorder, movementorder.get("_finishreason", "depleted"))
 
 
             if emit is not None:
@@ -300,14 +389,15 @@ def processmovementorders(movementorderlist, provincemap, emit):
                         "path": list(pathlist),
                         "finalProvinceId": pathlist[currentpathindex],
                         "remainingTroops": 0,
-                        "reason": "donno",
+                        "reason": movementorder.get("_finishreason", "depleted"),
                     },
                 )
 
         elif currentpathindex >= len(pathlist) - 1:
             destinationprovinceid = pathlist[-1]
             provincemap[destinationprovinceid]["troops"] += movementorder["amount"]
-            finishedorderlist.append(movementorder)
+            markprovincetroopactivity(provincemap[destinationprovinceid], currentturnnumber)
+            markorderfinished(movementorder, "arrived")
 
 
             if emit is not None:
@@ -322,6 +412,7 @@ def processmovementorders(movementorderlist, provincemap, emit):
                 )
 
     for finishedorder in finishedorderlist:
+        finishedorder.pop("_finishreason", None)
         movementorderlist.remove(finishedorder)
 
 

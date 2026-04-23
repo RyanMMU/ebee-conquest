@@ -1,3 +1,4 @@
+import math
 from collections import defaultdict
 
 from .economy import (
@@ -7,7 +8,14 @@ from .economy import (
     getrecruitcosts,
 )
 from .events import EngineEventType
-from .movement import findprovincepath, getprovincecontroller, getprovinceowner
+from .movement import (
+    entrenchmentdefensemultiplier,
+    entrenchmentturnrequired,
+    findprovincepath,
+    getprovincecontroller,
+    getprovinceowner,
+    markprovincetroopactivity,
+)
 
 
 class NpcDirector:
@@ -31,6 +39,7 @@ class NpcDirector:
         self.warlookup = defaultdict(set)
         self.countryeconomy = {}
         self.provincetroopsintel = {}
+        self.currentturnnumber = 1
 
         self.minimumgarrison = max(5, int(self.economyconfig.get("recruitamount", 100) // 4))
         self.maxdefenseordersperturn = 4
@@ -145,6 +154,8 @@ class NpcDirector:
         _ = developmentmode
         if movementorderlist is None:
             movementorderlist = []
+
+        self.currentturnnumber = int(turnnumber)
 
         self._initializecountryeconomy()
         summary = {
@@ -288,12 +299,34 @@ class NpcDirector:
 
     def _getestimateddefenders(self, provinceid):
         if provinceid in self.provincetroopsintel:
-            return int(self.provincetroopsintel[provinceid])
+            basecount = int(self.provincetroopsintel[provinceid])
+        else:
+            province = self.provincemap.get(provinceid)
+            if not province:
+                return 0
+            basecount = int(province.get("troops", 0))
 
         province = self.provincemap.get(provinceid)
         if not province:
-            return 0
-        return int(province.get("troops", 0))
+            return basecount
+
+        lastactivityturn = int(province.get("lasttroopactivityturn", 0))
+        entrenchedturns = max(0, int(self.currentturnnumber) - lastactivityturn)
+        if basecount > 0 and entrenchedturns >= entrenchmentturnrequired:
+            return int(math.ceil(basecount * entrenchmentdefensemultiplier))
+
+        return basecount
+
+    def _istargetprovinceentrenched(self, provinceid):
+        province = self.provincemap.get(provinceid)
+        if not province:
+            return False
+        if int(province.get("troops", 0)) <= 0:
+            return False
+
+        lastactivityturn = int(province.get("lasttroopactivityturn", 0))
+        entrenchedturns = max(0, int(self.currentturnnumber) - lastactivityturn)
+        return entrenchedturns >= entrenchmentturnrequired
 
     def _frontlineprovinceids(self, countryname, enemycountryset=None):
         frontlineids = set()
@@ -432,6 +465,7 @@ class NpcDirector:
                 continue
 
             self.provincemap[targetprovinceid]["troops"] += provinceamount
+            markprovincetroopactivity(self.provincemap[targetprovinceid], turnnumber)
             economystate["gold"] -= requiredgold
             economystate["population"] -= requiredpopulation
 
@@ -485,6 +519,7 @@ class NpcDirector:
                 "controllercountry": countryname,
                 "country": countryname,
                 "countrycolor": sourceprovince.get("countrycolor", self.countrytocolorlookup.get(countryname)),
+                "ordercreatedturn": turnnumber,
             }
         )
 
@@ -590,6 +625,7 @@ class NpcDirector:
                     break
 
                 sourceprovince["troops"] -= movecount
+                markprovincetroopactivity(sourceprovince, turnnumber)
                 self._appendmovementorder(
                     movementorderlist,
                     countryname,
@@ -773,8 +809,10 @@ class NpcDirector:
                     continue
 
                 defendercount = self._getestimateddefenders(targetprovinceid)
+                targetisentrenched = self._istargetprovinceentrenched(targetprovinceid)
                 currentdefendercount = int(self.provincemap[targetprovinceid].get("troops", 0))
-                hasfreshdefenderdrop = currentdefendercount < defendercount
+                previousrawdefendercount = int(self.provincetroopsintel.get(targetprovinceid, currentdefendercount))
+                hasfreshdefenderdrop = currentdefendercount < previousrawdefendercount
                 totalattackers = sum(plan["troops"] for plan in attackplanlist)
 
                 cancapture = totalattackers > defendercount
@@ -794,6 +832,9 @@ class NpcDirector:
                         0.45,
                         self.attritionattackthresholdratio - ((enemyaggression - 1.0) * 0.25),
                     )
+                    if targetisentrenched:
+                        # entrenched defenders are harder to dislodge; allow attrition attacks to start earlier
+                        effectiveattritionthreshold = max(0.35, effectiveattritionthreshold - 0.12)
                     minimumattritionforce = max(1, int(defendercount * effectiveattritionthreshold))
                     if totalattackers < minimumattritionforce:
                         continue
@@ -802,6 +843,8 @@ class NpcDirector:
                         1.35,
                         self.attritionattackcommitratio + ((enemyaggression - 1.0) * 0.2),
                     )
+                    if targetisentrenched:
+                        effectivecommitratio = min(1.5, effectivecommitratio + 0.12)
                     targetassaultforce = max(1, int(defendercount * effectivecommitratio))
                     troopssendneeded = min(totalattackers, targetassaultforce)
 
@@ -830,6 +873,7 @@ class NpcDirector:
                         max(1, min(troopssendneeded, wavesizebase)),
                     )
                     sourceprovince["troops"] -= movingtroops
+                    markprovincetroopactivity(sourceprovince, turnnumber)
                     self._appendmovementorder(
                         movementorderlist,
                         countryname,

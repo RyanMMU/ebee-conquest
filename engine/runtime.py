@@ -1650,6 +1650,7 @@ def main(eventbus=None):
                             developmentmode=developmentmode,
                         ):
                             selectedprovince["troops"] += recruitamount
+                            markprovincetroopactivity(selectedprovince, currentturnnumber)
                             if not developmentmode:
                                 playergold -= requiredgold
                                 playerpopulation -= requiredpopulation
@@ -1670,7 +1671,12 @@ def main(eventbus=None):
             # for quick search: "end turn button"
             # ON END TURN, process movement orders, apply economy, increment turn, emit next turn event
             if uiaction == EngineUI.actionendturn and gamephase == "play":
-                processmovementorders(movementorderlist, provincemap, emit=eventbus.emit)
+                processmovementorders(
+                    movementorderlist,
+                    provincemap,
+                    emit=eventbus.emit,
+                    currentturnnumber=currentturnnumber,
+                )
                 countrybordersdirty = True
                 playergold,playerpopulation = applyendturneconomy(
                     playercountry,
@@ -1859,6 +1865,7 @@ def main(eventbus=None):
                                     continue
 
                                 sourceprovince["troops"] -= movingtroopcount
+                                markprovincetroopactivity(sourceprovince, currentturnnumber)
                                 movementorderlist.append(
                                     {
                                         "amount": movingtroopcount,
@@ -1869,6 +1876,7 @@ def main(eventbus=None):
                                         "controllercountry": getprovincecontroller(sourceprovince),
                                         "country": getprovincecontroller(sourceprovince),
                                         "countrycolor": sourceprovince.get("countrycolor"),
+                                        "ordercreatedturn": currentturnnumber,
                                     }
                                 )
                                 frontlinepathpreviewset.update(foundpath)
@@ -2140,6 +2148,7 @@ def main(eventbus=None):
 
                     movingtroopcount = sourceprovince["troops"]
                     sourceprovince["troops"] -= movingtroopcount
+                    markprovincetroopactivity(sourceprovince, currentturnnumber)
 
                     movementorderlist.append(
                         {
@@ -2151,6 +2160,7 @@ def main(eventbus=None):
                             "controllercountry": getprovincecontroller(sourceprovince),
                             "country": getprovincecontroller(sourceprovince),
                             "countrycolor": sourceprovince.get("countrycolor"),
+                            "ordercreatedturn": currentturnnumber,
                         }
                     )
                     eventbus.emit(
@@ -2276,6 +2286,7 @@ getcountryborderedges = movementmodule.getcountryborderedges
 getborderworldsegments = movementmodule.getborderworldsegments
 createfrontline = movementmodule.createfrontline
 pointtosegmentdistance = movementmodule.pointtosegmentdistance
+markprovincetroopactivity = movementmodule.markprovincetroopactivity
 
 getrecruitcosts = economymodule.getrecruitcosts
 canrecruittroops = economymodule.canrecruittroops
