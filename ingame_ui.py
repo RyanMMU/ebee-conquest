@@ -59,7 +59,7 @@ class page:
         self.font = pygame.font.SysFont('Verdana', 14)
     
         self.sidebar = sidebar(0, 0, 250, 720)
-        self.sidebar.word('URGENT')
+        self.sidebar.word('NOTIFICATION')
         self.sidebar.word('LOGISTICS')
         self.sidebar.word('COMBAT')
         self.sidebar.word('INTEL')
