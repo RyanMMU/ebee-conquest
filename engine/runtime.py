@@ -9,6 +9,7 @@ from svgelements import Path
 import ctypes
 ctypes.windll.user32.SetProcessDPIAware()
 
+#TODO - OPTIMIZATION: consider using numpy for heavy geometry calculations and data handling, especially for large maps with many provinces and complex shapes. This could significantly improve performance for operations like point-in-polygon tests, polygon transformations, and adjacency graph construction.
 #Local module
 from engine.console import developmentconsole, loaddevmodeflag 
 from engine.gui import (
@@ -29,6 +30,7 @@ from . import economy as economymodule
 from . import api as apimodule
 from . import camera as cameramodule
 from . import eso as esomodule
+from . import npc as npcmodule
 from .events import EventBus, EngineEventType
 
 
@@ -1051,6 +1053,14 @@ def main(eventbus=None):
         recruitpopulationcostperunit,
     ) = initializeplayereconomy(economyconfig)
 
+    npcdirector = npcmodule.NpcDirector(
+        provincemap,
+        provincegraph,
+        countrytocolorlookup=countrytocolorlookup,
+        emit=eventbus.emit,
+        economyconfig=economyconfig,
+    )
+
 
     movementorderlist = []
     routepreviewset = set()
@@ -1062,7 +1072,66 @@ def main(eventbus=None):
     countryborderentrylist = []
     countrybordersdirty = True
     countriesatwarset = set() # track countries at war
+    warpairset = set()
     countrymenutarget = None
+
+    def normalizewarpair(firstcountry, secondcountry):
+        if not firstcountry or not secondcountry:
+            return None
+        first = str(firstcountry).strip()
+        second = str(secondcountry).strip()
+        if not first or not second or first == second:
+            return None
+        if first <= second:
+            return (first, second)
+        return (second, first)
+
+    def canonicalizecountry(rawcountry):
+        if rawcountry is None:
+            return None
+
+        countrytext = str(rawcountry).strip()
+        if not countrytext:
+            return None
+
+        aliaslookup = {}
+        for province in provincemap.values():
+            for key in ("ownercountry", "controllercountry", "country"):
+                knowncountry = province.get(key)
+                if not knowncountry:
+                    continue
+                knowntext = str(knowncountry).strip()
+                if not knowntext:
+                    continue
+                lowerknown = knowntext.lower()
+                if lowerknown not in aliaslookup:
+                    aliaslookup[lowerknown] = knowntext
+
+        return aliaslookup.get(countrytext.lower(), countrytext)
+
+    def handlewardeclared(payload):
+        attacker = canonicalizecountry(payload.get("attacker")) if isinstance(payload, dict) else None
+        defender = canonicalizecountry(payload.get("defender")) if isinstance(payload, dict) else None
+        if not attacker or not defender or attacker == defender:
+            return
+
+        if isinstance(payload, dict):
+            payload["attacker"] = attacker
+            payload["defender"] = defender
+
+        normalizedpair = normalizewarpair(attacker, defender)
+        if normalizedpair is not None:
+            warpairset.add(normalizedpair)
+
+        if playercountry:
+            if attacker == playercountry:
+                countriesatwarset.add(defender)
+            elif defender == playercountry:
+                countriesatwarset.add(attacker)
+
+            npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
+
+    eventbus.subscribe(EngineEventType.WARDECLARED, handlewardeclared)
 
     devconsole = developmentconsole(enabled=developmentmode)
     newssystem = NewsSystem(eventbus)
@@ -1470,7 +1539,11 @@ def main(eventbus=None):
             playercountry,
         )
 
-        canrecruit = selectedprovinceid is not None and getprovincecontroller(provincemap[selectedprovinceid]) == playercountry
+        canrecruit = (
+            selectedprovinceid is not None
+            and getprovincecontroller(provincemap[selectedprovinceid]) == playercountry
+            and getprovinceowner(provincemap[selectedprovinceid]) == playercountry
+        )
         recruitgoldcost, recruitpopulationcost = getrecruitcosts(
             recruitamount,
             recruitgoldcostperunit,
@@ -1541,7 +1614,6 @@ def main(eventbus=None):
 
             if uiaction == EngineUI.actiondeclarewar and gamephase == "play":
                 if countrymenutarget and countrymenutarget != playercountry:
-                    countriesatwarset.add(countrymenutarget)
                     eventbus.emit(
                         EngineEventType.WARDECLARED,
                         {
@@ -1556,7 +1628,10 @@ def main(eventbus=None):
             if uiaction == EngineUI.actionrecruit and gamephase == "play":
                 if selectedprovinceid:
                     selectedprovince = provincemap[selectedprovinceid]
-                    if getprovincecontroller(selectedprovince) == playercountry:
+                    if (
+                        getprovincecontroller(selectedprovince) == playercountry
+                        and getprovinceowner(selectedprovince) == playercountry
+                    ):
                         requiredgold, requiredpopulation = getrecruitcosts(
                             recruitamount,
                             recruitgoldcostperunit,
@@ -1597,6 +1672,11 @@ def main(eventbus=None):
                     provincemap,
                     playergold,
                     playerpopulation,
+                )
+                npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
+                npcdirector.executeturn(
+                    movementorderlist,
+                    currentturnnumber,
                 )
                 currentturnnumber += 1
                 routepreviewset = set()
@@ -1708,7 +1788,10 @@ def main(eventbus=None):
                         frontlineassignmentlist = []
                         frontlinebordersegmentcache = {}
                         countriesatwarset = set()
+                        warpairset = set()
                         countrymenutarget = None
+                        npcdirector.setplayercountry(playercountry)
+                        npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
                         eventbus.emit(
                             EngineEventType.PLAYERCOUNTRYSELECTED,
                             {
@@ -2090,7 +2173,16 @@ def main(eventbus=None):
             elif event.type == pygame.KEYDOWN:
 
             # (for quick ctrl f: developer console)
-                if devconsole.handlekeydown(event, provincemap, playercountry, countrytocolorlookup, defaultshapecolor, troopbadgelist, eventbus=eventbus):
+                if devconsole.handlekeydown(
+                    event,
+                    provincemap,
+                    playercountry,
+                    countrytocolorlookup,
+                    defaultshapecolor,
+                    troopbadgelist,
+                    eventbus=eventbus,
+                    currentturnnumber=currentturnnumber,
+                ):
                     continue # handle dev console input
 
 

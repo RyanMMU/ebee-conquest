@@ -13,7 +13,7 @@ class panel:
         pygame.draw.rect(surface, self.color, self.rect)
         pygame.draw.rect(surface, (25,25,25), self.rect, 1)
 
-class sidebar:
+class leftbar:
 
 
     def __init__(self, x, y, w, h):
@@ -32,6 +32,9 @@ class sidebar:
         pygame.draw.rect(surface, (50, 50, 50), self.rect)
         
         for i, item in enumerate(self.items):
+
+            if not item.strip(): 
+                continue
           
             x = self.rect.x + 10
             y = self.rect.y + 60 + (i * 50)
@@ -40,33 +43,46 @@ class sidebar:
 
             rect = pygame.Rect(x, y, w, h)
 
-            if rect.collidepoint(mouse):
-                color = (0, 200, 0)
+            if 'CLEAR ALL' in item:
+                if rect.collidepoint(mouse):
+                 color = (0,120, 0)  
+                else:
+                    color = (0,220, 0)   
+            elif rect.collidepoint(mouse):
+                    color = (0, 200, 0)
             else:
-                color = (30, 30, 30)
+                    color = (30, 30, 30)
 
             pygame.draw.rect(surface, color, rect)
 
-            text = font.render(item, True, (255, 255, 255))
+            if 'CLEAR ALL' in item:
+                text_color = (0, 0, 0)
+            else:
+                text_color = (255, 255, 255)
+
+            text = font.render(item, True, text_color)
             surface.blit(text, (x + 10, y + 10))
 
+            
 class page:
     def __init__(self):
         pygame.init()
-        self.screen = pygame.display.set_mode((1280, 720))
+        self.screen = pygame.display.set_mode((1280, 720),pygame.RESIZABLE)
     
         self.title_font = pygame.font.SysFont('Verdana', 16,bold= True)
         self.font = pygame.font.SysFont('Verdana', 14)
     
-        self.sidebar = sidebar(0, 0, 250, 720)
-        self.sidebar.word('URGENT')
-        self.sidebar.word('LOGISTICS')
-        self.sidebar.word('COMBAT')
-        self.sidebar.word('INTEL')
+        self.leftbar = leftbar(0, 0, 180, 700)
+        self.leftbar.word('      CLEAR ALL    ')
+        self.leftbar.word('')
+        self.leftbar.word('NOTIFICATIONS')
+        self.leftbar.word('LOGISTICS')
+        self.leftbar.word('COMBAT')
+        self.leftbar.word('INTEL')
 
-        self.topbar = panel(0, 0, 1280, 50, (35,35,35))
-        self.rightbar = panel(1030, 50, 250, 620, (0,0,0))
-        self.bottombar = panel(0, 670, 1280, 50, (35,35,35))
+        self.topbar = panel(0, 0, 1280, 50, (0,0,0))
+        self.rightbar = panel(1100, 50,180, 630, (0,0,0))
+        self.bottombar = panel(0, 679, 1280, 43, (29,29,29))
 
         self.bottom_buttons = b_buttons(self.bottombar.rect)
         self.bottom_buttons.add('RESEARCH')
@@ -85,10 +101,11 @@ class page:
 
             self.screen.fill((10,10,10))
             
-            self.topbar.draw(self.screen)
-            self.sidebar.draw(self.screen, self.font)
+           
+            self.leftbar.draw(self.screen, self.font)
             self.rightbar.draw(self.screen)
             self.bottombar.draw(self.screen)
+            self.topbar.draw(self.screen)
             self.bottom_buttons.draw(self.screen, self.font)
             title = self.title_font.render('OPERATIONAL COMMAND', True, (200, 170, 80))
             self.screen.blit(title, (20, 15))
@@ -117,6 +134,7 @@ class b_buttons:
             x = start_x + (i * (w + spacing))
             y = self.rect.y + 10
             rect = pygame.Rect(x, y, w, h)
+            
 
             if rect.collidepoint(mouse):
                 color = (0, 200, 0)
