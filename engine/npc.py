@@ -123,6 +123,9 @@ class NpcDirector:
             self.warlookup[secondcountry].add(firstcountry)
 
     def rebuildcountryindexes(self):
+        # ESO optimization 24/04
+        # O(c*p) --> O(p)
+        # build all per-country province indexes once per turn and reuse in lookups
         countryset = set()
         controlledindex = defaultdict(list)
         coreindex = defaultdict(list)
@@ -186,6 +189,9 @@ class NpcDirector:
 
         self.currentturnnumber = int(turnnumber)
 
+        # ESO optimization 24/04
+        # O(c*p*k) --> O(p + c*k)
+        # run one index pass up front so downstream country/province queries are cached
         self.rebuildcountryindexes()
         self._initializecountryeconomy()
         summary = {
@@ -901,6 +907,9 @@ class NpcDirector:
         if not warenemyset:
             return 0
 
+        # ESO optimization 24/04
+        # O(big nested branch) --> O(same complexity, lower overhead)
+        # attack decision flow split into focused helpers to reduce repeated calculations and branching cost
         orderscreated = 0
         for enemycountry in warenemyset:
             enemyaggression = self.getenemyaggression(countryname, enemycountry)
