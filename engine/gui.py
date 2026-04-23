@@ -744,12 +744,21 @@ def gui_drawhoverlabel(screen, fontobject, state, mouseposition):
     x = mouseposition[0] + 16
     y = mouseposition[1] + 16
 
+    # use safe access to avoid KeyError when some keys are missing
+    name = state.get("name", "unknown")
+    provinceid = state.get("provinceid", "unknown")
+    population = state.get("population", "unknown")
+    country = state.get("country", "unknown")
+    terrain = state.get("terrain", "unknown")
+    province_count = state.get("province_count", "unknown")
+
     lines = [
-        f"id: {state['name']}",
-        f"Population: {state['population']}",
-        f"Country: {state['country']}",
-        f"Terrain Type: {state['terrain']}",
-        f"Number of provinces: {state['province_count']}"
+        f"State: {name}",
+        f"Province: {provinceid}",
+        f"Population: {population}",
+        f"Country: {country}",
+        f"Terrain Type: {terrain}",
+        f"Number of states: {province_count}",
     ]
 
     text_surfaces = [fontobject.render(line, True, (255, 255, 255)) for line in lines]

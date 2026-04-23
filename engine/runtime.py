@@ -1322,6 +1322,11 @@ def main(eventbus=None):
                                 # O(c*s) --> O(1)
                                 # use precomputed state lookup for hover tooltip
                                 hovertext = esomodule.getstatedata(hoveredstateid, state_data_lookup)
+                                # avoid mutating the shared ESO lookup dict; copy before adding province id
+                                if hovertext is not None:
+                                    hovertext = dict(hovertext)
+                                    if hoveredprovinceid:
+                                        hovertext["provinceid"] = hoveredprovinceid
                             
                             else:
                                 hovertext = None
