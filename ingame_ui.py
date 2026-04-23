@@ -67,7 +67,7 @@ class leftbar:
 class page:
     def __init__(self):
         pygame.init()
-        self.screen = pygame.display.set_mode((1280, 720))
+        self.screen = pygame.display.set_mode((1280, 720),pygame.RESIZABLE)
     
         self.title_font = pygame.font.SysFont('Verdana', 16,bold= True)
         self.font = pygame.font.SysFont('Verdana', 14)
@@ -81,8 +81,8 @@ class page:
         self.leftbar.word('INTEL')
 
         self.topbar = panel(0, 0, 1280, 50, (0,0,0))
-        self.rightbar = panel(1100, 50,180, 620, (0,0,0))
-        self.bottombar = panel(0, 670, 1280, 50, (0,0,0))
+        self.rightbar = panel(1100, 50,180, 630, (0,0,0))
+        self.bottombar = panel(0, 679, 1280, 43, (29,29,29))
 
         self.bottom_buttons = b_buttons(self.bottombar.rect)
         self.bottom_buttons.add('RESEARCH')
