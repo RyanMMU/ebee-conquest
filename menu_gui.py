@@ -25,7 +25,7 @@ target_ease = 1
 
 
 main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 18)
-big_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 18)
+
 
 menu = 'main' 
 run = True
@@ -80,7 +80,7 @@ while run:
                         sys.exit()
                
                 elif button_m < mouse[0] < button_m+button_width and 345 < mouse[1] < 390:
-                        menu = 'settings'
+                        import settings
                 
                 elif button_m < mouse[0] < button_m + button_width and 430 < mouse[1] < 490:
                             run = False
@@ -88,13 +88,7 @@ while run:
                 elif button_m < mouse[0] < button_m + button_width and 255 < mouse[1] < 345:
                         print('loading game....')
             
-            elif menu == 'settings':
-
-                
-                
-       
-                if button_m < mouse[0] < button_m + button_width and 430 < mouse[1] < 490:
-                    menu = 'main'
+            
                     
     if menu == 'main':
         
@@ -156,9 +150,6 @@ while run:
 
 
 
-            
-        
-        
         hover = button_m < mouse[0] < button_m + button_width and 430 < mouse[1] < 490
         new_w = int(button_width * ease3)
         new_x = button_m - (new_w - button_width) // 2
@@ -212,41 +203,6 @@ while run:
         if ease4 > 1.01:
             glow(screen, new_x, new_y, new_w, new_h)
         button(screen, new_x, new_y, new_w, new_h)
-
-
-
-    elif menu == 'settings':
-        t2 = big_font.render('SETTINGS',True,text)
-        title_x2 = (WIDTH // 2) - (t2.get_width() // 2)
-        screen.blit(t2, (title_x2,50))
-
-
-
-
-        hover = button_m < mouse[0] < button_m + button_width and 430 < mouse[1] < 490
-        new_w = int(button_width * ease5)
-        new_x = button_m - (new_w - button_width) // 2
-        
-        new_h = int(button_height * ease5)
-
-        new_y = 430 - (new_h - button_height) // 2
-        txt4 = main_font.render('BACK',True,text)
-        txt4_rect = txt4.get_rect(center=(button_m + button_width // 2, 430 + button_height // 2))
-        screen.blit(txt4,txt4_rect)
-
-        if hover:
-            target_ease = 1.15
-        else:
-            target_ease = 1
-
-        ease5 = lerp(ease5, target_ease, 0.15)
-
-      
-
-        if ease5 > 1.01:
-            glow(screen, new_x, new_y, new_w, new_h)
-        button(screen, new_x, new_y, new_w, new_h)
-
 
 
     pygame.display.flip()

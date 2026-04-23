@@ -21,6 +21,7 @@ from engine.gui import (
     gui_drawmovementorderpaths,
     gui_drawcountrylabels,
     gui_drawcountryborders,
+    drawdevfpsgraph,
 )
 from engine.diagnostics import logstartupdiagnostics, createloadingprogresscallback, logslowpath
 from . import core as coremodule
@@ -28,6 +29,7 @@ from . import movement as movementmodule
 from . import economy as economymodule
 from . import api as apimodule
 from . import camera as cameramodule
+from . import eso as esomodule
 from . import npc as npcmodule
 from .events import EventBus, EngineEventType
 
@@ -211,6 +213,67 @@ def parsecolorvalue(rawcolorvalue):
     return None
 
 
+def blackworld(nonplayablestateshapelist, mapbox):
+    if not nonplayablestateshapelist:
+        return None
+
+    surfacewidth = max(1, int(math.ceil(mapbox["width"])) + 2)
+    surfaceheight = max(1, int(math.ceil(mapbox["height"])) + 2)
+    worldsurface = pygame.Surface((surfacewidth, surfaceheight), pygame.SRCALPHA)
+
+    offsetx = -mapbox["minimumx"]
+    offsety = -mapbox["minimumy"]
+
+    for stateshape in nonplayablestateshapelist:
+        for polygon in stateshape.get("polygons", ()): 
+            worldpoints = polygon.get("points", ())
+            if len(worldpoints) < 3:
+                continue
+            shiftedpoints = [
+                (int(pointx + offsetx), int(pointy + offsety))
+                for pointx, pointy in worldpoints
+            ]
+            if len(shiftedpoints) >= 3:
+                pygame.draw.polygon(worldsurface, (0, 0, 0, 255), shiftedpoints)
+
+    return worldsurface
+
+
+def blitblackworldslice(screen, worldsurface, mapbox, zoomvalue, drawcamerax, cameray):
+    screenwidth, screenheight = screen.get_size()
+
+    minimumworldx = (0.0 - drawcamerax) / zoomvalue
+    maximumworldx = (screenwidth - drawcamerax) / zoomvalue
+    minimumworldy = (0.0 - cameray) / zoomvalue
+    maximumworldy = (screenheight - cameray) / zoomvalue
+
+    sourceleft = int(math.floor(minimumworldx - mapbox["minimumx"]))
+    sourceright = int(math.ceil(maximumworldx - mapbox["minimumx"]))
+    sourcetop = int(math.floor(minimumworldy - mapbox["minimumy"]))
+    sourcebottom = int(math.ceil(maximumworldy - mapbox["minimumy"]))
+
+    sourceleft = max(0, min(worldsurface.get_width(), sourceleft))
+    sourceright = max(0, min(worldsurface.get_width(), sourceright))
+    sourcetop = max(0, min(worldsurface.get_height(), sourcetop))
+    sourcebottom = max(0, min(worldsurface.get_height(), sourcebottom))
+
+    sourcewidth = sourceright - sourceleft
+    sourceheight = sourcebottom - sourcetop
+    if sourcewidth <= 0 or sourceheight <= 0:
+        return
+
+    sourcesurface = worldsurface.subsurface(pygame.Rect(sourceleft, sourcetop, sourcewidth, sourceheight))
+    targetwidth = max(1, int(sourcewidth * zoomvalue))
+    targetheight = max(1, int(sourceheight * zoomvalue))
+    scaledslice = pygame.transform.scale(sourcesurface, (targetwidth, targetheight))
+
+    sourceworldx = mapbox["minimumx"] + sourceleft
+    sourceworldy = mapbox["minimumy"] + sourcetop
+    blitx = int(sourceworldx * zoomvalue + drawcamerax)
+    blity = int(sourceworldy * zoomvalue + cameray)
+    screen.blit(scaledslice, (blitx, blity))
+
+
 
 # TROOP BADGE MULTISELECT
 
@@ -232,27 +295,10 @@ def getbadgehitprovinceid(mouseposition, badgehitlist):
 
 with open("countries.json", "r", encoding="utf-8") as f:
     countries_full = json.load(f)
-
-def get_state_data(state_id, countries_full):
-    for country in countries_full:
-        country_name = country["Country"]
-        states = country["States"]
-
-        for state_name, state_data in states.items():
-            if state_name.lower() == state_id.lower():
-
-                province_count = len(states)
-
-                return {
-                    "name": state_name,
-                    "country": country_name,
-                    "capital": state_data["capital"],
-                    "population": state_data["population"],
-                    "terrain": state_data["terrain"],
-                    "province_count": province_count
-                }
-
-    return None
+# ESO optimization 22/04
+# O(c*s) --> O(1)
+# build state lookup once and reuse for hover data
+state_data_lookup = esomodule.buildstatedatalookup(countries_full)
 
 
     # for countryindex, countryentry in enumerate(rawdata):
@@ -338,61 +384,6 @@ def getselectedtroopentries(selectedprovinceidset, selectedprovinceid, provincem
 
     entries.sort(key=lambda entry: (entry["provinceid"]))
     return entries
-
-
-def eso_buildcountryborderentries(provincemap, eso_provinceedgepairlist, eso_segmentcache):
-    borderentrylist = []
-    for firstprovinceid, secondprovinceid in eso_provinceedgepairlist:
-        firstprovince = provincemap.get(firstprovinceid)
-        secondprovince = provincemap.get(secondprovinceid)
-        if not firstprovince or not secondprovince:
-            continue
-
-        firstcontroller = getprovincecontroller(firstprovince)
-        secondcontroller = getprovincecontroller(secondprovince)
-        if firstcontroller is None or secondcontroller is None:
-            continue
-        if firstcontroller == secondcontroller:
-            continue
-
-        edgekey = (firstprovinceid, secondprovinceid)
-        worldsegmentlist = eso_segmentcache.get(edgekey)
-        if worldsegmentlist is None:
-            worldsegmentlist = movementmodule.getsharedbordersegments(firstprovince, secondprovince)
-            eso_segmentcache[edgekey] = worldsegmentlist
-
-        for segmentstart, segmentend in worldsegmentlist or ():
-            minx = min(segmentstart[0], segmentend[0])
-            maxx = max(segmentstart[0], segmentend[0])
-            miny = min(segmentstart[1], segmentend[1])
-            maxy = max(segmentstart[1], segmentend[1])
-            borderentrylist.append(
-                {
-                    "start": segmentstart,
-                    "end": segmentend,
-                    "minx": minx,
-                    "maxx": maxx,
-                    "miny": miny,
-                    "maxy": maxy,
-                }
-            )
-
-    return borderentrylist
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def getkruskalbridges(segmentlist, maxgapdistance=16.0):
@@ -769,12 +760,13 @@ def main(eventbus=None):
 
     logstartupdiagnostics(startupbegintimestamp, "states loaded", f"count={len(stateshapelist)}")
     statetocountrylookup, countrytocolorlookup = loadcountrydata(countrydatafilepath)
+    allowedstateidset = set(statetocountrylookup.keys())
 
 
     logstartupdiagnostics(
         startupbegintimestamp,
         "countries loaded",
-        f"state_links={len(statetocountrylookup)} country_colors={len(countrytocolorlookup)}",
+        f"state_links={len(statetocountrylookup)} country_colors={len(countrytocolorlookup)} visible_states={len(allowedstateidset)} total_states={len(stateshapelist)}",
     )
     for stateshape in stateshapelist: # to prepare to load province data and assign countries to state 
         statecountry = statetocountrylookup.get(stateshape["id"])
@@ -870,14 +862,59 @@ def main(eventbus=None):
         "Compiling province graph..",
         onlog=appendloadinglog,
     )
-    provincegraph = buildprovinceadjacencygraph(
-        provincemap,
-        # if not graphprogresscallback:
-        #     pygame.quit()
-        #     return
-
-        onprogress=graphprogresscallback,
+    graphcacheloadstart = time.perf_counter()
+    graphcachevalidationstatus = "miss"
+    provincegraph = esomodule.loadprovincegraphcache(provincefilepath, allowedstateidset)
+    if provincegraph is not None:
+        cachedprovinceidset = set(provincegraph.keys())
+        expectedprovinceidset = set(provincemap.keys())
+        if cachedprovinceidset != expectedprovinceidset:
+            graphcachevalidationstatus = "messedUPNODE"
+            provincegraph = None
+        else:
+            for provinceid, neighborids in provincegraph.items():
+                if not neighborids.issubset(expectedprovinceidset):
+                    graphcachevalidationstatus = "NOTneighborref"
+                    provincegraph = None
+                    break
+            if provincegraph is not None:
+                graphcachevalidationstatus = "hit"
+    graphcacheloadelapsed = time.perf_counter() - graphcacheloadstart
+    logstartupdiagnostics(
+        startupbegintimestamp,
+        "province graph cache check",
+        f"status={graphcachevalidationstatus} elapsed={graphcacheloadelapsed:.3f}s nodes={(0 if provincegraph is None else len(provincegraph))}",
     )
+
+    if provincegraph is not None:
+        appendloadinglog(f"ESO cache hit for province graph with {len(provincegraph)} nodes!")
+        if graphprogresscallback and not graphprogresscallback(0, 1):
+            pygame.quit()
+            return
+        if graphprogresscallback and not graphprogresscallback(1, 1):
+            pygame.quit()
+            return
+    else:
+        graphbuildstart = time.perf_counter()
+        provincegraph = buildprovinceadjacencygraph(
+            provincemap,
+            onprogress=graphprogresscallback,
+        )
+        graphbuildelapsed = time.perf_counter() - graphbuildstart
+        logstartupdiagnostics(
+            startupbegintimestamp,
+            "province graph build",
+            f"elapsed={graphbuildelapsed:.3f}s nodes={(0 if provincegraph is None else len(provincegraph))}",
+        )
+        if provincegraph is not None:
+            graphcachestorestart = time.perf_counter()
+            esomodule.storeprovincegraphcache(provincefilepath, provincegraph, allowedstateidset)
+            graphcachestoreelapsed = time.perf_counter() - graphcachestorestart
+            logstartupdiagnostics(
+                startupbegintimestamp,
+                "province graph cache store",
+                f"elapsed={graphcachestoreelapsed:.3f}s nodes={len(provincegraph)}",
+            )
 
 
 
@@ -885,11 +922,33 @@ def main(eventbus=None):
     if provincegraph is None:
         pygame.quit()
         return
-    eso_provinceedgepairlist = []
-    for firstprovinceid, neighboridset in provincegraph.items():
+    playableprovinceidset = {
+        provinceid
+        for provinceid, province in provincemap.items()
+        if province.get("parentstateid") in allowedstateidset
+    }
+
+
+    # ESO optimization 22/04
+    # O(cp) --> O(p)
+    # iterate only playable provinces instead of all provinces
+
+
+    playableprovincemap = {provinceid: provincemap[provinceid] for provinceid in playableprovinceidset}
+    playableprovincegraph = {
+        provinceid: {
+            neighborid
+            for neighborid in provincegraph.get(provinceid, set())
+            if neighborid in playableprovinceidset
+        }
+        for provinceid in playableprovinceidset
+    }
+
+    provinceedgepairlist = []
+    for firstprovinceid, neighboridset in playableprovincegraph.items():
         for secondprovinceid in neighboridset:
             if firstprovinceid < secondprovinceid:
-                eso_provinceedgepairlist.append((firstprovinceid, secondprovinceid))
+                provinceedgepairlist.append((firstprovinceid, secondprovinceid))
 
     totaledges = sum(len(neighborset) for neighborset in provincegraph.values()) // 2
     logstartupdiagnostics(
@@ -900,7 +959,17 @@ def main(eventbus=None):
 
 
 
+    subdivisiongroupstart = time.perf_counter()
     groupedsubdivisionlookup = groupsubdivisionsbystate(provinceenrichedlist, stateshapelist)
+    subdivisiongroupelapsed = time.perf_counter() - subdivisiongroupstart
+
+    playablestateshapelist = [stateshape for stateshape in stateshapelist if stateshape["id"] in allowedstateidset]
+    nonplayablestateshapelist = [stateshape for stateshape in stateshapelist if stateshape["id"] not in allowedstateidset]
+    logstartupdiagnostics(
+        startupbegintimestamp,
+        "world partitioned",
+        f"playable_states={len(playablestateshapelist)} non_playable_states={len(nonplayablestateshapelist)} grouping_elapsed={subdivisiongroupelapsed:.3f}s",
+    )
 
     for stateshape in stateshapelist:
 
@@ -916,6 +985,25 @@ def main(eventbus=None):
 
 
     mapbox = getmapbox(stateshapelist)
+    blackedbuildstart = time.perf_counter()
+    blackedoutworldsurface = blackworld(nonplayablestateshapelist, mapbox)
+    blackedbuildelapsed = time.perf_counter() - blackedbuildstart
+    blackedpolygoncount = sum(len(stateshape.get("polygons", ())) for stateshape in nonplayablestateshapelist)
+    blackedsurfacesize = "none"
+    if blackedoutworldsurface is not None:
+        blackedsurfacesize = f"{blackedoutworldsurface.get_width()}x{blackedoutworldsurface.get_height()}"
+    logstartupdiagnostics(
+        startupbegintimestamp,
+        "blacked world prepared",
+        f"states={len(nonplayablestateshapelist)} polygons={blackedpolygoncount} surface={blackedsurfacesize} elapsed={blackedbuildelapsed:.3f}s",
+    )
+    blackedoutscaledsurface = None
+    blackedoutscaledzoombucket = None
+    logstartupdiagnostics(
+        startupbegintimestamp,
+        "blacked render config",
+        "bucket_step=0.03 close_zoom_threshold=1.45",
+    )
     logstartupdiagnostics(
         startupbegintimestamp,
         "startup complete",
@@ -944,6 +1032,8 @@ def main(eventbus=None):
 
 
     clock = pygame.time.Clock()
+    fpshistory = []
+    fpshistorymaxsamples = 180
     expandedstateid = None
     selectedprovinceid = None
     selectedprovinceidset = set()
@@ -978,9 +1068,9 @@ def main(eventbus=None):
     activefrontlineedgekeyset = set()
     frontlineassignmentlist = []
     frontlinebordersegmentcache = {}
-    eso_countrybordersegmentcache = {}
-    eso_countryborderentrylist = []
-    eso_countrybordersdirty = True
+    countrybordersegmentcache = {}
+    countryborderentrylist = []
+    countrybordersdirty = True
     countriesatwarset = set() # track countries at war
     warpairset = set()
     countrymenutarget = None
@@ -1064,6 +1154,7 @@ def main(eventbus=None):
     isrunning = True
     while isrunning:
         elapsedseconds = clock.tick(60) / 1000.0
+        esomodule.updaterollingfpshistory(fpshistory, clock.get_fps(), fpshistorymaxsamples)
         mouseposition = pygame.mouse.get_pos()
         #this gives x and y (0 and 1)
         windowwidth, windowheight = screen.get_size()
@@ -1108,6 +1199,17 @@ def main(eventbus=None):
         troopbadgehitlist = []
 
 
+        # ESO optimization 22/04
+        # O(d*m) --> O(d+m)
+        # build moving province id set once per frame
+        movingprovinceidset = esomodule.buildmovingprovinceidset(movementorderlist) if movementorderlist else set()
+
+        # ESO optimization 22/04
+        # O(cp*k) --> O(p*k)
+        # skip badge loop entirely when badges are hidden this frame
+        showtroopbadges = gui_shouldshowtroopbadges(zoomvalue, minimumzoomforframe)
+
+
 
         tilewidth = mapbox["width"] * zoomvalue
         if tilewidth > 1:
@@ -1116,10 +1218,30 @@ def main(eventbus=None):
         else:
             copyshiftlist = [0]
 
+        if blackedoutworldsurface is not None:
+            if zoomvalue <= 1.45:
+                zoomstep = 0.03
+                currentzoombucket = round(zoomvalue / zoomstep) * zoomstep
+                if blackedoutscaledzoombucket is None or abs(blackedoutscaledzoombucket - currentzoombucket) > 1e-9:
+                    scaledwidth = max(1, int(blackedoutworldsurface.get_width() * currentzoombucket))
+                    scaledheight = max(1, int(blackedoutworldsurface.get_height() * currentzoombucket))
+                    blackedoutscaledsurface = pygame.transform.scale(blackedoutworldsurface, (scaledwidth, scaledheight))
+                    blackedoutscaledzoombucket = currentzoombucket
+
+                for copyshift in copyshiftlist:
+                    drawcamerax = camerax + copyshift
+                    blitx = int(mapbox["minimumx"] * currentzoombucket + drawcamerax)
+                    blity = int(mapbox["minimumy"] * currentzoombucket + cameray)
+                    screen.blit(blackedoutscaledsurface, (blitx, blity))
+            else:
+                for copyshift in copyshiftlist:
+                    drawcamerax = camerax + copyshift
+                    blitblackworldslice(screen, blackedoutworldsurface, mapbox, zoomvalue, drawcamerax, cameray)
+
         for copyshift in copyshiftlist:
             drawcamerax = camerax + copyshift
 
-            for stateshape in stateshapelist:
+            for stateshape in playablestateshapelist:
                 staterectanglescreen = getscreenrectangle(stateshape["rectangle"], zoomvalue, drawcamerax, cameray)
                 if not staterectanglescreen.colliderect(screenrectangle):
                     continue
@@ -1186,10 +1308,13 @@ def main(eventbus=None):
                             hoveredstateid = drawitem.get("parentid", stateshape["id"])
                             hoveredprovinceid = drawitem["id"] if "parentid" in drawitem else None
 
-                            statetocountry, _ = loadcountrydata("countries.json")
-
                             if hoveredstateid:
-                                hovertext = get_state_data(hoveredstateid, countries_full)
+
+                                # ESO optimization 22/04
+                                # O(c*s) --> O(1)
+                                # use precomputed state lookup for hover tooltip
+                                hovertext = esomodule.getstatedata(hoveredstateid, state_data_lookup)
+                            
                             else:
                                 hovertext = None
 
@@ -1218,7 +1343,12 @@ def main(eventbus=None):
                         basefillcolor = (95, 145, 255)
 
 
-                    elif any(order["current"] == drawitem.get("id") for order in movementorderlist):
+                    # ESO optimization 22/04
+                    # O(d*m) --> O(d+m)
+                    # use set membership instead of scanning movement orders for each draw item
+                    
+                    
+                    elif drawitem.get("id") in movingprovinceidset:
                         basefillcolor = (132, 96, 226)
 
 
@@ -1244,18 +1374,19 @@ def main(eventbus=None):
                         pygame.draw.polygon(screen, finalfillcolor, drawpolygon)
                         pygame.draw.polygon(screen, (50, 50, 50), drawpolygon, 1)
 
-        if gamephase == "play":
+        # ESO optimization 22/04
+        # O(cp*k) --> O(p*k)
+        # badge pass now runs only when needed and only on playable provinces
+        
+        if gamephase == "play" and showtroopbadges:
             for copyshift in copyshiftlist:
                 drawcamerax = camerax + copyshift
-                for provinceid, province in provincemap.items():
+                for provinceid, province in playableprovincemap.items():
                     if int(province.get("troops", 0)) <= 0:
                         continue
 
                     provincerectanglescreen = getscreenrectangle(province["rectangle"], zoomvalue, drawcamerax, cameray)
                     if not provincerectanglescreen.colliderect(screenrectangle):
-                        continue
-
-                    if not gui_shouldshowtroopbadges(zoomvalue, minimumzoomforframe):
                         continue
 
                     troopbadgelist.append((provincerectanglescreen.center, province["troops"]))
@@ -1281,18 +1412,18 @@ def main(eventbus=None):
                 screenrectangle,
             )
 
-        if eso_countrybordersdirty:
-            eso_countryborderentrylist = eso_buildcountryborderentries(
-                provincemap,
-                eso_provinceedgepairlist,
-                eso_countrybordersegmentcache,
+        if countrybordersdirty:
+            countryborderentrylist = esomodule.buildcountryborderentries(
+                playableprovincemap,
+                provinceedgepairlist,
+                countrybordersegmentcache,
             )
-            eso_countrybordersdirty = False
+            countrybordersdirty = False
 
         if gamephase == "play" and zoomvalue >= minimumzoomforframe * 1.08:
             gui_drawcountryborders(
                 screen,
-                eso_countryborderentrylist,
+                countryborderentrylist,
                 zoomvalue,
                 camerax,
                 cameray,
@@ -1303,7 +1434,7 @@ def main(eventbus=None):
         if gui_shouldshowcountrylabels(zoomvalue, minimumzoomforframe):
             gui_drawcountrylabels(
                 screen,
-                stateshapelist,
+                playablestateshapelist,
                 zoomvalue,
                 camerax,
                 cameray,
@@ -1318,7 +1449,7 @@ def main(eventbus=None):
         frontlineedgebykey = {}
         hoveredfrontlineedgekey = None
         if gamephase == "play" and playercountry and (frontlineplacementmode or activefrontlineedgekeyset):
-            frontlineborderedgelist = getcountryborderedges(provincemap, provincegraph, playercountry)
+            frontlineborderedgelist = getcountryborderedges(playableprovincemap, playableprovincegraph, playercountry)
             frontlineedgebykey = {edge["edgekey"]: edge for edge in frontlineborderedgelist}
 
             currentfrontlineedgekeyset = set(frontlineedgebykey.keys())
@@ -1335,7 +1466,7 @@ def main(eventbus=None):
 
                     worldsegmentlist = frontlinebordersegmentcache.get(edgekey)
                     if worldsegmentlist is None:
-                        worldsegmentlist = getborderworldsegments(provincemap, borderedge)
+                        worldsegmentlist = getborderworldsegments(playableprovincemap, borderedge)
                         frontlinebordersegmentcache[edgekey] = worldsegmentlist
 
                     for worldsegmentstart, worldsegmentend in worldsegmentlist:
@@ -1442,6 +1573,8 @@ def main(eventbus=None):
         )
         runtimeui.update(elapsedseconds)
         runtimeui.draw(screen)
+        if developmentmode and gamephase == "play":
+            drawdevfpsgraph(screen, smallfont, fpshistory)
 
 
 
@@ -1525,7 +1658,7 @@ def main(eventbus=None):
             # ON END TURN, process movement orders, apply economy, increment turn, emit next turn event
             if uiaction == EngineUI.actionendturn and gamephase == "play":
                 processmovementorders(movementorderlist, provincemap, emit=eventbus.emit)
-                eso_countrybordersdirty = True
+                countrybordersdirty = True
                 playergold,playerpopulation = applyendturneconomy(
                     playercountry,
                     provincemap,
@@ -1637,7 +1770,7 @@ def main(eventbus=None):
                     if runtimeui.clickchoosebutton(event.pos) and pendingcountry:
                         playercountry = pendingcountry
                         gamephase = "play"
-                        eso_countrybordersdirty = True
+                        countrybordersdirty = True
                         expandedstateid = None
                         selectedprovinceid = None
                         selectedprovinceidset = set()
@@ -1664,8 +1797,8 @@ def main(eventbus=None):
                 if gamephase == "play" and frontlineplacementmode:
                     if hoveredfrontlineedgekey and hoveredfrontlineedgekey in frontlineedgebykey:
                         frontlineresult = createfrontline(
-                            provincemap,
-                            provincegraph,
+                            playableprovincemap,
+                            playableprovincegraph,
                             playercountry,
                             [entry["provinceid"] for entry in selectedtroopentries],
                             frontlineedgebykey[hoveredfrontlineedgekey],
