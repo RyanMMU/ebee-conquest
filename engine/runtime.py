@@ -1162,6 +1162,59 @@ def main(eventbus=None):
         syncfrontlineoverlays()
         return routeupdateset
 
+    def getcombatprovinceidset():
+        combatprovinceidset = set()
+        for movementorder in movementorderlist:
+            if int(movementorder.get("amount", 0)) <= 0:
+                continue
+
+            resumeturn = movementorder.get("_resumeonturn")
+            if resumeturn is not None and currentturnnumber is not None:
+                if int(currentturnnumber) < int(resumeturn):
+                    continue
+
+            pathlist = movementorder.get("path", [])
+            currentpathindex = int(movementorder.get("index", 0))
+            if currentpathindex >= len(pathlist) - 1:
+                continue
+
+            nextprovinceid = pathlist[currentpathindex + 1]
+            nextprovince = provincemap.get(nextprovinceid)
+            if not nextprovince:
+                continue
+
+            movingcountry = movementorder.get("controllercountry", movementorder.get("country"))
+            defendingcountry = getprovincecontroller(nextprovince)
+            if not movingcountry or not defendingcountry or movingcountry == defendingcountry:
+                continue
+
+            basedefenders = int(nextprovince.get("troops", 0))
+            movingdefenders = 0
+            for candidateorder in movementorderlist:
+                if candidateorder is movementorder:
+                    continue
+                if int(candidateorder.get("amount", 0)) <= 0:
+                    continue
+
+                candidateresumeturn = candidateorder.get("_resumeonturn")
+                if candidateresumeturn is not None and currentturnnumber is not None:
+                    if int(currentturnnumber) < int(candidateresumeturn):
+                        continue
+
+                if candidateorder.get("current") != nextprovinceid:
+                    continue
+
+                candidatecountry = candidateorder.get("controllercountry", candidateorder.get("country"))
+                if candidatecountry != defendingcountry:
+                    continue
+
+                movingdefenders += int(candidateorder.get("amount", 0))
+
+            if basedefenders + movingdefenders > 0:
+                combatprovinceidset.add(nextprovinceid)
+
+        return combatprovinceidset
+
     def handlewardeclared(payload):
         attacker = canonicalizecountry(payload.get("attacker")) if isinstance(payload, dict) else None
         defender = canonicalizecountry(payload.get("defender")) if isinstance(payload, dict) else None
@@ -1264,6 +1317,7 @@ def main(eventbus=None):
         # O(d*m) --> O(d+m)
         # build moving province id set once per frame
         movingprovinceidset = esomodule.buildmovingprovinceidset(movementorderlist) if movementorderlist else set()
+        combatprovinceidset = getcombatprovinceidset() if movementorderlist else set()
 
         # ESO optimization 22/04
         # O(cp*k) --> O(p*k)
@@ -1455,7 +1509,25 @@ def main(eventbus=None):
                     if not provincerectanglescreen.colliderect(screenrectangle):
                         continue
 
-                    troopbadgelist.append((provincerectanglescreen.center, province["troops"]))
+                    iscombatprovince = provinceid in combatprovinceidset
+                    ismovingprovince = provinceid in movingprovinceidset
+                    badgebackground = (0, 0, 0)
+                    badgeborder = (165, 165, 165)
+                    if iscombatprovince:
+                        badgebackground = (214, 122, 36)
+                        badgeborder = (255, 188, 92)
+                    elif ismovingprovince:
+                        badgebackground = (214, 194, 64)
+                        badgeborder = (255, 238, 132)
+
+                    troopbadgelist.append(
+                        {
+                            "center": provincerectanglescreen.center,
+                            "troops": province["troops"],
+                            "backgroundcolor": badgebackground,
+                            "bordercolor": badgeborder,
+                        }
+                    )
 
                     # for quick search: "troop badge hitbox"
                     troopbadgerect = gui_gettroopbadgerect(provincerectanglescreen.center, province["troops"], runtimeui.troopbadgefont)
