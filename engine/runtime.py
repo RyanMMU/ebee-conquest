@@ -1067,6 +1067,7 @@ def main(eventbus=None):
     frontlineplacementmode = False
     activefrontlineedgekeyset = set()
     frontlineassignmentlist = []
+    frontlineassignmentcounter = 0
     frontlinebordersegmentcache = {}
     countrybordersegmentcache = {}
     countryborderentrylist = []
@@ -1108,6 +1109,58 @@ def main(eventbus=None):
                     aliaslookup[lowerknown] = knowntext
 
         return aliaslookup.get(countrytext.lower(), countrytext)
+
+    def nextfrontlineid():
+        nonlocal frontlineassignmentcounter
+        frontlineassignmentcounter += 1
+        countryprefix = playercountry or "frontline"
+        return f"{countryprefix}_frontline_{frontlineassignmentcounter}"
+
+    def syncfrontlineoverlays():
+        nonlocal frontlineassignmentlist, activefrontlineedgekeyset
+        frontlineassignmentlist = [
+            assignment for assignment in frontlineassignmentlist
+            if assignment.get("active", True)
+        ]
+        activefrontlineedgekeyset = set()
+        for assignment in frontlineassignmentlist:
+            activefrontlineedgekeyset.update(assignment.get("frontlineedgekeys", ()))
+
+    def refreshfrontlines():
+        nonlocal frontlineassignmentlist, activefrontlineedgekeyset
+        if not playercountry or not frontlineassignmentlist:
+            frontlineassignmentlist = []
+            activefrontlineedgekeyset = set()
+            return set()
+
+        activefrontlineidset = {
+            assignment.get("frontlineid")
+            for assignment in frontlineassignmentlist
+            if assignment.get("frontlineid")
+        }
+        movementmodule.normalizefrontlineassignments(
+            playableprovincemap,
+            activefrontlineidset=activefrontlineidset,
+        )
+
+        routeupdateset = set()
+        refreshedassignments = []
+        for assignment in frontlineassignmentlist:
+            refreshresult = movementmodule.refreshfrontlineassignment(
+                assignment,
+                playableprovincemap,
+                playableprovincegraph,
+                movementorderlist,
+                emit=eventbus.emit,
+                currentturnnumber=currentturnnumber,
+            )
+            routeupdateset.update(refreshresult.get("routepreviewset", ()))
+            if assignment.get("active", True):
+                refreshedassignments.append(assignment)
+
+        frontlineassignmentlist = refreshedassignments
+        syncfrontlineoverlays()
+        return routeupdateset
 
     def handlewardeclared(payload):
         attacker = canonicalizecountry(payload.get("attacker")) if isinstance(payload, dict) else None
@@ -1689,8 +1742,9 @@ def main(eventbus=None):
                     movementorderlist,
                     currentturnnumber,
                 )
+                frontlineupdates = refreshfrontlines()
                 currentturnnumber += 1
-                routepreviewset = set()
+                routepreviewset = frontlineupdates
                 eventbus.emit(
                     EngineEventType.NEXTTURN,
                     {
@@ -1823,78 +1877,29 @@ def main(eventbus=None):
                             frontlineedgebykey[hoveredfrontlineedgekey],
                         )
                         if frontlineresult["success"]:
+                            frontlineresult["frontlineid"] = nextfrontlineid()
+                            movementmodule.registerfrontlineassignment(
+                                playableprovincemap,
+                                frontlineresult["frontlineid"],
+                                frontlineresult.get("transferplan", ()),
+                            )
+                            deploymentresult = movementmodule.applyfrontlinetransferplan(
+                                frontlineresult,
+                                frontlineresult.get("transferplan", ()),
+                                playableprovincemap,
+                                playableprovincegraph,
+                                movementorderlist,
+                                emit=eventbus.emit,
+                                currentturnnumber=currentturnnumber,
+                            )
                             frontlineassignmentlist.append(frontlineresult)
-                            activefrontlineedgekeyset.update(frontlineresult["frontlineedgekeys"])
+                            syncfrontlineoverlays()
                             selectedprovinceidset = set(frontlineresult["frontlineprovinceids"])
                             selectedprovinceid = frontlineresult["anchorprovinceid"]
-                            allowedprovinceidset = {
-                                provinceid
-                                for provinceid, province in provincemap.items()
-                                if getprovincecontroller(province) == playercountry
-                            }
-                            frontlinepathpreviewset = set()
-                            for transferentry in frontlineresult.get("transferplan", ()):
-                                sourceprovinceid = transferentry.get("sourceprovinceid")
-                                targetprovinceid = transferentry.get("targetprovinceid")
-                                transferamount = int(transferentry.get("amount", 0))
-                                if transferamount <= 0:
-                                    continue
-                                if not sourceprovinceid or not targetprovinceid:
-                                    continue
-                                if sourceprovinceid == targetprovinceid:
-                                    continue
-
-                                sourceprovince = provincemap.get(sourceprovinceid)
-                                if not sourceprovince:
-                                    continue
-                                if getprovincecontroller(sourceprovince) != playercountry:
-                                    continue
-
-                                foundpath = findprovincepath(
-                                    sourceprovinceid,
-                                    targetprovinceid,
-                                    provincemap,
-                                    provincegraph,
-                                    allowedprovinceidset=allowedprovinceidset,
-                                )
-                                if len(foundpath) < 2:
-                                    continue
-
-                                movingtroopcount = min(transferamount, int(sourceprovince.get("troops", 0)))
-                                if movingtroopcount <= 0:
-                                    continue
-
-                                sourceprovince["troops"] -= movingtroopcount
-                                markprovincetroopactivity(sourceprovince, currentturnnumber)
-                                movementorderlist.append(
-                                    {
-                                        "amount": movingtroopcount,
-                                        "path": foundpath,
-                                        "index": 0,
-                                        "current": foundpath[0],
-                                        "speedmodifier": 1.0,
-                                        "controllercountry": getprovincecontroller(sourceprovince),
-                                        "country": getprovincecontroller(sourceprovince),
-                                        "countrycolor": sourceprovince.get("countrycolor"),
-                                        "ordercreatedturn": currentturnnumber,
-                                    }
-                                )
-                                frontlinepathpreviewset.update(foundpath)
-                                eventbus.emit(
-                                    EngineEventType.MOVEORDERCREATED,
-                                    {
-                                        "sourceProvinceId": sourceprovinceid,
-                                        "destinationProvinceId": targetprovinceid,
-                                        "path": list(foundpath),
-                                        "troops": movingtroopcount,
-                                        "country": getprovincecontroller(sourceprovince),
-                                        "turn": currentturnnumber,
-                                    },
-                                )
                             selectedprovince = provincemap.get(selectedprovinceid) if selectedprovinceid else None
                             if selectedprovince:
                                 expandedstateid = selectedprovince.get("parentid", expandedstateid)
-                            routepreviewset = frontlinepathpreviewset
+                            routepreviewset = deploymentresult["routepreviewset"]
                             countrymenutarget = None
                             frontlineplacementmode = False
                         continue

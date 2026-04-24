@@ -66,6 +66,118 @@ def isprovinceentrenched(province, currentturnnumber):
     return getprovinceentrenchmentturns(province, currentturnnumber) >= entrenchmentturnrequired
 
 
+def allocatesurvivors(totalremainingtroops, contributionlist):
+    if totalremainingtroops <= 0 or not contributionlist:
+        return [0 for _ in contributionlist]
+
+    totalcontribution = sum(max(0, int(contribution)) for contribution in contributionlist)
+    if totalcontribution <= 0:
+        return [0 for _ in contributionlist]
+
+    baselist = []
+    remainderlist = []
+    assignedtotal = 0
+    for index, contribution in enumerate(contributionlist):
+        safecontribution = max(0, int(contribution))
+        scaledvalue = safecontribution * int(totalremainingtroops)
+        basevalue = scaledvalue // totalcontribution
+        baselist.append(basevalue)
+        assignedtotal += basevalue
+        remainderlist.append((scaledvalue % totalcontribution, safecontribution, -index))
+
+    remainingtroops = int(totalremainingtroops) - assignedtotal
+    if remainingtroops > 0:
+        remainderlist.sort(reverse=True)
+        for _, _, negativeindex in remainderlist[:remainingtroops]:
+            baselist[-negativeindex] += 1
+
+    return baselist
+
+
+def ensureprovincefrontlineassignments(province):
+    frontlineassignments = province.get("frontlineassignments")
+    if isinstance(frontlineassignments, dict):
+        return frontlineassignments
+
+    frontlineassignments = {}
+    province["frontlineassignments"] = frontlineassignments
+    return frontlineassignments
+
+
+def getprovincefrontlinetroops(province, frontlineid=None):
+    if province is None:
+        return 0
+
+    frontlineassignments = province.get("frontlineassignments")
+    if not isinstance(frontlineassignments, dict):
+        return 0
+
+    if frontlineid is None:
+        return sum(max(0, int(amount)) for amount in frontlineassignments.values())
+
+    return max(0, int(frontlineassignments.get(frontlineid, 0)))
+
+
+def setprovincefrontlinetroops(province, frontlineid, troopcount):
+    if province is None or not frontlineid:
+        return 0
+
+    frontlineassignments = ensureprovincefrontlineassignments(province)
+    safeamount = max(0, int(troopcount))
+    if safeamount <= 0:
+        frontlineassignments.pop(frontlineid, None)
+    else:
+        frontlineassignments[frontlineid] = safeamount
+    return safeamount
+
+
+def addprovincefrontlinetroops(province, frontlineid, troopdelta):
+    currentamount = getprovincefrontlinetroops(province, frontlineid)
+    return setprovincefrontlinetroops(province, frontlineid, currentamount + int(troopdelta))
+
+
+def getprovinceunassignedtroops(province):
+    if province is None:
+        return 0
+    totaltroops = max(0, int(province.get("troops", 0)))
+    return max(0, totaltroops - getprovincefrontlinetroops(province))
+
+
+def normalizefrontlineassignments(provincemap, activefrontlineidset=None):
+    for province in provincemap.values():
+        frontlineassignments = province.get("frontlineassignments")
+        if not isinstance(frontlineassignments, dict):
+            continue
+
+        cleanedassignments = {}
+        assignedtroops = 0
+        for frontlineid, rawamount in frontlineassignments.items():
+            if activefrontlineidset is not None and frontlineid not in activefrontlineidset:
+                continue
+
+            safeamount = max(0, int(rawamount))
+            if safeamount <= 0:
+                continue
+
+            cleanedassignments[frontlineid] = safeamount
+            assignedtroops += safeamount
+
+        totaltroops = max(0, int(province.get("troops", 0)))
+        if assignedtroops > totaltroops and cleanedassignments:
+            frontlineidlist = sorted(cleanedassignments.keys())
+            normalizedamounts = allocatesurvivors(
+                totaltroops,
+                [cleanedassignments[frontlineid] for frontlineid in frontlineidlist],
+            )
+            cleanedassignments = {
+                frontlineid: amount
+                for frontlineid, amount in zip(frontlineidlist, normalizedamounts)
+                if amount > 0
+            }
+
+        province["frontlineassignments"] = cleanedassignments
+
+
 # Movement starts
 def prepareprovincemetadata(provincelist):
     enrichedlist = []
@@ -79,6 +191,7 @@ def prepareprovincemetadata(provincelist):
         enrichedprovince["controllercountry"] = None
         enrichedprovince["country"] = None
         enrichedprovince["lasttroopactivityturn"] = 0
+        enrichedprovince["frontlineassignments"] = {}
         enrichedlist.append(enrichedprovince)
     return enrichedlist
 
@@ -251,6 +364,15 @@ def processmovementorders(movementorderlist, provincemap, emit, currentturnnumbe
         return interruptedorderlist, totalmovingdefenders
 
     for movementorder in movementorderlist:
+        resumeturn = movementorder.get("_resumeonturn")
+        if resumeturn is not None and currentturnnumber is not None:
+            if int(currentturnnumber) < int(resumeturn):
+                continue
+            movementorder.pop("_resumeonturn", None)
+
+        if movementorder.pop("_skipnextprocessing", False):
+            continue
+
         if int(movementorder.get("amount", 0)) <= 0:
             markorderfinished(movementorder, movementorder.get("_finishreason", "depleted"))
             continue
@@ -298,11 +420,26 @@ def processmovementorders(movementorderlist, provincemap, emit, currentturnnumbe
                 if defenders > 0 and attackers <= effectivedefenders:
                     remainingeffective = effectivedefenders - attackers
                     remainingdefenders = int(math.ceil(remainingeffective / defensemultiplier)) if remainingeffective > 0 else 0
-                    nextprovince["troops"] = max(0, min(defenders, remainingdefenders))
+                    remainingsurvivors = max(0, min(defenders, remainingdefenders))
 
-                    for interruptedorder in interruptedorderlist:
-                        interruptedorder["amount"] = 0
-                        markorderfinished(interruptedorder, "interrupted_defense")
+                    interruptedamountlist = [int(order.get("amount", 0)) for order in interruptedorderlist]
+                    survivorallocation = allocatesurvivors(
+                        remainingsurvivors,
+                        [basedefenders] + interruptedamountlist,
+                    )
+                    nextprovince["troops"] = survivorallocation[0] if survivorallocation else remainingsurvivors
+
+                    for interruptedorder, survivingtroops in zip(interruptedorderlist, survivorallocation[1:]):
+                        if survivingtroops <= 0:
+                            interruptedorder["amount"] = 0
+                            markorderfinished(interruptedorder, "interrupted_defense")
+                            continue
+
+                        interruptedorder["amount"] = survivingtroops
+                        if currentturnnumber is None:
+                            interruptedorder["_skipnextprocessing"] = True
+                        else:
+                            interruptedorder["_resumeonturn"] = int(currentturnnumber) + 1
 
                     markprovincetroopactivity(nextprovince, currentturnnumber)
 
@@ -396,6 +533,13 @@ def processmovementorders(movementorderlist, provincemap, emit, currentturnnumbe
         elif currentpathindex >= len(pathlist) - 1:
             destinationprovinceid = pathlist[-1]
             provincemap[destinationprovinceid]["troops"] += movementorder["amount"]
+            frontlineid = movementorder.get("frontlineid")
+            if frontlineid:
+                addprovincefrontlinetroops(
+                    provincemap[destinationprovinceid],
+                    frontlineid,
+                    movementorder["amount"],
+                )
             markprovincetroopactivity(provincemap[destinationprovinceid], currentturnnumber)
             markorderfinished(movementorder, "arrived")
 
@@ -854,9 +998,7 @@ def getborderworldsegments(provincemap, borderedge):
     return []
 
 
-def getfrontlineprovinces(provincemap, provincegraph, playercountry, anchorprovinceid, targetcountry=None):
-
-
+def getfrontlineprovinces(provincemap, provincegraph, playercountry, anchorprovinceid, targetcountry=None, nearbydepth=2):
     anchorprovince = provincemap.get(anchorprovinceid)
     if not anchorprovince or getprovincecontroller(anchorprovince) != playercountry:
         return set()
@@ -884,39 +1026,183 @@ def getfrontlineprovinces(provincemap, provincegraph, playercountry, anchorprovi
         if provincehasmatchingborder:
             frontierprovinceidset.add(provinceid)
 
-    if anchorprovinceid not in frontierprovinceidset:
-        frontierprovinceidset.add(anchorprovinceid)
+    traversalprovinceidset = {anchorprovinceid}
+    if frontierprovinceidset:
+        traversalprovinceidset.update(frontierprovinceidset)
+        depthlimit = max(0, int(nearbydepth))
+        frontierdepthlookup = {provinceid: 0 for provinceid in frontierprovinceidset}
+        openlist = list(frontierprovinceidset)
+        while openlist:
+            currentprovinceid = openlist.pop(0)
+            currentdepth = frontierdepthlookup[currentprovinceid]
+            if currentdepth >= depthlimit:
+                continue
+
+            for neighborprovinceid in provincegraph.get(currentprovinceid, ()):
+                neighborprovince = provincemap.get(neighborprovinceid)
+                if not neighborprovince:
+                    continue
+                if getprovincecontroller(neighborprovince) != playercountry:
+                    continue
+
+                nextdepth = currentdepth + 1
+                existingdepth = frontierdepthlookup.get(neighborprovinceid)
+                if existingdepth is not None and existingdepth <= nextdepth:
+                    continue
+                frontierdepthlookup[neighborprovinceid] = nextdepth
+                traversalprovinceidset.add(neighborprovinceid)
+                openlist.append(neighborprovinceid)
 
     frontlineprovinceidset = set()
     openlist = [anchorprovinceid]
+    visitedprovinceidset = set()
     while openlist:
         currentprovinceid = openlist.pop(0)
-        if currentprovinceid in frontlineprovinceidset:
+        if currentprovinceid in visitedprovinceidset:
             continue
-        if currentprovinceid not in frontierprovinceidset:
+        visitedprovinceidset.add(currentprovinceid)
+
+        currentprovince = provincemap.get(currentprovinceid)
+        if not currentprovince or getprovincecontroller(currentprovince) != playercountry:
+            continue
+        if currentprovinceid not in traversalprovinceidset:
             continue
 
-        frontlineprovinceidset.add(currentprovinceid)
+        if currentprovinceid in frontierprovinceidset:
+            frontlineprovinceidset.add(currentprovinceid)
 
         for neighborprovinceid in provincegraph.get(currentprovinceid, ()):
-            if neighborprovinceid in frontierprovinceidset:
+            neighborprovince = provincemap.get(neighborprovinceid)
+            if not neighborprovince:
+                continue
+            if getprovincecontroller(neighborprovince) != playercountry:
+                continue
+            if neighborprovinceid in traversalprovinceidset:
                 openlist.append(neighborprovinceid)
 
+    if not frontlineprovinceidset and anchorprovinceid in provincemap:
+        frontlineprovinceidset.add(anchorprovinceid)
+
     return frontlineprovinceidset
+
+
+def buildbalancedtransferplan(sourceamountlookup, targetprovinceids):
+    validsourceprovinceids = [
+        provinceid
+        for provinceid, amount in sorted(sourceamountlookup.items())
+        if int(amount) > 0
+    ]
+    if not validsourceprovinceids or not targetprovinceids:
+        return {
+            "totalassignedtroops": 0,
+            "transferplan": [],
+            "targetprovinceids": [],
+        }
+
+    sourceremaininglookup = {
+        provinceid: max(0, int(sourceamountlookup.get(provinceid, 0)))
+        for provinceid in validsourceprovinceids
+    }
+    totalavailabletroops = sum(sourceremaininglookup.values())
+    if totalavailabletroops <= 0:
+        return {
+            "totalassignedtroops": 0,
+            "transferplan": [],
+            "targetprovinceids": [],
+        }
+
+    targetcount = len(targetprovinceids)
+    baseallocation = totalavailabletroops // targetcount
+    remainder = totalavailabletroops % targetcount
+    targetdesiredlookup = {}
+    for targetindex, provinceid in enumerate(targetprovinceids):
+        targetdesiredlookup[provinceid] = baseallocation + (1 if targetindex < remainder else 0)
+
+    transferplan = []
+    # Keep troops already sitting in a target province there before planning
+    # any transfers. This avoids sideways shuffling on an unchanged frontline.
+    targetremaininglookup = dict(targetdesiredlookup)
+    for targetprovinceid in targetprovinceids:
+        stationedtroops = sourceremaininglookup.get(targetprovinceid, 0)
+        if stationedtroops <= 0:
+            continue
+
+        retainedtroops = min(targetremaininglookup.get(targetprovinceid, 0), stationedtroops)
+        if retainedtroops <= 0:
+            continue
+
+        transferplan.append(
+            {
+                "sourceprovinceid": targetprovinceid,
+                "targetprovinceid": targetprovinceid,
+                "amount": retainedtroops,
+            }
+        )
+        sourceremaininglookup[targetprovinceid] -= retainedtroops
+        targetremaininglookup[targetprovinceid] -= retainedtroops
+
+    surplussourceprovinceids = [
+        provinceid for provinceid in validsourceprovinceids if sourceremaininglookup.get(provinceid, 0) > 0
+    ]
+    sourcecursor = 0
+    for targetprovinceid in targetprovinceids:
+        neededtroops = targetremaininglookup.get(targetprovinceid, 0)
+        while neededtroops > 0 and sourcecursor < len(surplussourceprovinceids):
+            sourceprovinceid = surplussourceprovinceids[sourcecursor]
+            sourceavailable = sourceremaininglookup.get(sourceprovinceid, 0)
+            if sourceavailable <= 0:
+                sourcecursor += 1
+                continue
+
+            assignedtroops = min(neededtroops, sourceavailable)
+            if assignedtroops <= 0:
+                sourcecursor += 1
+                continue
+
+            transferplan.append(
+                {
+                    "sourceprovinceid": sourceprovinceid,
+                    "targetprovinceid": targetprovinceid,
+                    "amount": assignedtroops,
+                }
+            )
+            sourceremaininglookup[sourceprovinceid] -= assignedtroops
+            neededtroops -= assignedtroops
+            if sourceremaininglookup[sourceprovinceid] <= 0:
+                sourcecursor += 1
+
+    totalassignedtroops = sum(entry["amount"] for entry in transferplan)
+    effectivefrontlineprovinceids = []
+    seenprovinceids = set()
+    for transferentry in transferplan:
+        targetprovinceid = transferentry["targetprovinceid"]
+        if targetprovinceid in seenprovinceids:
+            continue
+        seenprovinceids.add(targetprovinceid)
+        effectivefrontlineprovinceids.append(targetprovinceid)
+
+    return {
+        "totalassignedtroops": totalassignedtroops,
+        "transferplan": transferplan,
+        "targetprovinceids": effectivefrontlineprovinceids,
+    }
 
 
 def buildfrontlinetransferplan(provincemap, selectedprovinceids, frontlineprovinceids, playercountry):
 
     validsourceprovinceids = []
+    sourceamountlookup = {}
     for provinceid in sorted(set(selectedprovinceids or ())):
         province = provincemap.get(provinceid)
         if not province:
             continue
         if getprovincecontroller(province) != playercountry:
             continue
-        if int(province.get("troops", 0)) <= 0:
+        availabletroops = getprovinceunassignedtroops(province)
+        if availabletroops <= 0:
             continue
         validsourceprovinceids.append(provinceid)
+        sourceamountlookup[provinceid] = availabletroops
 
     if not validsourceprovinceids:
         return {
@@ -942,75 +1228,332 @@ def buildfrontlinetransferplan(provincemap, selectedprovinceids, frontlineprovin
             "targetprovinceids": [],
         }
 
-    sourceremaininglookup = {
-        provinceid: int(provincemap[provinceid].get("troops", 0)) for provinceid in validsourceprovinceids
-    }
-    totalavailabletroops = sum(sourceremaininglookup.values())
+    return buildbalancedtransferplan(sourceamountlookup, validtargetprovinceids)
 
 
-    if totalavailabletroops <= 0:
+def buildfrontlinedivisiontransferplan(provincemap, frontlineid, frontlineprovinceids, playercountry):
+    sourceamountlookup = {}
+    for provinceid, province in sorted(provincemap.items()):
+        if getprovincecontroller(province) != playercountry:
+            continue
+        assignedtroops = getprovincefrontlinetroops(province, frontlineid)
+        if assignedtroops <= 0:
+            continue
+        sourceamountlookup[provinceid] = assignedtroops
+
+    return buildbalancedtransferplan(sourceamountlookup, list(frontlineprovinceids or ()))
+
+
+def orderfrontlineprovinceids(frontlineprovinceids, anchorprovinceid):
+    orderedprovinceids = sorted(set(frontlineprovinceids or ()))
+    if anchorprovinceid in orderedprovinceids:
+        orderedprovinceids.remove(anchorprovinceid)
+        orderedprovinceids.insert(0, anchorprovinceid)
+    return orderedprovinceids
+
+
+def buildfrontlineedges(
+    provincemap,
+    provincegraph,
+    playercountry,
+    frontlineprovinceids,
+    anchorprovinceid,
+    targetcountry=None,
+    fallbackforeignprovinceid=None,
+):
+    frontlineedgekeys = set()
+    frontlineedgelist = []
+
+    for playerprovinceid in frontlineprovinceids:
+        for foreignprovinceid in provincegraph.get(playerprovinceid, ()):
+            foreignprovince = provincemap.get(foreignprovinceid)
+            if not foreignprovince:
+                continue
+
+            foreigncountry = getprovincecontroller(foreignprovince)
+            if foreigncountry == playercountry:
+                continue
+            if targetcountry is not None and foreigncountry != targetcountry:
+                continue
+
+            playerprovince = provincemap.get(playerprovinceid)
+            if not playerprovince:
+                continue
+            sharedsegments = getsharedbordersegments(playerprovince, foreignprovince)
+            if not sharedsegments:
+                continue
+
+            edgekey = getborderedgekey(playerprovinceid, foreignprovinceid)
+            if edgekey in frontlineedgekeys:
+                continue
+
+            frontlineedgekeys.add(edgekey)
+            frontlineedgelist.append(
+                {
+                    "playerprovinceid": playerprovinceid,
+                    "foreignprovinceid": foreignprovinceid,
+                    "edgekey": edgekey,
+                    "foreigncountry": foreigncountry,
+                    "worldsegments": sharedsegments,
+                }
+            )
+
+    if not frontlineedgekeys and fallbackforeignprovinceid:
+        fallbackedgekey = getborderedgekey(anchorprovinceid, fallbackforeignprovinceid)
+        frontlineedgekeys.add(fallbackedgekey)
+        frontlineedgelist.append(
+            {
+                "playerprovinceid": anchorprovinceid,
+                "foreignprovinceid": fallbackforeignprovinceid,
+                "edgekey": fallbackedgekey,
+            }
+        )
+
+    return frontlineedgekeys, frontlineedgelist
+
+
+def registerfrontlineassignment(provincemap, frontlineid, transferplan):
+    sourcedelta = {}
+    for transferentry in transferplan or ():
+        sourceprovinceid = transferentry.get("sourceprovinceid")
+        amount = max(0, int(transferentry.get("amount", 0)))
+        if not sourceprovinceid or amount <= 0:
+            continue
+        sourcedelta[sourceprovinceid] = sourcedelta.get(sourceprovinceid, 0) + amount
+
+    for sourceprovinceid, amount in sourcedelta.items():
+        sourceprovince = provincemap.get(sourceprovinceid)
+        if not sourceprovince:
+            continue
+        availabletroops = getprovinceunassignedtroops(sourceprovince)
+        if availabletroops <= 0:
+            continue
+        addprovincefrontlinetroops(sourceprovince, frontlineid, min(amount, availabletroops))
+
+
+def applyfrontlinetransferplan(
+    frontlineassignment,
+    transferplan,
+    provincemap,
+    provincegraph,
+    movementorderlist,
+    emit=None,
+    currentturnnumber=None,
+):
+    frontlineid = frontlineassignment.get("frontlineid")
+    playercountry = frontlineassignment.get("country")
+    routepreviewset = set()
+    appliedtransferplan = []
+
+    if not frontlineid or not playercountry:
         return {
-            "totalassignedtroops": 0,
-            "transferplan": [],
-            "targetprovinceids": [],
+            "routepreviewset": routepreviewset,
+            "appliedtransferplan": appliedtransferplan,
+            "orderscreated": 0,
         }
 
-    targetcount = len(validtargetprovinceids)
-    baseallocation = totalavailabletroops // targetcount
-    remainder = totalavailabletroops % targetcount
-    targetdesiredlookup = {}
+    allowedprovinceidset = {
+        provinceid
+        for provinceid, province in provincemap.items()
+        if getprovincecontroller(province) == playercountry
+    }
+    orderscreated = 0
+    for transferentry in transferplan or ():
+        sourceprovinceid = transferentry.get("sourceprovinceid")
+        targetprovinceid = transferentry.get("targetprovinceid")
+        transferamount = max(0, int(transferentry.get("amount", 0)))
+        if not sourceprovinceid or not targetprovinceid or transferamount <= 0:
+            continue
 
+        sourceprovince = provincemap.get(sourceprovinceid)
+        if not sourceprovince or getprovincecontroller(sourceprovince) != playercountry:
+            continue
 
-    for targetindex, provinceid in enumerate(validtargetprovinceids):
-        targetdesiredlookup[provinceid] = baseallocation + (1 if targetindex < remainder else 0)
+        availablefrontlinetroops = getprovincefrontlinetroops(sourceprovince, frontlineid)
+        movingtroopcount = min(
+            transferamount,
+            availablefrontlinetroops,
+            max(0, int(sourceprovince.get("troops", 0))),
+        )
+        if movingtroopcount <= 0:
+            continue
 
-    transferplan = []
-    sourcecursor = 0
-
-
-
-    for targetprovinceid in validtargetprovinceids:
-        neededtroops = targetdesiredlookup.get(targetprovinceid, 0)
-        while neededtroops > 0 and sourcecursor < len(validsourceprovinceids):
-            sourceprovinceid = validsourceprovinceids[sourcecursor]
-            sourceavailable = sourceremaininglookup[sourceprovinceid]
-            if sourceavailable <= 0:
-                sourcecursor += 1
-                continue
-
-            assignedtroops = min(neededtroops, sourceavailable)
-            if assignedtroops <= 0:
-                sourcecursor += 1
-                continue
-
-            transferplan.append(
+        if sourceprovinceid == targetprovinceid:
+            appliedtransferplan.append(
                 {
                     "sourceprovinceid": sourceprovinceid,
                     "targetprovinceid": targetprovinceid,
-                    "amount": assignedtroops,
+                    "amount": movingtroopcount,
                 }
             )
-            sourceremaininglookup[sourceprovinceid] -= assignedtroops
-            neededtroops -= assignedtroops
-            if sourceremaininglookup[sourceprovinceid] <= 0:
-                sourcecursor += 1
-
-    totalassignedtroops = sum(entry["amount"] for entry in transferplan)
-    effectivefrontlineprovinceids = []
-    seenprovinceids = set()
-
-
-    for transferentry in transferplan:
-        targetprovinceid = transferentry["targetprovinceid"]
-        if targetprovinceid in seenprovinceids:
             continue
-        seenprovinceids.add(targetprovinceid)
-        effectivefrontlineprovinceids.append(targetprovinceid)
 
+        foundpath = findprovincepath(
+            sourceprovinceid,
+            targetprovinceid,
+            provincemap,
+            provincegraph,
+            allowedprovinceidset=allowedprovinceidset,
+        )
+        if len(foundpath) < 2:
+            continue
+
+        appliedtransferplan.append(
+            {
+                "sourceprovinceid": sourceprovinceid,
+                "targetprovinceid": targetprovinceid,
+                "amount": movingtroopcount,
+            }
+        )
+
+        sourceprovince["troops"] -= movingtroopcount
+        addprovincefrontlinetroops(sourceprovince, frontlineid, -movingtroopcount)
+        markprovincetroopactivity(sourceprovince, currentturnnumber)
+        movementorderlist.append(
+            {
+                "amount": movingtroopcount,
+                "path": foundpath,
+                "index": 0,
+                "current": foundpath[0],
+                "speedmodifier": 1.0,
+                "controllercountry": getprovincecontroller(sourceprovince),
+                "country": getprovincecontroller(sourceprovince),
+                "countrycolor": sourceprovince.get("countrycolor"),
+                "ordercreatedturn": currentturnnumber,
+                "frontlineid": frontlineid,
+                "divisionid": frontlineid,
+            }
+        )
+        routepreviewset.update(foundpath)
+        orderscreated += 1
+
+        if emit is not None:
+            emit(
+                EngineEventType.MOVEORDERCREATED,
+                {
+                    "sourceProvinceId": sourceprovinceid,
+                    "destinationProvinceId": targetprovinceid,
+                    "path": list(foundpath),
+                    "troops": movingtroopcount,
+                    "country": getprovincecontroller(sourceprovince),
+                    "turn": currentturnnumber,
+                    "frontlineId": frontlineid,
+                },
+            )
+
+    frontlineassignment["transferplan"] = appliedtransferplan
     return {
-        "totalassignedtroops": totalassignedtroops,
-        "transferplan": transferplan,
-        "targetprovinceids": effectivefrontlineprovinceids,
+        "routepreviewset": routepreviewset,
+        "appliedtransferplan": appliedtransferplan,
+        "orderscreated": orderscreated,
+    }
+
+
+def refreshfrontlineassignment(
+    frontlineassignment,
+    provincemap,
+    provincegraph,
+    movementorderlist,
+    emit=None,
+    currentturnnumber=None,
+):
+    frontlineid = frontlineassignment.get("frontlineid")
+    playercountry = frontlineassignment.get("country")
+    if not frontlineid or not playercountry:
+        frontlineassignment["active"] = False
+        return {
+            "success": False,
+            "routepreviewset": set(),
+        }
+
+    normalizefrontlineassignments(provincemap)
+
+    for province in provincemap.values():
+        if getprovincecontroller(province) == playercountry:
+            continue
+        setprovincefrontlinetroops(province, frontlineid, 0)
+
+    assignedstationarytroops = 0
+    for province in provincemap.values():
+        assignedstationarytroops += getprovincefrontlinetroops(province, frontlineid)
+    assignedmovingtroops = sum(
+        max(0, int(order.get("amount", 0)))
+        for order in movementorderlist
+        if order.get("frontlineid") == frontlineid
+    )
+    totaltroops = assignedstationarytroops + assignedmovingtroops
+    if totaltroops <= 0:
+        frontlineassignment["active"] = False
+        frontlineassignment["assignedtroops"] = 0
+        frontlineassignment["frontlineprovinceids"] = []
+        frontlineassignment["frontlineedgekeys"] = set()
+        frontlineassignment["frontlineedges"] = []
+        frontlineassignment["transferplan"] = []
+        return {
+            "success": False,
+            "routepreviewset": set(),
+        }
+
+    anchorprovinceid = frontlineassignment.get("anchorprovinceid")
+    nearbydepth = max(1, int(frontlineassignment.get("nearbydepth", 2)))
+    targetcountry = frontlineassignment.get("targetcountry")
+    frontlineprovinceidset = getfrontlineprovinces(
+        provincemap,
+        provincegraph,
+        playercountry,
+        anchorprovinceid,
+        targetcountry=targetcountry,
+        nearbydepth=nearbydepth,
+    )
+
+    orderedfrontlineprovinceids = orderfrontlineprovinceids(frontlineprovinceidset, anchorprovinceid)
+    if orderedfrontlineprovinceids and anchorprovinceid not in orderedfrontlineprovinceids:
+        frontlineassignment["anchorprovinceid"] = orderedfrontlineprovinceids[0]
+    elif not orderedfrontlineprovinceids:
+        fallbackprovinceids = [
+            provinceid
+            for provinceid, province in sorted(provincemap.items())
+            if getprovincefrontlinetroops(province, frontlineid) > 0
+        ]
+        orderedfrontlineprovinceids = fallbackprovinceids[:1]
+        if orderedfrontlineprovinceids:
+            frontlineassignment["anchorprovinceid"] = orderedfrontlineprovinceids[0]
+
+    frontlineedgekeys, frontlineedges = buildfrontlineedges(
+        provincemap,
+        provincegraph,
+        playercountry,
+        orderedfrontlineprovinceids,
+        frontlineassignment.get("anchorprovinceid"),
+        targetcountry=targetcountry,
+        fallbackforeignprovinceid=frontlineassignment.get("fallbackforeignprovinceid"),
+    )
+
+    transferplanresult = buildfrontlinedivisiontransferplan(
+        provincemap,
+        frontlineid,
+        orderedfrontlineprovinceids,
+        playercountry,
+    )
+    deploymentresult = applyfrontlinetransferplan(
+        frontlineassignment,
+        transferplanresult.get("transferplan", ()),
+        provincemap,
+        provincegraph,
+        movementorderlist,
+        emit=emit,
+        currentturnnumber=currentturnnumber,
+    )
+
+    frontlineassignment["active"] = True
+    frontlineassignment["assignedtroops"] = totaltroops
+    frontlineassignment["frontlineprovinceids"] = orderedfrontlineprovinceids
+    frontlineassignment["frontlineedgekeys"] = frontlineedgekeys
+    frontlineassignment["frontlineedges"] = frontlineedges
+    frontlineassignment["nearbydepth"] = nearbydepth
+    return {
+        "success": True,
+        "routepreviewset": deploymentresult["routepreviewset"],
     }
 
 
@@ -1049,14 +1592,12 @@ def createfrontline(provincemap, provincegraph, playercountry, selectedprovincei
         playercountry,
         anchorprovinceid,
         targetcountry=targetcountry,
+        nearbydepth=nearbydepth,
     )
     if not nearbyfrontlineprovinceidset:
         nearbyfrontlineprovinceidset = {anchorprovinceid}
 
-    frontlineprovinceids = sorted(nearbyfrontlineprovinceidset)
-    if anchorprovinceid in frontlineprovinceids:
-        frontlineprovinceids.remove(anchorprovinceid)
-        frontlineprovinceids.insert(0, anchorprovinceid)
+    frontlineprovinceids = orderfrontlineprovinceids(nearbyfrontlineprovinceidset, anchorprovinceid)
 
     frontlineplan = buildfrontlinetransferplan(
         provincemap,
@@ -1078,55 +1619,15 @@ def createfrontline(provincemap, provincegraph, playercountry, selectedprovincei
             "transferplan": [],
         }
 
-    frontlineedgekeys = set()
-    frontlineedgelist = []
-
-    for playerprovinceid in assignedprovinceids:
-        for foreignprovinceid in provincegraph.get(playerprovinceid, ()):
-            foreignprovince = provincemap.get(foreignprovinceid)
-            if not foreignprovince:
-                continue
-
-            foreigncountry = getprovincecontroller(foreignprovince)
-            if foreigncountry == playercountry:
-                continue
-            if targetcountry is not None and foreigncountry != targetcountry:
-                continue
-
-            playerprovince = provincemap.get(playerprovinceid)
-            if not playerprovince:
-                continue
-            sharedsegments = getsharedbordersegments(playerprovince, foreignprovince)
-            if not sharedsegments:
-                continue
-
-            edgekey = getborderedgekey(playerprovinceid, foreignprovinceid)
-            if edgekey in frontlineedgekeys:
-                continue
-            frontlineedgekeys.add(edgekey)
-            frontlineedgelist.append(
-                {
-                    "playerprovinceid": playerprovinceid,
-                    "foreignprovinceid": foreignprovinceid,
-                    "edgekey": edgekey,
-                    "foreigncountry": foreigncountry,
-                    "worldsegments": sharedsegments,
-                }
-            )
-
-    if not frontlineedgekeys:
-        fallbackedgekey = getborderedgekey(
-            anchorprovinceid,
-            borderedge.get("foreignprovinceid"),
-        )
-        frontlineedgekeys.add(fallbackedgekey)
-        frontlineedgelist.append(
-            {
-                "playerprovinceid": anchorprovinceid,
-                "foreignprovinceid": borderedge.get("foreignprovinceid"),
-                "edgekey": fallbackedgekey,
-            }
-        )
+    frontlineedgekeys, frontlineedgelist = buildfrontlineedges(
+        provincemap,
+        provincegraph,
+        playercountry,
+        assignedprovinceids,
+        anchorprovinceid,
+        targetcountry=targetcountry,
+        fallbackforeignprovinceid=borderedge.get("foreignprovinceid"),
+    )
 
     return {
 
@@ -1136,6 +1637,12 @@ def createfrontline(provincemap, provincegraph, playercountry, selectedprovincei
         "frontlineedgekeys": frontlineedgekeys,
         "frontlineedges": frontlineedgelist,
         "anchorprovinceid": anchorprovinceid,
+        "targetcountry": targetcountry,
+        "country": playercountry,
+        "nearbydepth": nearbydepth,
+        "frontlineid": None,
+        "fallbackforeignprovinceid": borderedge.get("foreignprovinceid"),
+        "active": True,
         "transferplan": frontlineplan["transferplan"],
     }
 
