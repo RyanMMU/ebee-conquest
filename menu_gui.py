@@ -229,12 +229,12 @@ while run:
         vol_text = main_font.render('Volume: ' + str(volume) + '%', True, text)
         screen.blit(vol_text, (button_m, 250))
 
-        pygame.draw.rect(screen, (60, 60, 60), (button_m, 290, button_width, 20))
+        pygame.draw.rect(screen, (60, 60, 60), (button_m, 290, button_width,8))
         bar_fill = int(button_width * volume / 100)
-        pygame.draw.rect(screen, (0, 255, 0), (button_m, 290, bar_fill, 20))
+        pygame.draw.rect(screen, (0, 255, 0), (button_m, 290, bar_fill, 8))
 
         knob = button_m + bar_fill
-        pygame.draw.circle(screen, (255, 255, 255), (knob, 300), 12)
+        pygame.draw.circle(screen, (255, 255, 255), (knob,295),8)
 
     
 
@@ -267,7 +267,6 @@ while run:
     clock.tick(500)
 
 
-    
-    
+ 
 pygame.quit()           
 sys.exit()
