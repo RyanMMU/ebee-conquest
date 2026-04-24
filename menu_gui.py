@@ -21,14 +21,18 @@ ease2= 1
 ease3= 1
 ease4 = 1
 ease5 = 1
+ease_backbutton = 1
 target_ease = 1
 
 
 main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 18)
+settings_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 36)
 
 
 menu = 'main' 
 run = True
+volume = 50
+
 
 
 button_width = 297
@@ -59,7 +63,7 @@ def button(screen,x,y,w,h):
 clock = pygame.time.Clock()
 
 while run:
-    mouse = pygame.mouse.get_pos() #restored
+    mouse = pygame.mouse.get_pos() 
     screen.blit(bg_image, (0, 0))
     
     for event in pygame.event.get():
@@ -70,24 +74,32 @@ while run:
 
 
         if event.type == pygame.MOUSEBUTTONDOWN:
+    
+    
+            if menu == 'settings':
+                if button_m < mouse[0] < button_m + button_width and 280 < mouse[1] < 320:
+                        volume_drag = True
+                        volume = int((mouse[0] - button_m) / button_width * 100)
+                        volume = max(0, min(100, volume))
+                        pygame.mixer.music.set_volume(volume / 100)
+                if button_m < mouse[0] < button_m + button_width and 400 < mouse[1] < 453:
+                        menu = 'main'
 
-            if menu== 'main':
-            
-                
+            elif menu == 'main':
                 if button_m < mouse[0] < button_m + button_width and 170 < mouse[1] < 223:
-                        main()
-                        pygame.quit()
-                        sys.exit()
-               
+                    main()
+                    pygame.quit()
+                    sys.exit()
+
                 elif button_m < mouse[0] < button_m+button_width and 345 < mouse[1] < 390:
-                        import settings
-                
+                    menu = 'settings'
+
                 elif button_m < mouse[0] < button_m + button_width and 430 < mouse[1] < 490:
-                            run = False
+                    run = False
 
                 elif button_m < mouse[0] < button_m + button_width and 255 < mouse[1] < 345:
-                        print('loading game....')
-            
+                    print('loading game....')
+
             
                     
     if menu == 'main':
@@ -203,6 +215,51 @@ while run:
         if ease4 > 1.01:
             glow(screen, new_x, new_y, new_w, new_h)
         button(screen, new_x, new_y, new_w, new_h)
+
+
+    if menu == 'settings':
+        overlay = pygame.Surface((WIDTH, HEIGHT))
+        overlay.set_alpha(200)
+        overlay.fill((0, 0, 0))
+        screen.blit(overlay, (0, 0))
+
+        title = settings_font.render('      SETTINGS', True, text)
+        screen.blit(title, (button_m, 30))
+
+        vol_text = main_font.render('Volume: ' + str(volume) + '%', True, text)
+        screen.blit(vol_text, (button_m, 250))
+
+        pygame.draw.rect(screen, (60, 60, 60), (button_m, 290, button_width, 20))
+        bar_fill = int(button_width * volume / 100)
+        pygame.draw.rect(screen, (0, 255, 0), (button_m, 290, bar_fill, 20))
+
+        knob = button_m + bar_fill
+        pygame.draw.circle(screen, (255, 255, 255), (knob, 300), 12)
+
+    
+
+        hover_back = button_m < mouse[0] < button_m + button_width and 400 < mouse[1] < 453
+
+        new_w = int(button_width * ease_backbutton)
+        new_x = button_m - (new_w - button_width) // 2
+
+        new_h = int(button_height * ease_backbutton)
+        new_y = 400 - (new_h - button_height) // 2
+
+        if hover_back:
+            target_ease = 1.15
+        else:
+            target_ease = 1
+
+        ease_backbutton = lerp(ease_backbutton, target_ease, 0.15)
+
+        if ease_backbutton > 1.01:
+            glow(screen, new_x, new_y, new_w, new_h)
+        button(screen, new_x, new_y, new_w, new_h)
+
+        back_text = main_font.render('BACK', True, text)
+        back_rect = back_text.get_rect(center=(new_x + new_w // 2, new_y + new_h // 2))
+        screen.blit(back_text, back_rect)
 
 
     pygame.display.flip()
