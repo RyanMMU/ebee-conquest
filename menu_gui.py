@@ -10,7 +10,7 @@ def lerp(start, end, t):
 
 WIDTH,HEIGHT = 1280,720
 
-screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.RESIZABLE | pygame.SCALED)
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
 pygame.display.set_caption('Ebee Conquest - Main Menu') 
 
@@ -22,7 +22,11 @@ ease3= 1
 ease4 = 1
 ease5 = 1
 ease_backbutton = 1
-target_ease = 1
+expand = 1
+
+
+is_fullscreen = False
+ease_fullscreen = 1 
 
 
 main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 18)
@@ -63,27 +67,33 @@ def button(screen,x,y,w,h):
 clock = pygame.time.Clock()
 
 while run:
-    mouse = pygame.mouse.get_pos() 
+    mouse = pygame.mouse.get_pos()
     screen.blit(bg_image, (0, 0))
-    
-    for event in pygame.event.get():
 
-        
+    for event in pygame.event.get():
         if event.type == pygame.QUIT:
             run = False
 
-
         if event.type == pygame.MOUSEBUTTONDOWN:
-    
-    
             if menu == 'settings':
                 if button_m < mouse[0] < button_m + button_width and 280 < mouse[1] < 320:
-                        volume_drag = True
-                        volume = int((mouse[0] - button_m) / button_width * 100)
-                        volume = max(0, min(100, volume))
-                        pygame.mixer.music.set_volume(volume / 100)
-                if button_m < mouse[0] < button_m + button_width and 400 < mouse[1] < 453:
-                        menu = 'main'
+                    volume = int((mouse[0] - button_m) / button_width * 100)
+                    volume = max(0, min(100, volume))
+                    pygame.mixer.music.set_volume(volume / 100)
+
+                if button_m < mouse[0] < button_m + button_width and 330 < mouse[1] < 383:
+                    is_fullscreen = not is_fullscreen
+                    if is_fullscreen:
+                        screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+                    else:
+                        screen = pygame.display.set_mode((WIDTH, HEIGHT))
+                    w, h = screen.get_size()
+                    button_m = (w // 2) - (button_width // 2)
+                    bg_image = pygame.transform.smoothscale(pygame.image.load('Game Menu UI Design (1).png').convert(), (w, h))
+
+
+            if button_m < mouse[0] < button_m + button_width and 400 < mouse[1] < 453:
+                            menu = 'main'
 
             elif menu == 'main':
                 if button_m < mouse[0] < button_m + button_width and 170 < mouse[1] < 223:
@@ -100,6 +110,7 @@ while run:
                 elif button_m < mouse[0] < button_m + button_width and 255 < mouse[1] < 345:
                     print('loading game....')
 
+        
             
                     
     if menu == 'main':
@@ -119,11 +130,11 @@ while run:
 
         
         if hover:
-            target_ease = 1.15
+            expand = 1.15
         else:
-            target_ease = 1
+            expand = 1
 
-        ease = lerp(ease, target_ease, 0.15)
+        ease = lerp(ease, expand, 0.15)
 
       
 
@@ -148,11 +159,11 @@ while run:
 
 
         if hover:
-            target_ease = 1.15
+            expand = 1.15
         else:
-            target_ease = 1
+            expand = 1
 
-        ease2 = lerp(ease2, target_ease, 0.15)
+        ease2 = lerp(ease2, expand, 0.15)
 
       
 
@@ -176,11 +187,11 @@ while run:
         screen.blit(txt3, txt3_rect)
 
         if hover:
-            target_ease = 1.15
+            expand = 1.15
         else:
-            target_ease = 1
+            expand = 1
 
-        ease3 = lerp(ease3, target_ease, 0.15)
+        ease3 = lerp(ease3, expand, 0.15)
 
       
 
@@ -204,11 +215,11 @@ while run:
         screen.blit(txt5, txt5_rect)
 
         if hover:
-            target_ease = 1.15
+            expand = 1.15
         else:
-            target_ease = 1
+            expand = 1
 
-        ease4 = lerp(ease4, target_ease, 0.15)
+        ease4 = lerp(ease4, expand, 0.15)
 
       
 
@@ -217,41 +228,65 @@ while run:
         button(screen, new_x, new_y, new_w, new_h)
 
 
+
+
+
+
+
     if menu == 'settings':
-        overlay = pygame.Surface((WIDTH, HEIGHT))
+        overlay = pygame.Surface(screen.get_size())
         overlay.set_alpha(200)
         overlay.fill((0, 0, 0))
         screen.blit(overlay, (0, 0))
 
-        title = settings_font.render('      SETTINGS', True, text)
+        title = settings_font.render(' SETTINGS', True, text)
         screen.blit(title, (button_m, 30))
 
         vol_text = main_font.render('Volume: ' + str(volume) + '%', True, text)
         screen.blit(vol_text, (button_m, 250))
 
-        pygame.draw.rect(screen, (60, 60, 60), (button_m, 290, button_width,8))
+        pygame.draw.rect(screen, (60, 60, 60), (button_m, 290, button_width, 8))
         bar_fill = int(button_width * volume / 100)
         pygame.draw.rect(screen, (0, 255, 0), (button_m, 290, bar_fill, 8))
 
         knob = button_m + bar_fill
-        pygame.draw.circle(screen, (255, 255, 255), (knob,295),8)
+        pygame.draw.circle(screen, (255, 255, 255), (knob, 295), 8)
+
+        
+        hover_fullscreen = button_m < mouse[0] < button_m + button_width and 330 < mouse[1] < 383
+
+        new_w = int(button_width * ease_fullscreen)
+        new_x = button_m - (new_w - button_width) // 2
+        new_h = int(button_height * ease_fullscreen)
+        new_y = 330 - (new_h - button_height) // 2
+
+        if hover_fullscreen:
+            expand = 1.15
+        else:
+            expand = 1
+        ease_fullscreen = lerp(ease_fullscreen, expand, 0.15)
+
+        if ease_fullscreen > 1.01:
+            glow(screen, new_x, new_y, new_w, new_h)
+        button(screen, new_x, new_y, new_w, new_h)
+
+        fs_text = 'TOGGLE FULLSCREEN: ON' if is_fullscreen else 'TOGGLE FULLSCREEN: OFF'
+        fullscreen_text = main_font.render(fs_text, True, text)
+        fs_box = fullscreen_text.get_rect(center=(new_x + new_w // 2, new_y + new_h // 2))
+        screen.blit(fullscreen_text, fs_box)
 
     
-
         hover_back = button_m < mouse[0] < button_m + button_width and 400 < mouse[1] < 453
-
         new_w = int(button_width * ease_backbutton)
         new_x = button_m - (new_w - button_width) // 2
-
         new_h = int(button_height * ease_backbutton)
         new_y = 400 - (new_h - button_height) // 2
 
         if hover_back:
-            target_ease = 1.15
+            expand = 1.15
         else:
-            target_ease = 1
-
-        ease_backbutton = lerp(ease_backbutton, target_ease, 0.15)
+            expand = 1
+        ease_backbutton = lerp(ease_backbutton, expand, 0.15)
 
         if ease_backbutton > 1.01:
             glow(screen, new_x, new_y, new_w, new_h)
@@ -260,7 +295,6 @@ while run:
         back_text = main_font.render('BACK', True, text)
         back_rect = back_text.get_rect(center=(new_x + new_w // 2, new_y + new_h // 2))
         screen.blit(back_text, back_rect)
-
 
     pygame.display.flip()
 
