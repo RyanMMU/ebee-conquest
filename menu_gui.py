@@ -28,6 +28,8 @@ expand = 1
 is_fullscreen = False
 ease_fullscreen = 1 
 
+volume_drag = False
+
 
 main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 18)
 settings_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 36)
@@ -76,10 +78,15 @@ while run:
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             if menu == 'settings':
-                if button_m < mouse[0] < button_m + button_width and 280 < mouse[1] < 320:
+                vol_bar_rect = pygame.Rect(button_m, 280, button_width, 30)
+                if vol_bar_rect.collidepoint(mouse):
+                    volume_drag = True
                     volume = int((mouse[0] - button_m) / button_width * 100)
                     volume = max(0, min(100, volume))
                     pygame.mixer.music.set_volume(volume / 100)
+
+
+
 
                 if button_m < mouse[0] < button_m + button_width and 330 < mouse[1] < 383:
                     is_fullscreen = not is_fullscreen
@@ -92,7 +99,8 @@ while run:
                     bg_image = pygame.transform.smoothscale(pygame.image.load('Game Menu UI Design (1).png').convert(), (w, h))
 
 
-            if button_m < mouse[0] < button_m + button_width and 400 < mouse[1] < 453:
+
+                if button_m < mouse[0] < button_m + button_width and 400 < mouse[1] < 453:
                             menu = 'main'
 
             elif menu == 'main':
@@ -110,8 +118,25 @@ while run:
                 elif button_m < mouse[0] < button_m + button_width and 255 < mouse[1] < 345:
                     print('loading game....')
 
-        
-            
+
+
+
+
+    if event.type == pygame.MOUSEBUTTONUP:
+        if event.button == 1:
+            volume_drag = False
+
+    if event.type == pygame.MOUSEMOTION:
+        if volume_drag and menu == 'settings':
+            volume = int((mouse[0] - button_m) / button_width * 100)
+            volume = max(0, min(100, volume))
+            pygame.mixer.music.set_volume(volume / 100)
+
+
+
+
+
+
                     
     if menu == 'main':
         
