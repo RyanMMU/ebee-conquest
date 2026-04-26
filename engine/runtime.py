@@ -674,22 +674,27 @@ def drawloadingscreen(
 
 
 
-def main(eventbus=None):
+def main(eventbus=None, is_fullscreen=False):
     if eventbus is None:
         eventbus = EventBus()
-
     startupbegintimestamp = time.perf_counter()
     pygame.init()
-
-
     logstartupdiagnostics(startupbegintimestamp, "pygame init", f"python={platform.python_version()} pygame={pygame.version.ver}")
-    screen = pygame.display.set_mode((defaultwindowwidth, defaultwindowheight), pygame.RESIZABLE)
+
+    # Set display mode once based on is_fullscreen
+    if is_fullscreen:
+        display_flags = pygame.FULLSCREEN
+        screen = pygame.display.set_mode((0, 0), display_flags)
+    else:
+        display_flags = pygame.RESIZABLE  
+        screen = pygame.display.set_mode((defaultwindowwidth, defaultwindowheight), display_flags)
+
     logstartupdiagnostics(
         startupbegintimestamp,
         "window created",
-        f"size={defaultwindowwidth}x{defaultwindowheight} driver={pygame.display.get_driver()}",
+        f"size={screen.get_width()}x{screen.get_height()} driver={pygame.display.get_driver()} fullscreen={is_fullscreen}",
     )
-
+        
     if os.path.exists("dev.txt"):
         pygame.display.set_caption("EbeeEngine Dev Build - APRIL 19 2024")
     else:
@@ -2281,6 +2286,8 @@ def main(eventbus=None):
 
 
             elif event.type == pygame.VIDEORESIZE:
+                if is_fullscreen: 
+                    continue
                 oldwindowwidth, oldwindowheight = screen.get_size()
                 newwindowwidth = max(400, event.w)
                 newwindowheight = max(300, event.h)
