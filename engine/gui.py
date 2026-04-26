@@ -616,7 +616,19 @@ class EngineUI:
             screen.blit(self.hudfont.render(self.hudheadertext, True, (242, 242, 242)), (10, 8))
             screen.blit(self.hudfont.render(self.huddetailtext, True, (236, 236, 236)), (10, 30))
             screen.blit(self.hudsmallfont.render(self.hudcontrolstext, True, (215, 215, 215)), (10, 52))
-        for badgecenter, badgetroops in self.troopbadgelist:
+        for badgeentry in self.troopbadgelist:
+            if isinstance(badgeentry, dict):
+                gui_drawtroopcountbadge(
+                    screen,
+                    badgeentry.get("center"),
+                    badgeentry.get("troops", 0),
+                    self.troopbadgefont,
+                    backgroundcolor=badgeentry.get("backgroundcolor", (0, 0, 0)),
+                    bordercolor=badgeentry.get("bordercolor", (165, 165, 165)),
+                )
+                continue
+
+            badgecenter, badgetroops = badgeentry
             gui_drawtroopcountbadge(screen, badgecenter, badgetroops, self.troopbadgefont)
         if self.hovertextcurrent:
             mousex, mousey = self.hovermousepos
@@ -728,11 +740,18 @@ class EngineUI:
 
 
 # for old_engien | IGNORE!
-def gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject):
+def gui_drawtroopcountbadge(
+    screen,
+    centerposition,
+    troopcount,
+    fontobject,
+    backgroundcolor=(0, 0, 0),
+    bordercolor=(165, 165, 165),
+):
     labelsurface = fontobject.render(str(troopcount), True, (255, 255, 255))
     labelrectangle = gui_gettroopbadgerect(centerposition, troopcount, fontobject)
-    pygame.draw.rect(screen, (0, 0, 0), labelrectangle, border_radius=1)
-    pygame.draw.rect(screen, (165, 165, 165), labelrectangle, width=1, border_radius=1) # this is the border for the troop badge
+    pygame.draw.rect(screen, backgroundcolor, labelrectangle, border_radius=1)
+    pygame.draw.rect(screen, bordercolor, labelrectangle, width=1, border_radius=1) # this is the border for the troop badge
     screen.blit(labelsurface, labelsurface.get_rect(center=labelrectangle.center))
 
 
@@ -744,12 +763,21 @@ def gui_drawhoverlabel(screen, fontobject, state, mouseposition):
     x = mouseposition[0] + 16
     y = mouseposition[1] + 16
 
+    # use safe access to avoid KeyError when some keys are missing
+    name = state.get("name", "unknown")
+    provinceid = state.get("provinceid", "unknown")
+    population = state.get("population", "unknown")
+    country = state.get("country", "unknown")
+    terrain = state.get("terrain", "unknown")
+    province_count = state.get("province_count", "unknown")
+
     lines = [
-        f"id: {state['name']}",
-        f"Population: {state['population']}",
-        f"Country: {state['country']}",
-        f"Terrain Type: {state['terrain']}",
-        f"Number of provinces: {state['province_count']}"
+        f"State: {name}",
+        f"Province: {provinceid}",
+        f"Population: {population}",
+        f"Country: {country}",
+        f"Terrain Type: {terrain}",
+        f"Number of states: {province_count}",
     ]
 
     text_surfaces = [fontobject.render(line, True, (255, 255, 255)) for line in lines]

@@ -15,7 +15,17 @@ def loaddevmodeflag(filepath="dev.txt"):
 
 
 
-def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallbackcolor, troopbadgelist, eventbus=None):
+def rundevcommand(
+    commandline,
+    provincemap,
+    playercountry,
+    countrytocolor,
+    fallbackcolor,
+    troopbadgelist,
+    eventbus=None,
+    currentturnnumber=0,
+    commandcontext=None,
+):
     commandparts = commandline.strip().split() # arguments
     if not commandparts:
         return "empty command"
@@ -34,6 +44,88 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
         return province.get("controllercountry", province.get("country"))
 
     validterrainset = {"plains", "forest", "hills", "mountains", "desert", "swamp", "urban"}
+
+    knowncountrylookup = {}
+    for province in provincemap.values():
+        for key in ("ownercountry", "controllercountry", "country"):
+            countryname = province.get(key)
+            if not countryname:
+                continue
+            countrytext = str(countryname).strip()
+            if not countrytext:
+                continue
+            lowercountry = countrytext.lower()
+            if lowercountry not in knowncountrylookup:
+                knowncountrylookup[lowercountry] = countrytext
+
+    def resolvecountry(rawtext):
+        if rawtext is None:
+            return None
+        countrytext = str(rawtext).strip()
+        if not countrytext:
+            return None
+        return knowncountrylookup.get(countrytext.lower())
+
+    def normalizewarpair(firstcountry, secondcountry):
+        first = resolvecountry(firstcountry)
+        second = resolvecountry(secondcountry)
+        if not first or not second or first == second:
+            return None
+        if first <= second:
+            return (first, second)
+        return (second, first)
+
+    def setsessionvalue(keyname, value):
+        if isinstance(commandcontext, dict):
+            commandcontext[keyname] = value
+
+    def getsessionvalue(keyname, defaultvalue=None):
+        if isinstance(commandcontext, dict):
+            return commandcontext.get(keyname, defaultvalue)
+        return defaultvalue
+
+    def applyplayercountry(newplayercountry):
+        canonicalcountry = resolvecountry(newplayercountry) if newplayercountry else None
+        setsessionvalue("playercountry", canonicalcountry)
+
+        if canonicalcountry:
+            setsessionvalue("gamephase", "play")
+            setsessionvalue("countriesatwarset", set())
+        else:
+            setsessionvalue("countriesatwarset", set())
+
+        npcdirector = getsessionvalue("npcdirector")
+        if npcdirector is not None:
+            npcdirector.setplayercountry(canonicalcountry)
+            npcdirector.sync_player_wars(canonicalcountry, getsessionvalue("countriesatwarset", set()), warpairset=getsessionvalue("warpairset", set()))
+
+        return canonicalcountry
+
+    def recomputeplayerwarset(playercountryvalue, warpairsetvalue):
+        if not playercountryvalue:
+            return set()
+        playerset = set()
+        for firstcountry, secondcountry in warpairsetvalue:
+            if firstcountry == playercountryvalue:
+                playerset.add(secondcountry)
+            elif secondcountry == playercountryvalue:
+                playerset.add(firstcountry)
+        return playerset
+
+    def syncevalscope(evalscope, originalsnapshot):
+        if not isinstance(commandcontext, dict):
+            return
+
+        for keyname, value in evalscope.items():
+            if keyname == "context":
+                continue
+            if keyname in originalsnapshot and originalsnapshot[keyname] == value:
+                continue
+            commandcontext[keyname] = value
+
+        scopedcontext = evalscope.get("context")
+        if isinstance(scopedcontext, dict) and scopedcontext is not commandcontext:
+            commandcontext.update(scopedcontext)
 
 
 
@@ -207,17 +299,46 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
 
 
     if commandname == "country_stats":
-        targetcountry = " ".join(commandparts[1:]).strip() if len(commandparts) >= 2 else (playercountry or "")
+        rawtargetcountry = " ".join(commandparts[1:]).strip() if len(commandparts) >= 2 else ""
 
+        if not rawtargetcountry:
+            countrystatlist = []
+            knowncountryset = set()
+            for province in provincemap.values():
+                owner = getowner(province)
+                controller = getcontroller(province)
+                if owner:
+                    knowncountryset.add(owner)
+                if controller:
+                    knowncountryset.add(controller)
 
-        if not targetcountry:
-            return "country pls"
+            for countryname in sorted(knowncountryset):
+                owned = [p for p in provincemap.values() if getowner(p) == countryname]
+                controlled = [p for p in provincemap.values() if getcontroller(p) == countryname]
+                controlledtroops = sum(max(0, int(p.get("troops", 0))) for p in controlled)
+                countrystatlist.append((countryname, len(owned), len(controlled), controlledtroops))
+
+            if not countrystatlist:
+                return "no countries"
+
+            countrystatlist.sort(key=lambda entry: (-entry[3], entry[0]))
+            maxrows = 8
+            visibleentries = countrystatlist[:maxrows]
+            summarytext = " ; ".join(
+                f"{name} owned={owned} controlled={controlled} controlled_troops={troops}"
+                for name, owned, controlled, troops in visibleentries
+            )
+            if len(countrystatlist) > maxrows:
+                summarytext += " ; ..."
+            return summarytext
+
+        targetcountry = resolvecountry(rawtargetcountry)
+        if targetcountry is None:
+            return f"unknown country: {rawtargetcountry}"
 
         owned = [p for p in provincemap.values() if getowner(p) == targetcountry]
         controlled = [p for p in provincemap.values() if getcontroller(p) == targetcountry]
         controlledtroops = sum(max(0, int(p.get("troops", 0))) for p in controlled)
-
-
 
         return (
             f"{targetcountry} | owned={len(owned)} controlled={len(controlled)} controlled_troops={controlledtroops}"
@@ -263,6 +384,260 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
             },
         )
         return f"queued collapse news for {countryname}"
+
+    if commandname == "war" and len(commandparts) == 3:
+        if eventbus is None:
+            return "eventbus unavailable"
+
+        if not commandparts[1].strip() or not commandparts[2].strip():
+            return "usage: war [country1] [country2]"
+
+        attackercountry = resolvecountry(commandparts[1])
+        if attackercountry is None:
+            return f"unknown country: {commandparts[1]}"
+
+        defendercountry = resolvecountry(commandparts[2])
+        if defendercountry is None:
+            return f"unknown country: {commandparts[2]}"
+
+        if attackercountry.lower() == defendercountry.lower():
+            return "countries must differ"
+
+        eventbus.emit(
+            "wardeclared",
+            {
+                "attacker": attackercountry,
+                "defender": defendercountry,
+                "turn": int(currentturnnumber),
+                "source": "devconsole",
+            },
+        )
+        return f"ok war declared: {attackercountry} -> {defendercountry}"
+
+    if commandname == "observe" and len(commandparts) == 1:
+        applyplayercountry(None)
+        return "ok observe mode enabled (player control released to AI)"
+
+    if commandname == "setplayercountry" and len(commandparts) >= 2:
+        rawcountry = " ".join(commandparts[1:]).strip()
+        if not rawcountry:
+            return "usage: setplayercountry [country]"
+
+        canonicalcountry = resolvecountry(rawcountry)
+        if canonicalcountry is None:
+            return f"unknown country: {rawcountry}"
+
+        applyplayercountry(canonicalcountry)
+        return f"ok playercountry={canonicalcountry}"
+
+    if commandname == "declarepeace" and len(commandparts) == 3:
+        firstcountry = resolvecountry(commandparts[1])
+        secondcountry = resolvecountry(commandparts[2])
+        if not firstcountry:
+            return f"unknown country: {commandparts[1]}"
+        if not secondcountry:
+            return f"unknown country: {commandparts[2]}"
+
+        normalizedpair = normalizewarpair(firstcountry, secondcountry)
+        if normalizedpair is None:
+            return "countries must differ"
+
+        warpairset = set(getsessionvalue("warpairset", set()))
+        if normalizedpair not in warpairset:
+            return f"no active war: {firstcountry} vs {secondcountry}"
+
+        warpairset.remove(normalizedpair)
+        setsessionvalue("warpairset", warpairset)
+
+        sessionplayercountry = getsessionvalue("playercountry", playercountry)
+        countriesatwarset = recomputeplayerwarset(sessionplayercountry, warpairset)
+        setsessionvalue("countriesatwarset", countriesatwarset)
+
+        npcdirector = getsessionvalue("npcdirector")
+        if npcdirector is not None:
+            npcdirector.sync_player_wars(sessionplayercountry, countriesatwarset, warpairset=warpairset)
+
+        if eventbus is not None:
+            eventbus.emit(
+                "warended",
+                {
+                    "country1": firstcountry,
+                    "country2": secondcountry,
+                    "turn": int(getsessionvalue("currentturnnumber", currentturnnumber)),
+                    "source": "devconsole",
+                },
+            )
+        return f"ok peace declared: {firstcountry} & {secondcountry}"
+
+    if commandname == "takeovercountry" and len(commandparts) == 3:
+        sourcecountry = resolvecountry(commandparts[1])
+        targetcountry = resolvecountry(commandparts[2])
+        if sourcecountry is None:
+            return f"unknown country: {commandparts[1]}"
+        if targetcountry is None:
+            return f"unknown country: {commandparts[2]}"
+        if sourcecountry == targetcountry:
+            return "countries must differ"
+
+        changedownercount = 0
+        changedcontrollercount = 0
+        for province in provincemap.values():
+            if getowner(province) == sourcecountry:
+                province["ownercountry"] = targetcountry
+                changedownercount += 1
+            if getcontroller(province) == sourcecountry:
+                province["controllercountry"] = targetcountry
+                province["country"] = targetcountry
+                province["countrycolor"] = countrytocolor.get(targetcountry, fallbackcolor)
+                changedcontrollercount += 1
+
+        npcdirector = getsessionvalue("npcdirector")
+        if npcdirector is not None:
+            npcdirector.rebuildcountryindexes()
+            npcdirector._initializecountryeconomy()
+
+        sessionplayercountry = getsessionvalue("playercountry", playercountry)
+        if sessionplayercountry == sourcecountry:
+            setsessionvalue("playercountry", targetcountry)
+
+        return (
+            f"ok takeover {sourcecountry} -> {targetcountry} "
+            f"(owner={changedownercount} controller={changedcontrollercount})"
+        )
+
+    if commandname == "spawnwar" and len(commandparts) == 2:
+        sourcecountry = resolvecountry(commandparts[1])
+        if sourcecountry is None:
+            return f"unknown country: {commandparts[1]}"
+
+        targetcountryset = set()
+        provincegraph = getsessionvalue("provincegraph")
+        if provincegraph:
+            for provinceid, province in provincemap.items():
+                if getcontroller(province) != sourcecountry:
+                    continue
+                for neighborid in provincegraph.get(provinceid, ()): 
+                    neighborprovince = provincemap.get(neighborid)
+                    if not neighborprovince:
+                        continue
+                    neighborcountry = getcontroller(neighborprovince)
+                    if neighborcountry and neighborcountry != sourcecountry:
+                        targetcountryset.add(neighborcountry)
+
+        if not targetcountryset:
+            targetcountryset = {
+                countryname
+                for countryname in knowncountrylookup.values()
+                if countryname != sourcecountry
+            }
+
+        if not targetcountryset:
+            return f"no targets found for {sourcecountry}"
+
+        warpairset = set(getsessionvalue("warpairset", set()))
+        createdpairs = []
+        for targetcountry in sorted(targetcountryset):
+            normalizedpair = normalizewarpair(sourcecountry, targetcountry)
+            if normalizedpair is None or normalizedpair in warpairset:
+                continue
+            warpairset.add(normalizedpair)
+            createdpairs.append((sourcecountry, targetcountry))
+            if eventbus is not None:
+                eventbus.emit(
+                    "wardeclared",
+                    {
+                        "attacker": sourcecountry,
+                        "defender": targetcountry,
+                        "turn": int(getsessionvalue("currentturnnumber", currentturnnumber)),
+                        "source": "devconsole",
+                    },
+                )
+
+        setsessionvalue("warpairset", warpairset)
+        sessionplayercountry = getsessionvalue("playercountry", playercountry)
+        countriesatwarset = recomputeplayerwarset(sessionplayercountry, warpairset)
+        setsessionvalue("countriesatwarset", countriesatwarset)
+
+        npcdirector = getsessionvalue("npcdirector")
+        if npcdirector is not None:
+            npcdirector.sync_player_wars(sessionplayercountry, countriesatwarset, warpairset=warpairset)
+
+        if not createdpairs:
+            return f"no new wars created for {sourcecountry}"
+        targettext = ", ".join(pair[1] for pair in createdpairs)
+        return f"ok spawned wars: {sourcecountry} vs {targettext}"
+
+    if commandname == "economy":
+        if len(commandparts) == 1:
+            currentgold = int(getsessionvalue("playergold", 0))
+            currentpopulation = int(getsessionvalue("playerpopulation", 0))
+            return f"economy player gold={currentgold} population={currentpopulation}"
+
+        npcdirector = getsessionvalue("npcdirector")
+
+        if len(commandparts) == 2 and commandparts[1].lower() == "player":
+            currentgold = int(getsessionvalue("playergold", 0))
+            currentpopulation = int(getsessionvalue("playerpopulation", 0))
+            return f"economy player gold={currentgold} population={currentpopulation}"
+
+        if len(commandparts) == 4 and commandparts[1].lower() in {"set", "add"}:
+            actionname = commandparts[1].lower()
+            statname = commandparts[2].lower()
+            if statname not in {"gold", "population"}:
+                return "usage: economy [set|add] [gold|population] [value]"
+            try:
+                amountvalue = int(commandparts[3])
+            except ValueError:
+                return "value must be int"
+
+            sessionkey = "playergold" if statname == "gold" else "playerpopulation"
+            currentvalue = int(getsessionvalue(sessionkey, 0))
+            if actionname == "set":
+                nextvalue = max(0, amountvalue)
+            else:
+                nextvalue = max(0, currentvalue + amountvalue)
+            setsessionvalue(sessionkey, nextvalue)
+            return f"ok player {statname}={nextvalue}"
+
+        if len(commandparts) >= 5 and commandparts[1].lower() == "country":
+            if npcdirector is None:
+                return "npcdirector unavailable"
+
+            rawcountry = commandparts[2]
+            canonicalcountry = getattr(npcdirector, "_canonicalizecountry", lambda value: value)(rawcountry)
+            if not canonicalcountry:
+                return f"unknown country: {rawcountry}"
+
+            actionname = commandparts[3].lower()
+            statname = commandparts[4].lower()
+            if actionname not in {"set", "add"}:
+                return "usage: economy country [country] [set|add] [gold|population] [value]"
+            if statname not in {"gold", "population"}:
+                return "usage: economy country [country] [set|add] [gold|population] [value]"
+            if len(commandparts) != 6:
+                return "usage: economy country [country] [set|add] [gold|population] [value]"
+            try:
+                amountvalue = int(commandparts[5])
+            except ValueError:
+                return "value must be int"
+
+            if canonicalcountry not in npcdirector.countryeconomy:
+                npcdirector._initializecountryeconomy()
+            if canonicalcountry not in npcdirector.countryeconomy:
+                return f"unknown country: {rawcountry}"
+
+            currentvalue = int(npcdirector.countryeconomy[canonicalcountry].get(statname, 0))
+            if actionname == "set":
+                nextvalue = max(0, amountvalue)
+            else:
+                nextvalue = max(0, currentvalue + amountvalue)
+            npcdirector.countryeconomy[canonicalcountry][statname] = nextvalue
+            return f"ok economy {canonicalcountry} {statname}={nextvalue}"
+
+        return (
+            "usage: economy | economy player | economy [set|add] [gold|population] [value] | "
+            "economy country [country] [set|add] [gold|population] [value]"
+        )
     
 
     if commandname == "exit" and len(commandparts) == 1:
@@ -271,38 +646,86 @@ def rundevcommand(commandline, provincemap, playercountry, countrytocolor, fallb
 
 
 
-    if commandname == "evaluate"  and len(commandparts) >= 2:
-        code = " ".join(commandparts[1:])
-        try:            # only allow access to a limited set of variables and functions for safety
-            whitelist = {
+    if commandname in {"evaluate", "eval"} and len(commandparts) >= 2:
+        coderaw = commandline.strip()[len(commandparts[0]):].strip()
+        try:
+            safebuiltins = {
+                "abs": abs,
+                "all": all,
+                "any": any,
+                "bool": bool,
+                "dict": dict,
+                "float": float,
+                "int": int,
+                "len": len,
+                "list": list,
+                "max": max,
+                "min": min,
+                "pow": pow,
+                "range": range,
+                "round": round,
+                "set": set,
+                "sorted": sorted,
+                "str": str,
+                "sum": sum,
+                "tuple": tuple,
+                "print": print,
+            }
+
+            evalscope = {
                 "provincemap": provincemap,
-                "playercountry": playercountry,
+                "playercountry": getsessionvalue("playercountry", playercountry),
                 "countrytocolor": countrytocolor,
                 "fallbackcolor": fallbackcolor,
-                "troopbadgelist": troopbadgelist
+                "troopbadgelist": troopbadgelist,
+                "eventbus": eventbus,
+                "currentturnnumber": currentturnnumber,
+                "math": math,
+                "context": commandcontext,
             }
-            result = eval(code, {"__builtins__": {}}, whitelist)
-            return f"eval result: {result}"
-        except Exception as e:
-            return f"eval error: {e}"
-        """ example:
-        provincemap.keys() = see all province id for debug
-        provincemap['provinceid'] = read info about specific province
-        playercountry = current country
-        fallbackcolor = test color rendering
-        """
+
+            if isinstance(commandcontext, dict):
+                for keyname, value in commandcontext.items():
+                    if keyname not in evalscope:
+                        evalscope[keyname] = value
+
+            originalsnapshot = dict(commandcontext) if isinstance(commandcontext, dict) else {}
+
+            trymode = "eval"
+            if coderaw.startswith("exec "):
+                trymode = "exec"
+                coderaw = coderaw[5:].lstrip()
+            elif "\n" in coderaw or ";" in coderaw:
+                trymode = "exec"
+
+            if trymode == "eval":
+                result = eval(coderaw, {"__builtins__": safebuiltins}, evalscope)
+                syncevalscope(evalscope, originalsnapshot)
+                return f"eval result: {result!r}"
+
+            exec(coderaw, {"__builtins__": safebuiltins}, evalscope)
+            syncevalscope(evalscope, originalsnapshot)
+            if "_" in evalscope:
+                return f"exec ok: _={evalscope['_']!r}"
+            return "exec ok"
+        except Exception as error:
+            return f"eval error: {error}"
 
     if commandname == "help:debug" and len(commandparts) == 1:
         return (
             "debug: province [id], find [text], stats, country_stats [country], "
-            "set_troops [id] [n], set_terrain [id] [terrain], set_owner [id] [country], set_controller [id] [country]"
+            "set_troops [id] [n], set_terrain [id] [terrain], set_owner [id] [country], set_controller [id] [country], "
+            "eval [code], observe, setplayercountry [country], economy, "
+            "declarepeace [country1] [country2], takeovercountry [from] [to], spawnwar [country]"
         )
 
     if commandname == "help" and len(commandparts) == 1:
         return (
             "commands: add_troops [province] [amount], remove_troops [province] [amount], annex [province], "
             "province [id], find [text], stats, country_stats [country], news [title | description], "
-            "collapse [country] [description], help:debug, help, exit"
+            "collapse [country] [description], war [country1] [country2], observe, setplayercountry [country], "
+            "economy, eval [code], declarepeace [country1] [country2], "
+            "takeovercountry [from] [to], spawnwar [country], help:debug, help, exit"
         )
 
 
@@ -484,7 +907,18 @@ class developmentconsole:
         return False
 
 
-    def handlekeydown(self, keyboardevent, provincemap, playercountry, countrytocolor, fallbackcolor, troopbadgelist, eventbus=None):
+    def handlekeydown(
+        self,
+        keyboardevent,
+        provincemap,
+        playercountry,
+        countrytocolor,
+        fallbackcolor,
+        troopbadgelist,
+        eventbus=None,
+        currentturnnumber=0,
+        commandcontext=None,
+    ):
         if not self.visible:
             return False
 
@@ -502,6 +936,8 @@ class developmentconsole:
                     fallbackcolor,
                     troopbadgelist,
                     eventbus=eventbus,
+                    currentturnnumber=currentturnnumber,
+                    commandcontext=commandcontext,
                 )
                 self.loglines.append(outputline)
             self.inputtext = ""
