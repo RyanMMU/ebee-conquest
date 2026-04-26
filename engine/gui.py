@@ -752,11 +752,48 @@ def gui_drawtroopcountbadge(
     backgroundcolor=(0, 0, 0),
     bordercolor=(165, 165, 165),
 ):
+    x, y = centerposition
+
+    # 🔥 TEMP HARDCODE (confirm dulu system jalan)
+    country_name = "Malaysia"  
+
+    # render text
     labelsurface = fontobject.render(str(troopcount), True, (255, 255, 255))
-    labelrectangle = gui_gettroopbadgerect(centerposition, troopcount, fontobject)
-    pygame.draw.rect(screen, backgroundcolor, labelrectangle, border_radius=1)
-    pygame.draw.rect(screen, bordercolor, labelrectangle, width=1, border_radius=1) # this is the border for the troop badge
-    screen.blit(labelsurface, labelsurface.get_rect(center=labelrectangle.center))
+
+    # get flag
+    flag_img = None
+    flag_offset = 0
+
+    if country_name in flags:
+        flag_img = flags[country_name]
+        flag_offset = flag_img.get_width() + 4
+
+    # calculate badge size (extra width for flag)
+    padding = 6
+    width = labelsurface.get_width() + padding * 2 + flag_offset
+    height = labelsurface.get_height() + padding * 2
+
+    rect = pygame.Rect(
+        x - width // 2,
+        y - height // 2,
+        width,
+        height
+    )
+
+    # draw background
+    pygame.draw.rect(screen, backgroundcolor, rect, border_radius=1)
+    pygame.draw.rect(screen, bordercolor, rect, width=1, border_radius=1)
+
+    draw_x = rect.x + padding
+
+    # draw flag
+    if flag_img:
+        screen.blit(flag_img, (draw_x, rect.y + padding))
+        draw_x += flag_offset
+
+    # draw text
+    screen.blit(labelsurface, (draw_x, rect.y + padding))
+
 
 
 def gui_drawhoverlabel(screen, fontobject, state, mouseposition):
