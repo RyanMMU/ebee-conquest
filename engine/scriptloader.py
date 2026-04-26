@@ -10,3 +10,5 @@
 # basic implementation, can be expanded upon with additional features
 
 # TEST
+# def load_script(script_path):
+#     try:
