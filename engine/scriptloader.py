@@ -8,3 +8,5 @@
 # TODO: create a way to manage loaded scripts, such as keeping track of them and allowing for unloading or reloading if needed
 # TODO: document the script loading functionality for users who want to create their own scripts or mods
 # basic implementation, can be expanded upon with additional features
+
+# TEST
