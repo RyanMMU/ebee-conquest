@@ -752,6 +752,8 @@ def gui_drawtroopcountbadge(
 ):
     x, y = centerposition
 
+    print(flags)
+
     country_name = "Malaysia"  
 
     # render text
