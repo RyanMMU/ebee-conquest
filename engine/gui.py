@@ -234,10 +234,10 @@ class EngineUI:
         self.window_size = window_size
         self.manager = pygame_gui.UIManager(window_size)
         self.troopbadgelist = []
-        self.troopbadgefont = pygame.font.SysFont("Arial", 12)
-        self.hudfont = pygame.font.SysFont("Arial", 14)
-        self.hudsmallfont = pygame.font.SysFont("Arial", 12)
-        self.hoverfont = pygame.font.SysFont("Arial", 14)
+        self.troopbadgefont = pygame.font.SysFont("Arial", 16)
+        self.hudfont = pygame.font.SysFont("Arial", 18)
+        self.hudsmallfont = pygame.font.SysFont("Arial", 16)
+        self.hoverfont = pygame.font.SysFont("Arial", 13)
         self.countrylabelfont = pygame.font.SysFont("Arial", 18, bold=True)
         self.countrylabelcache = {}
         self.choosetitlefont = pygame.font.SysFont("Arial", 32, bold=True)

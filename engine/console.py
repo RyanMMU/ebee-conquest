@@ -385,34 +385,67 @@ def rundevcommand(
         )
         return f"queued collapse news for {countryname}"
 
-    if commandname == "war" and len(commandparts) == 3:
+
+
+    if commandname in {"war", "declarewar", "declare_war"}:
         if eventbus is None:
-            return "eventbus unavailable"
+            return "i cant connect to eventbus"
 
-        if not commandparts[1].strip() or not commandparts[2].strip():
-            return "usage: war [country1] [country2]"
+        if len(commandparts) not in {2, 3}:
+            return "war [country1] [country2] | declarewar [country]"
 
-        attackercountry = resolvecountry(commandparts[1])
+        if len(commandparts) == 2:
+            attackerraw = getsessionvalue("playercountry", playercountry)
+            defenderraw = commandparts[1]
+            if not attackerraw:
+                return "war [country1] [country2]"
+        else:
+            attackerraw = commandparts[1]
+            defenderraw = commandparts[2]
+
+        attackercountry = resolvecountry(attackerraw)
         if attackercountry is None:
-            return f"unknown country: {commandparts[1]}"
+            return f"unknown country: {attackerraw}"
 
-        defendercountry = resolvecountry(commandparts[2])
+        defendercountry = resolvecountry(defenderraw)
         if defendercountry is None:
-            return f"unknown country: {commandparts[2]}"
+            return f"unknown country: {defenderraw}"
 
         if attackercountry.lower() == defendercountry.lower():
             return "countries must differ"
+
+        normalizedpair = normalizewarpair(attackercountry, defendercountry)
+        if normalizedpair is None:
+            return "countries must differ"
+
+        warpairset = set(getsessionvalue("warpairset", set()))
+        if normalizedpair in warpairset:
+            return f"already at war: {attackercountry} vs {defendercountry}"
+        warpairset.add(normalizedpair)
+        setsessionvalue("warpairset", warpairset)
+
+        sessionplayercountry = getsessionvalue("playercountry", playercountry)
+        countriesatwarset = recomputeplayerwarset(sessionplayercountry, warpairset)
+        setsessionvalue("countriesatwarset", countriesatwarset)
+
+        npcdirector = getsessionvalue("npcdirector")
+        if npcdirector is not None:
+            npcdirector.sync_player_wars(sessionplayercountry, countriesatwarset, warpairset=warpairset)
 
         eventbus.emit(
             "wardeclared",
             {
                 "attacker": attackercountry,
                 "defender": defendercountry,
-                "turn": int(currentturnnumber),
+                "turn": int(getsessionvalue("currentturnnumber", currentturnnumber)),
                 "source": "devconsole",
             },
         )
         return f"ok war declared: {attackercountry} -> {defendercountry}"
+
+
+
+
 
     if commandname == "observe" and len(commandparts) == 1:
         applyplayercountry(None)
@@ -716,14 +749,16 @@ def rundevcommand(
             "debug: province [id], find [text], stats, country_stats [country], "
             "set_troops [id] [n], set_terrain [id] [terrain], set_owner [id] [country], set_controller [id] [country], "
             "eval [code], observe, setplayercountry [country], economy, "
-            "declarepeace [country1] [country2], takeovercountry [from] [to], spawnwar [country]"
+            "war [country1] [country2], declarewar [country], declarepeace [country1] [country2], "
+            "takeovercountry [from] [to], spawnwar [country]"
         )
 
     if commandname == "help" and len(commandparts) == 1:
         return (
             "commands: add_troops [province] [amount], remove_troops [province] [amount], annex [province], "
             "province [id], find [text], stats, country_stats [country], news [title | description], "
-            "collapse [country] [description], war [country1] [country2], observe, setplayercountry [country], "
+            "collapse [country] [description], war [country1] [country2], declarewar [country], "
+            "observe, setplayercountry [country], "
             "economy, eval [code], declarepeace [country1] [country2], "
             "takeovercountry [from] [to], spawnwar [country], help:debug, help, exit"
         )
