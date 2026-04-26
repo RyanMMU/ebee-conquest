@@ -6,6 +6,9 @@ import math
 troopbadgevisiblezoommultiplier = 2.5
 countrylabelvisiblezoommultiplier = 6
 FLAG_PATH = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "flags"))
+troopbadgelayoutcache = {}
+troopbadgeassetcache = {}
+hoverlabelcache = {}
 
 #FOR ANY GUI PLEASE PUT IT IN HERE
 # THIS SHOULD BE THE ONLY FILE WITH GUI CODE IN IT
@@ -72,10 +75,15 @@ def load_flags():
 
 
 def gui_gettroopbadgerect(centerposition, troopcount, fontobject):
-
-    labelsurface = fontobject.render(str(troopcount), True, (255, 255, 255))
-    labelrectangle = labelsurface.get_rect()
-    labelrectangle.inflate_ip(10, 6)
+    layoutkey = (id(fontobject), str(troopcount))
+    cachedsize = troopbadgelayoutcache.get(layoutkey)
+    if cachedsize is None:
+        labelsurface = fontobject.render(str(troopcount), True, (255, 255, 255))
+        labelrectangle = labelsurface.get_rect()
+        labelrectangle.inflate_ip(10, 6)
+        cachedsize = labelrectangle.size
+        troopbadgelayoutcache[layoutkey] = cachedsize
+    labelrectangle = pygame.Rect(0, 0, cachedsize[0], cachedsize[1])
     labelrectangle.center = (int(centerposition[0]), int(centerposition[1]))
     
     return labelrectangle
@@ -83,6 +91,113 @@ def gui_gettroopbadgerect(centerposition, troopcount, fontobject):
 
 #def DEBUG():
 #    pass
+
+
+def gui_gettroopbadgeasset(fontobject, troopcount, backgroundcolor, bordercolor):
+    cachekey = (
+        id(fontobject),
+        str(troopcount),
+        tuple(backgroundcolor),
+        tuple(bordercolor),
+    )
+    cachedsurface = troopbadgeassetcache.get(cachekey)
+    if cachedsurface is not None:
+        return cachedsurface
+
+    labelsurface = fontobject.render(str(troopcount), True, (255, 255, 255))
+    labelrectangle = gui_gettroopbadgerect((0, 0), troopcount, fontobject)
+    renderedsurface = pygame.Surface(labelrectangle.size, pygame.SRCALPHA)
+    pygame.draw.rect(renderedsurface, backgroundcolor, renderedsurface.get_rect(), border_radius=1)
+    pygame.draw.rect(renderedsurface, bordercolor, renderedsurface.get_rect(), width=1, border_radius=1)
+    renderedsurface.blit(labelsurface, labelsurface.get_rect(center=renderedsurface.get_rect().center))
+    troopbadgeassetcache[cachekey] = renderedsurface
+    return renderedsurface
+
+
+def gui_gethoverlabelsurface(fontobject, state):
+    if not state:
+        return None
+
+    name = state.get("name", "unknown")
+    provinceid = state.get("provinceid", "unknown")
+    population = state.get("population", "unknown")
+    country = state.get("country", "unknown")
+    terrain = state.get("terrain", "unknown")
+    province_count = state.get("province_count", "unknown")
+
+    lines = (
+        f"State: {name}",
+        f"Province: {provinceid}",
+        f"Population: {population}",
+        f"Country: {country}",
+        f"Terrain Type: {terrain}",
+        f"Number of states: {province_count}",
+    )
+    cachekey = (id(fontobject), lines)
+    cachedsurface = hoverlabelcache.get(cachekey)
+    if cachedsurface is not None:
+        return cachedsurface
+
+    padding = 8
+    textsurfaces = [fontobject.render(line, True, (255, 255, 255)) for line in lines]
+    width = max(text.get_width() for text in textsurfaces) + padding * 2
+    height = sum(text.get_height() for text in textsurfaces) + padding * 2
+    renderedsurface = pygame.Surface((width, height), pygame.SRCALPHA)
+    pygame.draw.rect(renderedsurface, (20, 20, 20), renderedsurface.get_rect())
+    pygame.draw.rect(renderedsurface, (255, 200, 0), renderedsurface.get_rect(), 2)
+
+    offsety = padding
+    for textsurface in textsurfaces:
+        renderedsurface.blit(textsurface, (padding, offsety))
+        offsety += textsurface.get_height()
+
+    hoverlabelcache[cachekey] = renderedsurface
+    return renderedsurface
+
+
+def gui_buildcountrylabelanchors(stateshapelist, gamephase):
+    countryanchorlookup = {}
+    for stateshape in stateshapelist:
+        staterect = stateshape["rectangle"]
+
+        countryname = stateshape.get("controllercountry", stateshape.get("country"))
+        if gamephase == "choosecountry":
+            countryname = stateshape.get("country", countryname)
+        if not countryname:
+            continue
+
+        statewidth = max(1.0, float(staterect.width))
+        stateheight = max(1.0, float(staterect.height))
+        statearea = statewidth * stateheight
+        centerx = float(staterect.centerx)
+        centery = float(staterect.centery)
+        stateleft = float(staterect.x)
+        statetop = float(staterect.y)
+        stateright = stateleft + statewidth
+        statebottom = statetop + stateheight
+
+        fixedentry = countryanchorlookup.get(countryname)
+        if fixedentry is None:
+            countryanchorlookup[countryname] = {
+                "weightedx": centerx * statearea,
+                "weightedy": centery * statearea,
+                "weight": statearea,
+                "minx": stateleft,
+                "miny": statetop,
+                "maxx": stateright,
+                "maxy": statebottom,
+            }
+            continue
+
+        fixedentry["weightedx"] += centerx * statearea
+        fixedentry["weightedy"] += centery * statearea
+        fixedentry["weight"] += statearea
+        fixedentry["minx"] = min(fixedentry["minx"], stateleft)
+        fixedentry["miny"] = min(fixedentry["miny"], statetop)
+        fixedentry["maxx"] = max(fixedentry["maxx"], stateright)
+        fixedentry["maxy"] = max(fixedentry["maxy"], statebottom)
+
+    return countryanchorlookup
 
 
 
@@ -844,6 +959,9 @@ def gui_drawtroopcountbadge(
         flag_y = center_y - flag_img.get_height() // 2
         screen.blit(flag_img, (draw_x, flag_y))
         draw_x += flag_img.get_width() + spacing
+    labelrectangle = gui_gettroopbadgerect(centerposition, troopcount, fontobject)
+    badgesurface = gui_gettroopbadgeasset(fontobject, troopcount, backgroundcolor, bordercolor)
+    screen.blit(badgesurface, badgesurface.get_rect(center=labelrectangle.center))
 
     # step 9: draw troop number on the right
     text_y = center_y - text_surf.get_height() // 2
@@ -853,39 +971,12 @@ def gui_drawhoverlabel(screen, fontobject, state, mouseposition):
     if not state:
         return
 
-    padding = 8
     x = mouseposition[0] + 16
     y = mouseposition[1] + 16
-
-    # use safe access to avoid KeyError when some keys are missing
-    name = state.get("name", "unknown")
-    provinceid = state.get("provinceid", "unknown")
-    population = state.get("population", "unknown")
-    country = state.get("country", "unknown")
-    terrain = state.get("terrain", "unknown")
-    province_count = state.get("province_count", "unknown")
-
-    lines = [
-        f"State: {name}",
-        f"Province: {provinceid}",
-        f"Population: {population}",
-        f"Country: {country}",
-        f"Terrain Type: {terrain}",
-        f"Number of states: {province_count}",
-    ]
-
-    text_surfaces = [fontobject.render(line, True, (255, 255, 255)) for line in lines]
-
-    width = max(text.get_width() for text in text_surfaces) + padding * 2
-    height = sum(text.get_height() for text in text_surfaces) + padding * 2
-
-    pygame.draw.rect(screen, (20, 20, 20), (x, y, width, height))
-    pygame.draw.rect(screen, (255, 200, 0), (x, y, width, height), 2)
-
-    offset_y = y + padding
-    for text in text_surfaces:
-        screen.blit(text, (x + padding, offset_y))
-        offset_y += text.get_height()
+    hoverlabelsurface = gui_gethoverlabelsurface(fontobject, state)
+    if hoverlabelsurface is None:
+        return
+    screen.blit(hoverlabelsurface, (x, y))
 
 
 def gui_shouldshowtroopbadges(zoomvalue, minimumzoom):
@@ -964,63 +1055,22 @@ def gui_drawcountrylabels(
     labelcache,
     gamephase,
 ):
+    # Ebee Super Optimization (ESO) 27/4
+    # O(k*s) -> O(s + k*c)
+    # build country anchors once per frame and reuse across wrapped copies
+    countryanchorlookup = gui_buildcountrylabelanchors(stateshapelist, gamephase)
+
     for copyshift in copyshiftlist:
         drawcamerax = camerax + copyshift
-        countryanchorlookup = {}
-
-        for stateshape in stateshapelist:
-            staterect = stateshape["rectangle"]
-
-
-            countryname = stateshape.get("controllercountry", stateshape.get("country"))
-            if gamephase == "choosecountry":
-                countryname = stateshape.get("country", countryname)
-            if not countryname:
-                continue
-
-
-            centerx = staterect.centerx * zoomvalue + drawcamerax
-            centery = staterect.centery * zoomvalue + cameray
-            statewidth = max(1.0, staterect.width * zoomvalue)
-            stateheight = max(1.0, staterect.height * zoomvalue)
-            statearea = statewidth * stateheight
-            stateleft = staterect.x * zoomvalue + drawcamerax
-            statetop = staterect.y * zoomvalue + cameray
-            stateright = stateleft + statewidth
-            statebottom = statetop + stateheight
-            fixedentry = countryanchorlookup.get(countryname)
-
-
-
-
-            if fixedentry is None:
-                countryanchorlookup[countryname] = {
-                    "weightedx": centerx * statearea,
-                    "weightedy": centery * statearea,
-                    "weight": statearea,
-                    "minx": stateleft,
-                    "miny": statetop,
-                    "maxx": stateright,
-                    "maxy": statebottom,
-                }
-
-            else:
-                fixedentry["weightedx"] += centerx * statearea
-                fixedentry["weightedy"] += centery * statearea
-                fixedentry["weight"] += statearea
-                fixedentry["minx"] = min(fixedentry["minx"], stateleft)
-                fixedentry["miny"] = min(fixedentry["miny"], statetop)
-                fixedentry["maxx"] = max(fixedentry["maxx"], stateright)
-                fixedentry["maxy"] = max(fixedentry["maxy"], statebottom)
 
         for countryname, fixedentry in countryanchorlookup.items():
             labeltext = str(countryname).replace("_", " ")
 
             weight = max(1.0, fixedentry["weight"])
-            centerx = fixedentry["weightedx"] / weight
-            centery = fixedentry["weightedy"] / weight
-            boxwidth = max(1.0, fixedentry["maxx"] - fixedentry["minx"])
-            boxheight = max(1.0, fixedentry["maxy"] - fixedentry["miny"])
+            centerx = (fixedentry["weightedx"] / weight) * zoomvalue + drawcamerax
+            centery = (fixedentry["weightedy"] / weight) * zoomvalue + cameray
+            boxwidth = max(1.0, (fixedentry["maxx"] - fixedentry["minx"]) * zoomvalue)
+            boxheight = max(1.0, (fixedentry["maxy"] - fixedentry["miny"]) * zoomvalue)
 
             if boxwidth < 50 or boxheight < 20:
                 continue
@@ -1040,8 +1090,8 @@ def gui_drawcountrylabels(
                 continue
 
             countrybox = pygame.Rect(
-                int(fixedentry["minx"]),
-                int(fixedentry["miny"]),
+                int(fixedentry["minx"] * zoomvalue + drawcamerax),
+                int(fixedentry["miny"] * zoomvalue + cameray),
                 max(1, int(boxwidth)),
                 max(1, int(boxheight)),
             )
@@ -1075,6 +1125,32 @@ def gui_arrowhead(screen, endpoint, directionvector, colorvalue, arrowsize, line
     pygame.draw.polygon(screen, (30, 30, 30), [endpoint, leftpoint, rightpoint], max(1, linewidth // 2))
 
 
+def gui_getmovementpathworldpoints(movementorder, provincemap, startindex):
+    pathlist = movementorder.get("path", [])
+    cacheentry = movementorder.get("_pathworldpointcache")
+    if (
+        cacheentry is not None
+        and cacheentry.get("path") is pathlist
+        and cacheentry.get("startindex") == startindex
+    ):
+        return cacheentry.get("points", [])
+
+    pathpointsworld = []
+    for provinceid in pathlist[startindex:]:
+        province = provincemap.get(provinceid)
+        if not province:
+            pathpointsworld = []
+            break
+        pathpointsworld.append(province.get("center", (province["rectangle"].centerx, province["rectangle"].centery)))
+
+    movementorder["_pathworldpointcache"] = {
+        "path": pathlist,
+        "startindex": startindex,
+        "points": pathpointsworld,
+    }
+    return pathpointsworld
+
+
 
 
 def gui_drawmovementorderpaths(
@@ -1103,16 +1179,10 @@ def gui_drawmovementorderpaths(
         if startindex >= len(pathlist) - 1:
             continue
 
-
-
-        pathpointsworld = []
-        for provinceid in pathlist[startindex:]:
-            province = provincemap.get(provinceid)
-            if not province:
-                pathpointsworld = []
-                break
-            pathpointsworld.append(province.get("center", (province["rectangle"].centerx, province["rectangle"].centery)))
-
+        # Ebee Super Optimization (ESO) 27/4
+        # O(m*p) -> O(m)
+        # cache world-space path points until the order advances
+        pathpointsworld = gui_getmovementpathworldpoints(movementorder, provincemap, startindex)
         if len(pathpointsworld) < 2:
             continue
 
