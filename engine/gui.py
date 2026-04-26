@@ -5,6 +5,8 @@ import math
 troopbadgevisiblezoommultiplier = 2.5
 countrylabelvisiblezoommultiplier = 6
 
+flags = load_flags()
+
 #FOR ANY GUI PLEASE PUT IT IN HERE
 # THIS SHOULD BE THE ONLY FILE WITH GUI CODE IN IT
 # TO USE, CALL THE SYNC FUNCTION
@@ -750,7 +752,6 @@ def gui_drawtroopcountbadge(
 ):
     x, y = centerposition
 
-    # 🔥 TEMP HARDCODE (confirm dulu system jalan)
     country_name = "Malaysia"  
 
     # render text
