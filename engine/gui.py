@@ -5,8 +5,6 @@ import math
 troopbadgevisiblezoommultiplier = 2.5
 countrylabelvisiblezoommultiplier = 6
 
-flags = load_flags()
-
 #FOR ANY GUI PLEASE PUT IT IN HERE
 # THIS SHOULD BE THE ONLY FILE WITH GUI CODE IN IT
 # TO USE, CALL THE SYNC FUNCTION
@@ -756,6 +754,10 @@ def gui_drawtroopcountbadge(
 
     country_name = "Malaysia"  
 
+    # test direct game
+    test_img = pygame.image.load("assets/flags/malaysia.png")
+    screen.blit(test_img, (50, 50))
+
     # render text
     labelsurface = fontobject.render(str(troopcount), True, (255, 255, 255))
 
@@ -793,6 +795,7 @@ def gui_drawtroopcountbadge(
     # draw text
     screen.blit(labelsurface, (draw_x, rect.y + padding))
 
+flags = load_flags()
 
 
 def gui_drawhoverlabel(screen, fontobject, state, mouseposition):
