@@ -418,41 +418,6 @@ def rundevcommand(
         applyplayercountry(None)
         return "ok observe mode enabled (player control released to AI)"
 
-    if commandname == "endturn":
-        turncount = 1
-        if len(commandparts) == 2:
-            try:
-                turncount = max(1, int(commandparts[1]))
-            except ValueError:
-                return "usage: endturn [count]"
-        elif len(commandparts) > 2:
-            return "usage: endturn [count]"
-
-        currentturn = int(getsessionvalue("currentturnnumber", currentturnnumber))
-        sessionplayercountry = getsessionvalue("playercountry", playercountry)
-        sessionwarpairset = set(getsessionvalue("warpairset", set()))
-        sessioncountriesatwarset = set(getsessionvalue("countriesatwarset", set()))
-        movementorderlist = getsessionvalue("movementorderlist", [])
-        npcdirector = getsessionvalue("npcdirector")
-
-        for _ in range(turncount):
-            if npcdirector is not None:
-                npcdirector.sync_player_wars(sessionplayercountry, sessioncountriesatwarset, warpairset=sessionwarpairset)
-                npcdirector.executeturn(movementorderlist, currentturn)
-            currentturn += 1
-
-        setsessionvalue("currentturnnumber", currentturn)
-        if eventbus is not None:
-            eventbus.emit(
-                "nextturn",
-                {
-                    "turn": currentturn,
-                    "playerCountry": sessionplayercountry,
-                    "source": "devconsole",
-                },
-            )
-        return f"ok advanced turn to {currentturn}"
-
     if commandname == "setplayercountry" and len(commandparts) >= 2:
         rawcountry = " ".join(commandparts[1:]).strip()
         if not rawcountry:
@@ -750,7 +715,7 @@ def rundevcommand(
         return (
             "debug: province [id], find [text], stats, country_stats [country], "
             "set_troops [id] [n], set_terrain [id] [terrain], set_owner [id] [country], set_controller [id] [country], "
-            "eval [code], observe, setplayercountry [country], economy, endturn [count], "
+            "eval [code], observe, setplayercountry [country], economy, "
             "declarepeace [country1] [country2], takeovercountry [from] [to], spawnwar [country]"
         )
 
@@ -759,7 +724,7 @@ def rundevcommand(
             "commands: add_troops [province] [amount], remove_troops [province] [amount], annex [province], "
             "province [id], find [text], stats, country_stats [country], news [title | description], "
             "collapse [country] [description], war [country1] [country2], observe, setplayercountry [country], "
-            "economy, eval [code], endturn [count], declarepeace [country1] [country2], "
+            "economy, eval [code], declarepeace [country1] [country2], "
             "takeovercountry [from] [to], spawnwar [country], help:debug, help, exit"
         )
 
