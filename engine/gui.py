@@ -645,8 +645,8 @@ class EngineUI:
                     badgeentry.get("country", "malaysia"),  
                     backgroundcolor=badgeentry.get("backgroundcolor", (0, 0, 0)),
                     bordercolor=badgeentry.get("bordercolor", (165, 165, 165)),
-        )
-        continue
+                )
+                continue
 
             badgecenter, badgetroops = badgeentry
             gui_drawtroopcountbadge(screen, badgecenter, badgetroops, self.troopbadgefont)
