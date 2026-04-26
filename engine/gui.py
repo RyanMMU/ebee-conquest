@@ -5,6 +5,7 @@ import math
 
 troopbadgevisiblezoommultiplier = 2.5
 countrylabelvisiblezoommultiplier = 6
+FLAG_PATH = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "flags"))
 
 #FOR ANY GUI PLEASE PUT IT IN HERE
 # THIS SHOULD BE THE ONLY FILE WITH GUI CODE IN IT
@@ -35,17 +36,38 @@ countrylabelvisiblezoommultiplier = 6
 def load_flags():
     flags = {}
 
-    country_map = {
-        "malaysia": "malaysia.png",
-    }
 
-    for country, file in country_map.items():
-        path = os.path.join(FLAG_PATH, file)
-        if os.path.exists(path):
-            img = pygame.image.load(path).convert_alpha()
-            img = pygame.transform.scale(img, (20, 14))
-            flags[country] = img
 
+    # step 1: check if the flags folder exists
+    if not os.path.isdir(FLAG_PATH):
+        return flags
+
+
+    for filename in os.listdir(FLAG_PATH):
+        # step 2: only read png files
+        if not filename.lower().endswith(".png"):
+            continue
+
+
+        filepath = os.path.join(FLAG_PATH, filename)
+        if not os.path.isfile(filepath):
+            continue
+
+        # step 3: turn the filename into a country key
+        country_key = os.path.splitext(filename)[0].strip().lower().replace(" ", "_").replace("-", "_")
+        if not country_key:
+            continue
+
+        try:
+            img = pygame.image.load(filepath).convert_alpha()
+        except pygame.error:
+            continue
+
+        # step 4: resize to mini flag size
+        img = pygame.transform.scale(img, (20, 14))
+        flags[country_key] = img
+
+    # step 5: give back all loaded flags
     return flags
 
 
@@ -117,6 +139,7 @@ class EngineUI:
         self.selectionpanelwidth = 356 
         self.selectionpanelheight = 308
         self.selectionrowlabels = []
+        self.flags = load_flags()
 
         #print("build elementstest")
         self.buildelements()
@@ -641,13 +664,15 @@ class EngineUI:
                     badgeentry.get("center"),
                     badgeentry.get("troops", 0),
                     self.troopbadgefont,
+                    self.flags,
+                    badgeentry.get("country"),
                     backgroundcolor=badgeentry.get("backgroundcolor", (0, 0, 0)),
                     bordercolor=badgeentry.get("bordercolor", (165, 165, 165)),
                 )
                 continue
 
             badgecenter, badgetroops = badgeentry
-            gui_drawtroopcountbadge(screen, badgecenter, badgetroops, self.troopbadgefont)
+            gui_drawtroopcountbadge(screen, badgecenter, badgetroops, self.troopbadgefont, self.flags, None)
         if self.hovertextcurrent:
             mousex, mousey = self.hovermousepos
             gui_drawhoverlabel(screen, self.hoverfont, self.hovertextcurrent, (mousex, mousey))
@@ -763,26 +788,30 @@ def gui_drawtroopcountbadge(
     centerposition,
     troopcount,
     fontobject,
-    flags,
-    country_name,
+    flags=None,
+    country_name=None,
     backgroundcolor=(0, 0, 0),
     bordercolor=(165, 165, 165),
 ):
+    # step 1: stop if center position is missing
+    if not centerposition:
+        return
+
     x, y = centerposition
 
-    # normalize key
-    country_key = country_name.strip().lower()
+    # step 2: normalize country name to a key
+    country_key = str(country_name or "").strip().lower().replace(" ", "_").replace("-", "_")
 
-    # render number
+    # step 3: render troop number text
     text_surf = fontobject.render(str(troopcount), True, (255, 255, 255))
 
-    # get flag
-    flag_img = flags.get(country_key)
+    # step 4: get matching mini flag if it exists
+    flag_img = flags.get(country_key) if flags and country_key else None
 
     padding = 6
     spacing = 4
 
-    # calculate width
+    # step 5: compute badge size from text and optional flag
     content_width = text_surf.get_width()
 
     if flag_img:
@@ -801,22 +830,22 @@ def gui_drawtroopcountbadge(
         height
     )
 
-    # draw badge
+    # step 6: draw the badge box
     pygame.draw.rect(screen, backgroundcolor, rect, border_radius=4)
     pygame.draw.rect(screen, bordercolor, rect, 1, border_radius=4)
 
     draw_x = rect.x + padding
 
-    # vertical center helper
+    # step 7: find vertical center for alignment
     center_y = rect.y + rect.height // 2
 
-    # draw flag FIRST (left)
+    # step 8: draw flag on the left
     if flag_img:
         flag_y = center_y - flag_img.get_height() // 2
         screen.blit(flag_img, (draw_x, flag_y))
         draw_x += flag_img.get_width() + spacing
 
-    # draw number (right of flag)
+    # step 9: draw troop number on the right
     text_y = center_y - text_surf.get_height() // 2
     screen.blit(text_surf, (draw_x, text_y))
 
