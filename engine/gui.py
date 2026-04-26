@@ -1,9 +1,11 @@
 import pygame
+import os
 import pygame_gui
 import math
 
 troopbadgevisiblezoommultiplier = 2.5
 countrylabelvisiblezoommultiplier = 6
+FLAG_PATH = os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "flags"))
 troopbadgelayoutcache = {}
 troopbadgeassetcache = {}
 hoverlabelcache = {}
@@ -32,6 +34,44 @@ hoverlabelcache = {}
 # hovertext: the current hover text to display based on hovered province, or None if no hover
 # mouseposition: the current mouse position in screen coordinates, used for hover text positioning
 # troopbadgelist: a list of (centerposition, troopcount) tuples for rendering troop count badges on provinces
+
+
+def load_flags():
+    flags = {}
+
+
+
+    # step 1: check if the flags folder exists
+    if not os.path.isdir(FLAG_PATH):
+        return flags
+
+
+    for filename in os.listdir(FLAG_PATH):
+        # step 2: only read png files
+        if not filename.lower().endswith(".png"):
+            continue
+
+
+        filepath = os.path.join(FLAG_PATH, filename)
+        if not os.path.isfile(filepath):
+            continue
+
+        # step 3: turn the filename into a country key
+        country_key = os.path.splitext(filename)[0].strip().lower().replace(" ", "_").replace("-", "_")
+        if not country_key:
+            continue
+
+        try:
+            img = pygame.image.load(filepath).convert_alpha()
+        except pygame.error:
+            continue
+
+        # step 4: resize to mini flag size
+        img = pygame.transform.scale(img, (20, 14))
+        flags[country_key] = img
+
+    # step 5: give back all loaded flags
+    return flags
 
 
 def gui_gettroopbadgerect(centerposition, troopcount, fontobject):
@@ -214,6 +254,7 @@ class EngineUI:
         self.selectionpanelwidth = 356 
         self.selectionpanelheight = 308
         self.selectionrowlabels = []
+        self.flags = load_flags()
 
         #print("build elementstest")
         self.buildelements()
@@ -738,13 +779,15 @@ class EngineUI:
                     badgeentry.get("center"),
                     badgeentry.get("troops", 0),
                     self.troopbadgefont,
+                    self.flags,                          
+                    badgeentry.get("country", "malaysia"),  
                     backgroundcolor=badgeentry.get("backgroundcolor", (0, 0, 0)),
                     bordercolor=badgeentry.get("bordercolor", (165, 165, 165)),
                 )
                 continue
 
             badgecenter, badgetroops = badgeentry
-            gui_drawtroopcountbadge(screen, badgecenter, badgetroops, self.troopbadgefont)
+            gui_drawtroopcountbadge(screen, badgecenter, badgetroops, self.troopbadgefont, self.flags, None)
         if self.hovertextcurrent:
             mousex, mousey = self.hovermousepos
             gui_drawhoverlabel(screen, self.hoverfont, self.hovertextcurrent, (mousex, mousey))
@@ -854,19 +897,75 @@ class EngineUI:
 
 
 
-# for old_engien | IGNORE!
+
 def gui_drawtroopcountbadge(
     screen,
     centerposition,
     troopcount,
     fontobject,
+    flags=None,
+    country_name=None,
     backgroundcolor=(0, 0, 0),
     bordercolor=(165, 165, 165),
 ):
+    # step 1: stop if center position is missing
+    if not centerposition:
+        return
+
+    x, y = centerposition
+
+    # step 2: normalize country name to a key
+    country_key = str(country_name or "").strip().lower().replace(" ", "_").replace("-", "_")
+
+    # step 3: render troop number text
+    text_surf = fontobject.render(str(troopcount), True, (255, 255, 255))
+
+    # step 4: get matching mini flag if it exists
+    flag_img = flags.get(country_key) if flags and country_key else None
+
+    padding = 6
+    spacing = 4
+
+    # step 5: compute badge size from text and optional flag
+    content_width = text_surf.get_width()
+
+    if flag_img:
+        content_width += flag_img.get_width() + spacing
+
+    width = content_width + padding * 2
+    height = max(
+        text_surf.get_height(),
+        flag_img.get_height() if flag_img else 0
+    ) + padding * 2
+
+    rect = pygame.Rect(
+        x - width // 2,
+        y - height // 2,
+        width,
+        height
+    )
+
+    # step 6: draw the badge box
+    pygame.draw.rect(screen, backgroundcolor, rect, border_radius=4)
+    pygame.draw.rect(screen, bordercolor, rect, 1, border_radius=4)
+
+    draw_x = rect.x + padding
+
+    # step 7: find vertical center for alignment
+    center_y = rect.y + rect.height // 2
+
+    # step 8: draw flag on the left
+    if flag_img:
+        flag_y = center_y - flag_img.get_height() // 2
+        screen.blit(flag_img, (draw_x, flag_y))
+        draw_x += flag_img.get_width() + spacing
     labelrectangle = gui_gettroopbadgerect(centerposition, troopcount, fontobject)
     badgesurface = gui_gettroopbadgeasset(fontobject, troopcount, backgroundcolor, bordercolor)
     screen.blit(badgesurface, badgesurface.get_rect(center=labelrectangle.center))
 
+    # step 9: draw troop number on the right
+    text_y = center_y - text_surf.get_height() // 2
+    screen.blit(text_surf, (draw_x, text_y))
 
 def gui_drawhoverlabel(screen, fontobject, state, mouseposition):
     if not state:
