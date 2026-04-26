@@ -239,7 +239,7 @@ while run:
         overlay.fill((0, 0, 0))
         screen.blit(overlay, (0, 0))
 
-        title = settings_font.render(' SETTINGS', True, text)
+        title = settings_font.render('       SETTINGS', True, text)
         screen.blit(title, (button_m, 30))
 
         vol_text = main_font.render('Volume: ' + str(volume) + '%', True, text)
