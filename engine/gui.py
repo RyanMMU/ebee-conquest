@@ -768,34 +768,29 @@ def gui_drawtroopcountbadge(
     centerposition,
     troopcount,
     fontobject,
+    country_name,
+    flags,
     backgroundcolor=(0, 0, 0),
     bordercolor=(165, 165, 165),
 ):
     x, y = centerposition
 
-    print(flags)
-
-    country_name = "Malaysia"  
-
-    # test direct game
-    test_img = pygame.image.load("flags/malaysia.png")
-    screen.blit(test_img, (50, 50))
-
     # render text
     labelsurface = fontobject.render(str(troopcount), True, (255, 255, 255))
 
     # get flag
-    flag_img = None
+    flag_img = flags.get(country_name)
     flag_offset = 0
 
-    if country_name in flags:
-        flag_img = flags[country_name]
-        flag_offset = flag_img.get_width() + 4
+    if flag_img:
+        flag_offset = flag_img.get_width() + 6  # spacing improved
 
-    # calculate badge size (extra width for flag)
+    # padding
     padding = 6
+
+    # calculate badge size
     width = labelsurface.get_width() + padding * 2 + flag_offset
-    height = labelsurface.get_height() + padding * 2
+    height = max(labelsurface.get_height(), flag_img.get_height() if flag_img else 0) + padding * 2
 
     rect = pygame.Rect(
         x - width // 2,
@@ -805,19 +800,21 @@ def gui_drawtroopcountbadge(
     )
 
     # draw background
-    pygame.draw.rect(screen, backgroundcolor, rect, border_radius=1)
-    pygame.draw.rect(screen, bordercolor, rect, width=1, border_radius=1)
+    pygame.draw.rect(screen, backgroundcolor, rect, border_radius=4)
+    pygame.draw.rect(screen, bordercolor, rect, width=1, border_radius=4)
 
     draw_x = rect.x + padding
+    draw_y = rect.y + (rect.height // 2)
 
-    # draw flag
+    # draw flag (left)
     if flag_img:
-        screen.blit(flag_img, (draw_x, rect.y + padding))
+        flag_y = rect.y + (rect.height - flag_img.get_height()) // 2
+        screen.blit(flag_img, (draw_x, flag_y))
         draw_x += flag_offset
 
-    # draw text
-    screen.blit(labelsurface, (draw_x, rect.y + padding))
-
+    # draw text (right of flag)
+    text_y = rect.y + (rect.height - labelsurface.get_height()) // 2
+    screen.blit(labelsurface, (draw_x, text_y))
 
 def gui_drawhoverlabel(screen, fontobject, state, mouseposition):
     if not state:
