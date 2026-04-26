@@ -20,7 +20,6 @@ ease = 1
 ease2= 1
 ease3= 1
 ease4 = 1
-ease5 = 1
 ease_backbutton = 1
 expand = 1
 
