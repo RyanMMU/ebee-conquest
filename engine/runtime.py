@@ -9,6 +9,7 @@ from svgelements import Path
 import ctypes
 ctypes.windll.user32.SetProcessDPIAware()
 
+#TODO - OPTIMIZATION: consider using numpy for heavy geometry calculations and data handling, especially for large maps with many provinces and complex shapes. This could significantly improve performance for operations like point-in-polygon tests, polygon transformations, and adjacency graph construction.
 #Local module
 from engine.console import developmentconsole, loaddevmodeflag 
 from engine.gui import (
@@ -29,6 +30,7 @@ from . import economy as economymodule
 from . import api as apimodule
 from . import camera as cameramodule
 from . import eso as esomodule
+from . import npc as npcmodule
 from .events import EventBus, EngineEventType
 
 
@@ -672,22 +674,27 @@ def drawloadingscreen(
 
 
 
-def main(eventbus=None):
+def main(eventbus=None, is_fullscreen=False):
     if eventbus is None:
         eventbus = EventBus()
-
     startupbegintimestamp = time.perf_counter()
     pygame.init()
-
-
     logstartupdiagnostics(startupbegintimestamp, "pygame init", f"python={platform.python_version()} pygame={pygame.version.ver}")
-    screen = pygame.display.set_mode((defaultwindowwidth, defaultwindowheight), pygame.RESIZABLE)
+
+    # Set display mode once based on is_fullscreen
+    if is_fullscreen:
+        display_flags = pygame.FULLSCREEN
+        screen = pygame.display.set_mode((0, 0), display_flags)
+    else:
+        display_flags = pygame.RESIZABLE  
+        screen = pygame.display.set_mode((defaultwindowwidth, defaultwindowheight), display_flags)
+
     logstartupdiagnostics(
         startupbegintimestamp,
         "window created",
-        f"size={defaultwindowwidth}x{defaultwindowheight} driver={pygame.display.get_driver()}",
+        f"size={screen.get_width()}x{screen.get_height()} driver={pygame.display.get_driver()} fullscreen={is_fullscreen}",
     )
-
+        
     if os.path.exists("dev.txt"):
         pygame.display.set_caption("EbeeEngine Dev Build - APRIL 19 2024")
     else:
@@ -1051,18 +1058,275 @@ def main(eventbus=None):
         recruitpopulationcostperunit,
     ) = initializeplayereconomy(economyconfig)
 
+    npcdirector = npcmodule.NpcDirector(
+        provincemap,
+        provincegraph,
+        countrytocolorlookup=countrytocolorlookup,
+        emit=eventbus.emit,
+        economyconfig=economyconfig,
+    )
+
 
     movementorderlist = []
     routepreviewset = set()
     frontlineplacementmode = False
     activefrontlineedgekeyset = set()
     frontlineassignmentlist = []
+    frontlineassignmentcounter = 0
     frontlinebordersegmentcache = {}
     countrybordersegmentcache = {}
     countryborderentrylist = []
     countrybordersdirty = True
     countriesatwarset = set() # track countries at war
+    warpairset = set()
     countrymenutarget = None
+
+    def normalizewarpair(firstcountry, secondcountry):
+        if not firstcountry or not secondcountry:
+            return None
+        first = str(firstcountry).strip()
+        second = str(secondcountry).strip()
+        if not first or not second or first == second:
+            return None
+        if first <= second:
+            return (first, second)
+        return (second, first)
+
+    def canonicalizecountry(rawcountry):
+        if rawcountry is None:
+            return None
+
+        countrytext = str(rawcountry).strip()
+        if not countrytext:
+            return None
+
+        aliaslookup = {}
+        for province in provincemap.values():
+            for key in ("ownercountry", "controllercountry", "country"):
+                knowncountry = province.get(key)
+                if not knowncountry:
+                    continue
+                knowntext = str(knowncountry).strip()
+                if not knowntext:
+                    continue
+                lowerknown = knowntext.lower()
+                if lowerknown not in aliaslookup:
+                    aliaslookup[lowerknown] = knowntext
+
+        return aliaslookup.get(countrytext.lower(), countrytext)
+
+    def nextfrontlineid():
+        nonlocal frontlineassignmentcounter
+        frontlineassignmentcounter += 1
+        countryprefix = playercountry or "frontline"
+        return f"{countryprefix}_frontline_{frontlineassignmentcounter}"
+
+    def syncfrontlineoverlays():
+        nonlocal frontlineassignmentlist, activefrontlineedgekeyset
+        frontlineassignmentlist = [
+            assignment for assignment in frontlineassignmentlist
+            if assignment.get("active", True)
+        ]
+        activefrontlineedgekeyset = set()
+        for assignment in frontlineassignmentlist:
+            activefrontlineedgekeyset.update(assignment.get("frontlineedgekeys", ()))
+
+    def refreshfrontlines():
+        nonlocal frontlineassignmentlist, activefrontlineedgekeyset
+        if not playercountry or not frontlineassignmentlist:
+            frontlineassignmentlist = []
+            activefrontlineedgekeyset = set()
+            return set()
+
+        activefrontlineidset = {
+            assignment.get("frontlineid")
+            for assignment in frontlineassignmentlist
+            if assignment.get("frontlineid")
+        }
+        movementmodule.normalizefrontlineassignments(
+            playableprovincemap,
+            activefrontlineidset=activefrontlineidset,
+        )
+
+        routeupdateset = set()
+        refreshedassignments = []
+        for assignment in frontlineassignmentlist:
+            refreshresult = movementmodule.refreshfrontlineassignment(
+                assignment,
+                playableprovincemap,
+                playableprovincegraph,
+                movementorderlist,
+                emit=eventbus.emit,
+                currentturnnumber=currentturnnumber,
+            )
+            routeupdateset.update(refreshresult.get("routepreviewset", ()))
+            if assignment.get("active", True):
+                refreshedassignments.append(assignment)
+
+        frontlineassignmentlist = refreshedassignments
+        syncfrontlineoverlays()
+        return routeupdateset
+
+    def getcombatprovinceidset():
+        combatprovinceidset = set()
+        for movementorder in movementorderlist:
+            if int(movementorder.get("amount", 0)) <= 0:
+                continue
+
+            resumeturn = movementorder.get("_resumeonturn")
+            if resumeturn is not None and currentturnnumber is not None:
+                if int(currentturnnumber) < int(resumeturn):
+                    continue
+
+            pathlist = movementorder.get("path", [])
+            currentpathindex = int(movementorder.get("index", 0))
+            if currentpathindex >= len(pathlist) - 1:
+                continue
+
+            nextprovinceid = pathlist[currentpathindex + 1]
+            nextprovince = provincemap.get(nextprovinceid)
+            if not nextprovince:
+                continue
+
+            movingcountry = movementorder.get("controllercountry", movementorder.get("country"))
+            defendingcountry = getprovincecontroller(nextprovince)
+            if not movingcountry or not defendingcountry or movingcountry == defendingcountry:
+                continue
+
+            basedefenders = int(nextprovince.get("troops", 0))
+            movingdefenders = 0
+            for candidateorder in movementorderlist:
+                if candidateorder is movementorder:
+                    continue
+                if int(candidateorder.get("amount", 0)) <= 0:
+                    continue
+
+                candidateresumeturn = candidateorder.get("_resumeonturn")
+                if candidateresumeturn is not None and currentturnnumber is not None:
+                    if int(currentturnnumber) < int(candidateresumeturn):
+                        continue
+
+                if candidateorder.get("current") != nextprovinceid:
+                    continue
+
+                candidatecountry = candidateorder.get("controllercountry", candidateorder.get("country"))
+                if candidatecountry != defendingcountry:
+                    continue
+
+                movingdefenders += int(candidateorder.get("amount", 0))
+
+            if basedefenders + movingdefenders > 0:
+                combatprovinceidset.add(nextprovinceid)
+
+        return combatprovinceidset
+
+    def handlewardeclared(payload):
+        attacker = canonicalizecountry(payload.get("attacker")) if isinstance(payload, dict) else None
+        defender = canonicalizecountry(payload.get("defender")) if isinstance(payload, dict) else None
+        if not attacker or not defender or attacker == defender:
+            return
+
+        if isinstance(payload, dict):
+            payload["attacker"] = attacker
+            payload["defender"] = defender
+
+        normalizedpair = normalizewarpair(attacker, defender)
+        if normalizedpair is not None:
+            warpairset.add(normalizedpair)
+
+        if playercountry:
+            if attacker == playercountry:
+                countriesatwarset.add(defender)
+            elif defender == playercountry:
+                countriesatwarset.add(attacker)
+
+            npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
+
+    eventbus.subscribe(EngineEventType.WARDECLARED, handlewardeclared)
+
+    def applyconsolecommandstate(commandstate):
+        nonlocal playercountry
+        nonlocal playergold
+        nonlocal playerpopulation
+        nonlocal gamephase
+        nonlocal currentturnnumber
+        nonlocal countriesatwarset
+        nonlocal warpairset
+        nonlocal selectedprovinceid
+        nonlocal selectedprovinceidset
+        nonlocal routepreviewset
+        nonlocal frontlineplacementmode
+        nonlocal activefrontlineedgekeyset
+        nonlocal frontlineassignmentlist
+        nonlocal frontlinebordersegmentcache
+        nonlocal countrymenutarget
+        nonlocal countrybordersdirty
+
+        if not isinstance(commandstate, dict):
+            return
+
+        previousplayercountry = playercountry
+        requestedplayercountry = commandstate.get("playercountry", playercountry)
+        if requestedplayercountry is not None:
+            requestedplayercountry = canonicalizecountry(requestedplayercountry)
+
+        if "playergold" in commandstate:
+            playergold = max(0, int(commandstate.get("playergold", playergold)))
+        if "playerpopulation" in commandstate:
+            playerpopulation = max(0, int(commandstate.get("playerpopulation", playerpopulation)))
+        if "currentturnnumber" in commandstate:
+            currentturnnumber = max(1, int(commandstate.get("currentturnnumber", currentturnnumber)))
+
+        if "countriesatwarset" in commandstate:
+            updatedwarset = set()
+            for rawcountry in commandstate.get("countriesatwarset", set()):
+                canonicalcountry = canonicalizecountry(rawcountry)
+                if canonicalcountry:
+                    updatedwarset.add(canonicalcountry)
+            countriesatwarset = updatedwarset
+
+        if "warpairset" in commandstate:
+            updatedwarpairset = set()
+            for rawwarpair in commandstate.get("warpairset", set()):
+                if not isinstance(rawwarpair, (tuple, list)) or len(rawwarpair) != 2:
+                    continue
+                normalizedpair = normalizewarpair(rawwarpair[0], rawwarpair[1])
+                if normalizedpair is not None:
+                    updatedwarpairset.add(normalizedpair)
+            warpairset = updatedwarpairset
+
+        playercountrychanged = requestedplayercountry != previousplayercountry
+        if playercountrychanged:
+            playercountry = requestedplayercountry
+            countrybordersdirty = True
+            selectedprovinceid = None
+            selectedprovinceidset = set()
+            routepreviewset = set()
+            frontlineplacementmode = False
+            activefrontlineedgekeyset = set()
+            frontlineassignmentlist = []
+            frontlinebordersegmentcache = {}
+            countrymenutarget = None
+            if not playercountry:
+                countriesatwarset = set()
+
+            npcdirector.setplayercountry(playercountry)
+            npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
+
+            if playercountry:
+                gamephase = "play"
+                eventbus.emit(
+                    EngineEventType.PLAYERCOUNTRYSELECTED,
+                    {
+                        "country": playercountry,
+                    },
+                )
+
+        if "gamephase" in commandstate:
+            gamephase = commandstate.get("gamephase", gamephase)
+
+        if playercountry and not playercountrychanged:
+            npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
 
     devconsole = developmentconsole(enabled=developmentmode)
     newssystem = NewsSystem(eventbus)
@@ -1099,6 +1363,14 @@ def main(eventbus=None):
             edgepanmargin,
             edgepanspeed,
         )
+        #cameramodule.applyverticalpan(
+        #    camerastate,
+        #    mouseposition[1],
+        #    windowheight,
+        #    elapsedseconds,
+        #    edgepanmargin,
+        #    edgepanspeed,
+        #)
 
         """ disabled for now, because everytime i click any button near the edge the camera will pan and itis getting annoying
         if mouseposition[1] <= edgepanmargin:
@@ -1134,6 +1406,7 @@ def main(eventbus=None):
         # O(d*m) --> O(d+m)
         # build moving province id set once per frame
         movingprovinceidset = esomodule.buildmovingprovinceidset(movementorderlist) if movementorderlist else set()
+        combatprovinceidset = getcombatprovinceidset() if movementorderlist else set()
 
         # ESO optimization 22/04
         # O(cp*k) --> O(p*k)
@@ -1245,6 +1518,11 @@ def main(eventbus=None):
                                 # O(c*s) --> O(1)
                                 # use precomputed state lookup for hover tooltip
                                 hovertext = esomodule.getstatedata(hoveredstateid, state_data_lookup)
+                                # avoid mutating the shared ESO lookup dict; copy before adding province id
+                                if hovertext is not None:
+                                    hovertext = dict(hovertext)
+                                    if hoveredprovinceid:
+                                        hovertext["provinceid"] = hoveredprovinceid
                             
                             else:
                                 hovertext = None
@@ -1320,7 +1598,25 @@ def main(eventbus=None):
                     if not provincerectanglescreen.colliderect(screenrectangle):
                         continue
 
-                    troopbadgelist.append((provincerectanglescreen.center, province["troops"]))
+                    iscombatprovince = provinceid in combatprovinceidset
+                    ismovingprovince = provinceid in movingprovinceidset
+                    badgebackground = (0, 0, 0)
+                    badgeborder = (165, 165, 165)
+                    if iscombatprovince:
+                        badgebackground = (214, 122, 36)
+                        badgeborder = (255, 188, 92)
+                    elif ismovingprovince:
+                        badgebackground = (214, 194, 64)
+                        badgeborder = (255, 238, 132)
+
+                    troopbadgelist.append(
+                        {
+                            "center": provincerectanglescreen.center,
+                            "troops": province["troops"],
+                            "backgroundcolor": badgebackground,
+                            "bordercolor": badgeborder,
+                        }
+                    )
 
                     # for quick search: "troop badge hitbox"
                     troopbadgerect = gui_gettroopbadgerect(provincerectanglescreen.center, province["troops"], runtimeui.troopbadgefont)
@@ -1462,7 +1758,11 @@ def main(eventbus=None):
             playercountry,
         )
 
-        canrecruit = selectedprovinceid is not None and getprovincecontroller(provincemap[selectedprovinceid]) == playercountry
+        canrecruit = (
+            selectedprovinceid is not None
+            and getprovincecontroller(provincemap[selectedprovinceid]) == playercountry
+            and getprovinceowner(provincemap[selectedprovinceid]) == playercountry
+        )
         recruitgoldcost, recruitpopulationcost = getrecruitcosts(
             recruitamount,
             recruitgoldcostperunit,
@@ -1533,7 +1833,6 @@ def main(eventbus=None):
 
             if uiaction == EngineUI.actiondeclarewar and gamephase == "play":
                 if countrymenutarget and countrymenutarget != playercountry:
-                    countriesatwarset.add(countrymenutarget)
                     eventbus.emit(
                         EngineEventType.WARDECLARED,
                         {
@@ -1548,7 +1847,10 @@ def main(eventbus=None):
             if uiaction == EngineUI.actionrecruit and gamephase == "play":
                 if selectedprovinceid:
                     selectedprovince = provincemap[selectedprovinceid]
-                    if getprovincecontroller(selectedprovince) == playercountry:
+                    if (
+                        getprovincecontroller(selectedprovince) == playercountry
+                        and getprovinceowner(selectedprovince) == playercountry
+                    ):
                         requiredgold, requiredpopulation = getrecruitcosts(
                             recruitamount,
                             recruitgoldcostperunit,
@@ -1562,6 +1864,7 @@ def main(eventbus=None):
                             developmentmode=developmentmode,
                         ):
                             selectedprovince["troops"] += recruitamount
+                            markprovincetroopactivity(selectedprovince, currentturnnumber)
                             if not developmentmode:
                                 playergold -= requiredgold
                                 playerpopulation -= requiredpopulation
@@ -1582,7 +1885,12 @@ def main(eventbus=None):
             # for quick search: "end turn button"
             # ON END TURN, process movement orders, apply economy, increment turn, emit next turn event
             if uiaction == EngineUI.actionendturn and gamephase == "play":
-                processmovementorders(movementorderlist, provincemap, emit=eventbus.emit)
+                processmovementorders(
+                    movementorderlist,
+                    provincemap,
+                    emit=eventbus.emit,
+                    currentturnnumber=currentturnnumber,
+                )
                 countrybordersdirty = True
                 playergold,playerpopulation = applyendturneconomy(
                     playercountry,
@@ -1590,8 +1898,14 @@ def main(eventbus=None):
                     playergold,
                     playerpopulation,
                 )
+                npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
+                npcdirector.executeturn(
+                    movementorderlist,
+                    currentturnnumber,
+                )
+                frontlineupdates = refreshfrontlines()
                 currentturnnumber += 1
-                routepreviewset = set()
+                routepreviewset = frontlineupdates
                 eventbus.emit(
                     EngineEventType.NEXTTURN,
                     {
@@ -1700,7 +2014,10 @@ def main(eventbus=None):
                         frontlineassignmentlist = []
                         frontlinebordersegmentcache = {}
                         countriesatwarset = set()
+                        warpairset = set()
                         countrymenutarget = None
+                        npcdirector.setplayercountry(playercountry)
+                        npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
                         eventbus.emit(
                             EngineEventType.PLAYERCOUNTRYSELECTED,
                             {
@@ -1721,76 +2038,29 @@ def main(eventbus=None):
                             frontlineedgebykey[hoveredfrontlineedgekey],
                         )
                         if frontlineresult["success"]:
+                            frontlineresult["frontlineid"] = nextfrontlineid()
+                            movementmodule.registerfrontlineassignment(
+                                playableprovincemap,
+                                frontlineresult["frontlineid"],
+                                frontlineresult.get("transferplan", ()),
+                            )
+                            deploymentresult = movementmodule.applyfrontlinetransferplan(
+                                frontlineresult,
+                                frontlineresult.get("transferplan", ()),
+                                playableprovincemap,
+                                playableprovincegraph,
+                                movementorderlist,
+                                emit=eventbus.emit,
+                                currentturnnumber=currentturnnumber,
+                            )
                             frontlineassignmentlist.append(frontlineresult)
-                            activefrontlineedgekeyset.update(frontlineresult["frontlineedgekeys"])
+                            syncfrontlineoverlays()
                             selectedprovinceidset = set(frontlineresult["frontlineprovinceids"])
                             selectedprovinceid = frontlineresult["anchorprovinceid"]
-                            allowedprovinceidset = {
-                                provinceid
-                                for provinceid, province in provincemap.items()
-                                if getprovincecontroller(province) == playercountry
-                            }
-                            frontlinepathpreviewset = set()
-                            for transferentry in frontlineresult.get("transferplan", ()):
-                                sourceprovinceid = transferentry.get("sourceprovinceid")
-                                targetprovinceid = transferentry.get("targetprovinceid")
-                                transferamount = int(transferentry.get("amount", 0))
-                                if transferamount <= 0:
-                                    continue
-                                if not sourceprovinceid or not targetprovinceid:
-                                    continue
-                                if sourceprovinceid == targetprovinceid:
-                                    continue
-
-                                sourceprovince = provincemap.get(sourceprovinceid)
-                                if not sourceprovince:
-                                    continue
-                                if getprovincecontroller(sourceprovince) != playercountry:
-                                    continue
-
-                                foundpath = findprovincepath(
-                                    sourceprovinceid,
-                                    targetprovinceid,
-                                    provincemap,
-                                    provincegraph,
-                                    allowedprovinceidset=allowedprovinceidset,
-                                )
-                                if len(foundpath) < 2:
-                                    continue
-
-                                movingtroopcount = min(transferamount, int(sourceprovince.get("troops", 0)))
-                                if movingtroopcount <= 0:
-                                    continue
-
-                                sourceprovince["troops"] -= movingtroopcount
-                                movementorderlist.append(
-                                    {
-                                        "amount": movingtroopcount,
-                                        "path": foundpath,
-                                        "index": 0,
-                                        "current": foundpath[0],
-                                        "speedmodifier": 1.0,
-                                        "controllercountry": getprovincecontroller(sourceprovince),
-                                        "country": getprovincecontroller(sourceprovince),
-                                        "countrycolor": sourceprovince.get("countrycolor"),
-                                    }
-                                )
-                                frontlinepathpreviewset.update(foundpath)
-                                eventbus.emit(
-                                    EngineEventType.MOVEORDERCREATED,
-                                    {
-                                        "sourceProvinceId": sourceprovinceid,
-                                        "destinationProvinceId": targetprovinceid,
-                                        "path": list(foundpath),
-                                        "troops": movingtroopcount,
-                                        "country": getprovincecontroller(sourceprovince),
-                                        "turn": currentturnnumber,
-                                    },
-                                )
                             selectedprovince = provincemap.get(selectedprovinceid) if selectedprovinceid else None
                             if selectedprovince:
                                 expandedstateid = selectedprovince.get("parentid", expandedstateid)
-                            routepreviewset = frontlinepathpreviewset
+                            routepreviewset = deploymentresult["routepreviewset"]
                             countrymenutarget = None
                             frontlineplacementmode = False
                         continue
@@ -2044,6 +2314,7 @@ def main(eventbus=None):
 
                     movingtroopcount = sourceprovince["troops"]
                     sourceprovince["troops"] -= movingtroopcount
+                    markprovincetroopactivity(sourceprovince, currentturnnumber)
 
                     movementorderlist.append(
                         {
@@ -2055,6 +2326,7 @@ def main(eventbus=None):
                             "controllercountry": getprovincecontroller(sourceprovince),
                             "country": getprovincecontroller(sourceprovince),
                             "countrycolor": sourceprovince.get("countrycolor"),
+                            "ordercreatedturn": currentturnnumber,
                         }
                     )
                     eventbus.emit(
@@ -2082,13 +2354,39 @@ def main(eventbus=None):
             elif event.type == pygame.KEYDOWN:
 
             # (for quick ctrl f: developer console)
-                if devconsole.handlekeydown(event, provincemap, playercountry, countrytocolorlookup, defaultshapecolor, troopbadgelist, eventbus=eventbus):
+                commandcontext = {
+                    "playercountry": playercountry,
+                    "playergold": playergold,
+                    "playerpopulation": playerpopulation,
+                    "gamephase": gamephase,
+                    "currentturnnumber": currentturnnumber,
+                    "countriesatwarset": set(countriesatwarset),
+                    "warpairset": set(warpairset),
+                    "npcdirector": npcdirector,
+                    "economyconfig": economyconfig,
+                    "movementorderlist": movementorderlist,
+                    "provincegraph": provincegraph,
+                }
+                if devconsole.handlekeydown(
+                    event,
+                    provincemap,
+                    playercountry,
+                    countrytocolorlookup,
+                    defaultshapecolor,
+                    troopbadgelist,
+                    eventbus=eventbus,
+                    currentturnnumber=currentturnnumber,
+                    commandcontext=commandcontext,
+                ):
+                    applyconsolecommandstate(commandcontext)
                     continue # handle dev console input
 
 
 
 
             elif event.type == pygame.VIDEORESIZE:
+                if is_fullscreen: 
+                    continue
                 oldwindowwidth, oldwindowheight = screen.get_size()
                 newwindowwidth = max(400, event.w)
                 newwindowheight = max(300, event.h)
@@ -2171,6 +2469,7 @@ getcountryborderedges = movementmodule.getcountryborderedges
 getborderworldsegments = movementmodule.getborderworldsegments
 createfrontline = movementmodule.createfrontline
 pointtosegmentdistance = movementmodule.pointtosegmentdistance
+markprovincetroopactivity = movementmodule.markprovincetroopactivity
 
 getrecruitcosts = economymodule.getrecruitcosts
 canrecruittroops = economymodule.canrecruittroops
