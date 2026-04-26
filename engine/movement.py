@@ -1,5 +1,6 @@
 import heapq
 import math
+from collections import deque
 
 from .core import getparentstateidfromprovinceid, getshapecenter, rectanglesclose
 from .events import EngineEventType
@@ -274,7 +275,13 @@ def buildprovinceadjacencygraph(provincemap, onprogress=None):
 
 
 def getterrainmovecost(province):
-    return terrainmovecostlookup.get(province.get("terrain", "plains"), 1.0)
+    cachedmovecost = province.get("_terrainmovecost")
+    if cachedmovecost is not None:
+        return cachedmovecost
+
+    movecost = terrainmovecostlookup.get(province.get("terrain", "plains"), 1.0)
+    province["_terrainmovecost"] = movecost
+    return movecost
 
 
 
@@ -293,6 +300,7 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
     parentlookup = {}
     costlookup = {startprovinceid: 0.0}
     visitedset = set()
+    infinityvalue = float("inf")
 
     #  A*
     while openheap:
@@ -309,7 +317,16 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
             return pathlist
 
         visitedset.add(currentprovinceid)
-        currentcenter = provincemap[currentprovinceid]["center"]
+        # Ebee Super Optimization (ESO) 27/4
+        # O(path*edges*geometry) -> O(path*edges)
+        # cache per-edge move costs on province nodes
+        currentprovince = provincemap[currentprovinceid]
+        currentcenter = currentprovince["center"]
+        currentcost = costlookup[currentprovinceid]
+        stepcostcache = currentprovince.get("_neighborstepcostcache")
+        if stepcostcache is None:
+            stepcostcache = {}
+            currentprovince["_neighborstepcostcache"] = stepcostcache
 
         for nextprovinceid in provincegraph.get(currentprovinceid, ()):
             if allowedprovinceidset is not None and nextprovinceid not in allowedprovinceidset:
@@ -317,12 +334,16 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
             if nextprovinceid in visitedset:
                 continue
 
-            nextcenter = provincemap[nextprovinceid]["center"]
-            stepdistance = math.hypot(nextcenter[0] - currentcenter[0], nextcenter[1] - currentcenter[1])
-            moveenergy = stepdistance * getterrainmovecost(provincemap[nextprovinceid])
-            newcost = costlookup[currentprovinceid] + moveenergy
+            nextprovince = provincemap[nextprovinceid]
+            nextcenter = nextprovince["center"]
+            moveenergy = stepcostcache.get(nextprovinceid)
+            if moveenergy is None:
+                stepdistance = math.hypot(nextcenter[0] - currentcenter[0], nextcenter[1] - currentcenter[1])
+                moveenergy = stepdistance * getterrainmovecost(nextprovince)
+                stepcostcache[nextprovinceid] = moveenergy
+            newcost = currentcost + moveenergy
 
-            if newcost >= costlookup.get(nextprovinceid, float("inf")):
+            if newcost >= costlookup.get(nextprovinceid, infinityvalue):
                 continue
 
             parentlookup[nextprovinceid] = currentprovinceid
@@ -334,28 +355,83 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
     return []
 
 
+def buildmovementordercurrentindex(movementorderlist, currentturnnumber=None):
+    movementorderindex = {}
+    for movementorder in movementorderlist:
+        if int(movementorder.get("amount", 0)) <= 0:
+            continue
+
+        resumeturn = movementorder.get("_resumeonturn")
+        if resumeturn is not None and currentturnnumber is not None:
+            if int(currentturnnumber) < int(resumeturn):
+                continue
+
+        currentprovinceid = movementorder.get("current")
+        if currentprovinceid is None:
+            continue
+
+        currentcountry = movementorder.get("controllercountry", movementorder.get("country"))
+        if currentcountry is None:
+            continue
+
+        movementorderindex.setdefault((currentprovinceid, currentcountry), []).append(movementorder)
+
+    return movementorderindex
+
+
 def processmovementorders(movementorderlist, provincemap, emit, currentturnnumber=None):
     # MOVEMENT processing
     finishedorderlist = []
+    # Ebee Super Optimization (ESO) 27/4
+    # O(m*m) -> O(m)
+    # index active orders by current province and country for defender lookups
+    currentorderindex = buildmovementordercurrentindex(movementorderlist, currentturnnumber=currentturnnumber)
 
     def markorderfinished(movementorder, reasontext):
         if movementorder not in finishedorderlist:
             finishedorderlist.append(movementorder)
         movementorder["_finishreason"] = reasontext
 
+    def getorderindexkey(movementorder):
+        if int(movementorder.get("amount", 0)) <= 0:
+            return None
+
+        resumeturn = movementorder.get("_resumeonturn")
+        if resumeturn is not None and currentturnnumber is not None:
+            if int(currentturnnumber) < int(resumeturn):
+                return None
+
+        currentprovinceid = movementorder.get("current")
+        if currentprovinceid is None:
+            return None
+
+        currentcountry = movementorder.get("controllercountry", movementorder.get("country"))
+        if currentcountry is None:
+            return None
+
+        return (currentprovinceid, currentcountry)
+
+    def reindexorder(movementorder, previouskey):
+        if previouskey is not None:
+            bucket = currentorderindex.get(previouskey)
+            if bucket:
+                try:
+                    bucket.remove(movementorder)
+                except ValueError:
+                    pass
+                if not bucket:
+                    currentorderindex.pop(previouskey, None)
+
+        newkey = getorderindexkey(movementorder)
+        if newkey is not None:
+            currentorderindex.setdefault(newkey, []).append(movementorder)
+        return newkey
+
     def interruptdefendingorders(targetprovinceid, defendingcountry, excludedorder):
         interruptedorderlist = []
         totalmovingdefenders = 0
-        for candidateorder in movementorderlist:
+        for candidateorder in list(currentorderindex.get((targetprovinceid, defendingcountry), ())):
             if candidateorder is excludedorder:
-                continue
-            if int(candidateorder.get("amount", 0)) <= 0:
-                continue
-            if candidateorder.get("current") != targetprovinceid:
-                continue
-
-            candidatecountry = candidateorder.get("controllercountry", candidateorder.get("country"))
-            if candidatecountry != defendingcountry:
                 continue
 
             totalmovingdefenders += int(candidateorder.get("amount", 0))
@@ -364,6 +440,7 @@ def processmovementorders(movementorderlist, provincemap, emit, currentturnnumbe
         return interruptedorderlist, totalmovingdefenders
 
     for movementorder in movementorderlist:
+        orderindexkey = getorderindexkey(movementorder)
         resumeturn = movementorder.get("_resumeonturn")
         if resumeturn is not None and currentturnnumber is not None:
             if int(currentturnnumber) < int(resumeturn):
@@ -395,6 +472,7 @@ def processmovementorders(movementorderlist, provincemap, emit, currentturnnumbe
                 movingcountry = getprovincecontroller(provincemap[pathlist[currentpathindex]])
                 movementorder["controllercountry"] = movingcountry
                 movementorder["country"] = movingcountry
+                orderindexkey = reindexorder(movementorder, orderindexkey)
 
             nextcountry = getprovincecontroller(nextprovince)
             if (
@@ -430,9 +508,11 @@ def processmovementorders(movementorderlist, provincemap, emit, currentturnnumbe
                     nextprovince["troops"] = survivorallocation[0] if survivorallocation else remainingsurvivors
 
                     for interruptedorder, survivingtroops in zip(interruptedorderlist, survivorallocation[1:]):
+                        interruptedorderindexkey = getorderindexkey(interruptedorder)
                         if survivingtroops <= 0:
                             interruptedorder["amount"] = 0
                             markorderfinished(interruptedorder, "interrupted_defense")
+                            reindexorder(interruptedorder, interruptedorderindexkey)
                             continue
 
                         interruptedorder["amount"] = survivingtroops
@@ -440,6 +520,7 @@ def processmovementorders(movementorderlist, provincemap, emit, currentturnnumbe
                             interruptedorder["_skipnextprocessing"] = True
                         else:
                             interruptedorder["_resumeonturn"] = int(currentturnnumber) + 1
+                        reindexorder(interruptedorder, interruptedorderindexkey)
 
                     markprovincetroopactivity(nextprovince, currentturnnumber)
 
@@ -460,6 +541,7 @@ def processmovementorders(movementorderlist, provincemap, emit, currentturnnumbe
 
                     movementorder["amount"] = 0
                     markorderfinished(movementorder, "defeated")
+                    orderindexkey = reindexorder(movementorder, orderindexkey)
                     break
 
                 if defenders > 0:
@@ -467,8 +549,10 @@ def processmovementorders(movementorderlist, provincemap, emit, currentturnnumbe
                     nextprovince["troops"] = 0
 
                     for interruptedorder in interruptedorderlist:
+                        interruptedorderindexkey = getorderindexkey(interruptedorder)
                         interruptedorder["amount"] = 0
                         markorderfinished(interruptedorder, "interrupted_defense")
+                        reindexorder(interruptedorder, interruptedorderindexkey)
 
                     markprovincetroopactivity(nextprovince, currentturnnumber)
 
@@ -514,6 +598,7 @@ def processmovementorders(movementorderlist, provincemap, emit, currentturnnumbe
 
         movementorder["index"] = currentpathindex
         movementorder["current"] = pathlist[currentpathindex]
+        orderindexkey = reindexorder(movementorder, orderindexkey)
 
         if movementorder["amount"] <= 0:
             markorderfinished(movementorder, movementorder.get("_finishreason", "depleted"))
@@ -1031,9 +1116,12 @@ def getfrontlineprovinces(provincemap, provincegraph, playercountry, anchorprovi
         traversalprovinceidset.update(frontierprovinceidset)
         depthlimit = max(0, int(nearbydepth))
         frontierdepthlookup = {provinceid: 0 for provinceid in frontierprovinceidset}
-        openlist = list(frontierprovinceidset)
+        # Ebee Super Optimization (ESO) 27/4
+        # O(n*n) -> O(n)
+        # use deque queues for frontier breadth-first searches
+        openlist = deque(frontierprovinceidset)
         while openlist:
-            currentprovinceid = openlist.pop(0)
+            currentprovinceid = openlist.popleft()
             currentdepth = frontierdepthlookup[currentprovinceid]
             if currentdepth >= depthlimit:
                 continue
@@ -1054,10 +1142,10 @@ def getfrontlineprovinces(provincemap, provincegraph, playercountry, anchorprovi
                 openlist.append(neighborprovinceid)
 
     frontlineprovinceidset = set()
-    openlist = [anchorprovinceid]
+    openlist = deque([anchorprovinceid])
     visitedprovinceidset = set()
     while openlist:
-        currentprovinceid = openlist.pop(0)
+        currentprovinceid = openlist.popleft()
         if currentprovinceid in visitedprovinceidset:
             continue
         visitedprovinceidset.add(currentprovinceid)

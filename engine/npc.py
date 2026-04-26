@@ -43,6 +43,8 @@ class NpcDirector:
         self.countryprovinceindex = {}
         self.countrycoreprovinceindex = {}
         self.countryinvadedprovinceindex = {}
+        self.countryprovincecountindex = {}
+        self.countrytroopcountindex = {}
         self.countrystatecountindex = {}
         self.countryfrontlineallindex = {}
         self.countryfrontlineenemyindex = {}
@@ -136,6 +138,11 @@ class NpcDirector:
         coreindex = defaultdict(list)
         invadedindex = defaultdict(list)
         stateindex = defaultdict(set)
+        # Ebee Super Optimization (ESO) 27/4
+        # O(c*p) -> O(1)
+        # cache province counts and troop totals while indexing countries
+        provincecountindex = defaultdict(int)
+        troopcountindex = defaultdict(int)
 
         # Ebee Super Optimization (ESO) 26/4
         # O(c*p*n) --> O(p*n)
@@ -152,6 +159,8 @@ class NpcDirector:
             if controllercountry:
                 countryset.add(controllercountry)
                 controlledindex[controllercountry].append(provinceid)
+                provincecountindex[controllercountry] += 1
+                troopcountindex[controllercountry] += max(0, int(province.get("troops", 0)))
                 if stateid is not None:
                     stateindex[controllercountry].add(stateid)
             if ownercountry:
@@ -177,18 +186,20 @@ class NpcDirector:
                 frontlineenemyindex[controllercountry][neighborcountry].add(provinceid)
                 enemybordertargetindex[controllercountry][neighborcountry].add(neighborprovinceid)
 
-        self.allcountrycache = sorted(countryset)
-        self.countryprovinceindex = {country: sorted(ids) for country, ids in controlledindex.items()}
-        self.countrycoreprovinceindex = {country: sorted(ids) for country, ids in coreindex.items()}
-        self.countryinvadedprovinceindex = {country: sorted(ids) for country, ids in invadedindex.items()}
+        self.allcountrycache = tuple(sorted(countryset))
+        self.countryprovinceindex = {country: tuple(sorted(ids)) for country, ids in controlledindex.items()}
+        self.countrycoreprovinceindex = {country: tuple(sorted(ids)) for country, ids in coreindex.items()}
+        self.countryinvadedprovinceindex = {country: tuple(sorted(ids)) for country, ids in invadedindex.items()}
+        self.countryprovincecountindex = dict(provincecountindex)
+        self.countrytroopcountindex = dict(troopcountindex)
         self.countrystatecountindex = {country: len(stateids) for country, stateids in stateindex.items()}
-        self.countryfrontlineallindex = {country: sorted(provinceids) for country, provinceids in frontlineallindex.items()}
+        self.countryfrontlineallindex = {country: tuple(sorted(provinceids)) for country, provinceids in frontlineallindex.items()}
         self.countryfrontlineenemyindex = {
-            country: {enemy: sorted(provinceids) for enemy, provinceids in byenemy.items()}
+            country: {enemy: tuple(sorted(provinceids)) for enemy, provinceids in byenemy.items()}
             for country, byenemy in frontlineenemyindex.items()
         }
         self.countryenemybordertargetindex = {
-            country: {enemy: sorted(provinceids) for enemy, provinceids in byenemy.items()}
+            country: {enemy: tuple(sorted(provinceids)) for enemy, provinceids in byenemy.items()}
             for country, byenemy in enemybordertargetindex.items()
         }
         self.countryaliaslookup = {
@@ -285,7 +296,7 @@ class NpcDirector:
     def _allcountries(self):
         if not self.allcountrycache:
             self.rebuildcountryindexes()
-        return list(self.allcountrycache)
+        return self.allcountrycache
 
     def _initializecountryeconomy(self):
         startinggold = int(self.economyconfig.get("startinggold", 0))
@@ -307,17 +318,17 @@ class NpcDirector:
     def _controlledprovinceids(self, countryname):
         if not self.countryprovinceindex and self.provincemap:
             self.rebuildcountryindexes()
-        return list(self.countryprovinceindex.get(countryname, ()))
+        return self.countryprovinceindex.get(countryname, ())
 
     def _corecontrolledprovinceids(self, countryname):
         if not self.countrycoreprovinceindex and self.provincemap:
             self.rebuildcountryindexes()
-        return list(self.countrycoreprovinceindex.get(countryname, ()))
+        return self.countrycoreprovinceindex.get(countryname, ())
 
     def _invadedprovinceids(self, countryname):
         if not self.countryinvadedprovinceindex and self.provincemap:
             self.rebuildcountryindexes()
-        return list(self.countryinvadedprovinceindex.get(countryname, ()))
+        return self.countryinvadedprovinceindex.get(countryname, ())
 
     def _countcontrolledstates(self, controlledprovinceids):
         # Ebee Super Optimization (ESO) 26/4
@@ -403,7 +414,7 @@ class NpcDirector:
         # O(p*n) --> O(1)
         # serve frontline provinces from prebuilt border indexes
         if enemycountryset is None:
-            return set(self.countryfrontlineallindex.get(countryname, ()))
+            return self.countryfrontlineallindex.get(countryname, ())
 
         byenemy = self.countryfrontlineenemyindex.get(countryname, {})
         frontlineids = set()
@@ -461,10 +472,10 @@ class NpcDirector:
         if frontlineprovincecount <= 0:
             return self.minimumgarrison
 
-        totalcountrytroops = 0
-        for provinceid in self._controlledprovinceids(countryname):
-            totalcountrytroops += int(self.provincemap[provinceid].get("troops", 0))
-
+        # Ebee Super Optimization (ESO) 27/4
+        # O(c*p) -> O(1)
+        # reuse cached per-country troop totals during frontline planning
+        totalcountrytroops = int(self.countrytroopcountindex.get(countryname, 0))
         offensivereservetroops = int(totalcountrytroops * self.frontlineoffensivereservefraction)
         return max(self.minimumgarrison, offensivereservetroops // frontlineprovincecount)
 
@@ -548,6 +559,7 @@ class NpcDirector:
                 continue
 
             self.provincemap[targetprovinceid]["troops"] += provinceamount
+            self.countrytroopcountindex[countryname] = int(self.countrytroopcountindex.get(countryname, 0)) + provinceamount
             markprovincetroopactivity(self.provincemap[targetprovinceid], turnnumber)
             economystate["gold"] -= requiredgold
             economystate["population"] -= requiredpopulation
@@ -718,6 +730,10 @@ class NpcDirector:
                     break
 
                 sourceprovince["troops"] -= movecount
+                self.countrytroopcountindex[countryname] = max(
+                    0,
+                    int(self.countrytroopcountindex.get(countryname, 0)) - movecount,
+                )
                 markprovincetroopactivity(sourceprovince, turnnumber)
                 self._appendmovementorder(
                     movementorderlist,
@@ -785,7 +801,7 @@ class NpcDirector:
         # return cached enemy border targets from turn indexes
         cachedtargets = self.countryenemybordertargetindex.get(countryname, {}).get(enemycountry)
         if cachedtargets is not None:
-            return list(cachedtargets)
+            return cachedtargets
 
         targetids = set()
         for provinceid in self._controlledprovinceids(countryname):
@@ -805,22 +821,16 @@ class NpcDirector:
         if countryname in self.countrystrengthcache:
             return int(self.countrystrengthcache[countryname])
 
-        controlledprovinceids = self._controlledprovinceids(countryname)
-        if not controlledprovinceids:
+        controlledprovincecount = int(self.countryprovincecountindex.get(countryname, 0))
+        if controlledprovincecount <= 0:
             return 0
-
-        controlledtroops = sum(
-            int(self.provincemap[provinceid].get("troops", 0))
-            for provinceid in controlledprovinceids
-        )
-        controlledstatecount = self._countcontrolledstates(controlledprovinceids)
 
         provinceweight = max(2, self.minimumgarrison // 2)
         stateweight = max(6, self.minimumgarrison)
         return (
-            controlledtroops
-            + (len(controlledprovinceids) * provinceweight)
-            + (controlledstatecount * stateweight)
+            int(self.countrytroopcountindex.get(countryname, 0))
+            + (controlledprovincecount * provinceweight)
+            + (int(self.countrystatecountindex.get(countryname, 0)) * stateweight)
         )
 
     def _rebuildcountrystrengthcache(self):
@@ -831,19 +841,20 @@ class NpcDirector:
         stateweight = max(6, self.minimumgarrison)
         strengthcache = {}
 
+        # Ebee Super Optimization (ESO) 27/4
+        # O(c*p) -> O(c)
+        # derive strength from cached country totals instead of rescanning provinces
         for countryname in self._allcountries():
-            controlledprovinceids = self._controlledprovinceids(countryname)
-            if not controlledprovinceids:
+            controlledprovincecount = int(self.countryprovincecountindex.get(countryname, 0))
+            if controlledprovincecount <= 0:
                 strengthcache[countryname] = 0
                 continue
 
-            controlledtroops = 0
-            for provinceid in controlledprovinceids:
-                controlledtroops += int(self.provincemap[provinceid].get("troops", 0))
+            controlledtroops = int(self.countrytroopcountindex.get(countryname, 0))
             controlledstatecount = int(self.countrystatecountindex.get(countryname, 0))
             strengthcache[countryname] = (
                 controlledtroops
-                + (len(controlledprovinceids) * provinceweight)
+                + (controlledprovincecount * provinceweight)
                 + (controlledstatecount * stateweight)
             )
 
@@ -1003,6 +1014,10 @@ class NpcDirector:
 
             movingtroops = min(movabletroops, max(1, min(troopssendneeded, wavesizebase)))
             sourceprovince["troops"] -= movingtroops
+            self.countrytroopcountindex[countryname] = max(
+                0,
+                int(self.countrytroopcountindex.get(countryname, 0)) - movingtroops,
+            )
             markprovincetroopactivity(sourceprovince, turnnumber)
             self._appendmovementorder(
                 movementorderlist,
