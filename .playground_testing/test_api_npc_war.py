@@ -1,0 +1,59 @@
+from engine.api import EbeeEngine
+
+
+def _province(provinceid, ownercountry, controllercountry, troops, center):
+    return {
+        "id": provinceid,
+        "ownercountry": ownercountry,
+        "controllercountry": controllercountry,
+        "country": controllercountry,
+        "countrycolor": (100, 100, 100),
+        "troops": troops,
+        "center": center,
+    }
+
+
+def test_api_runnpcturn_supports_npc_vs_npc_wars():
+    engine = EbeeEngine()
+    engine.provincemap = {
+        "A1": _province("A1", "A", "A", 0, (0.0, 0.0)),
+        "B1": _province("B1", "B", "B", 40, (1.0, 0.0)),
+        "C1": _province("C1", "C", "C", 8, (2.0, 0.0)),
+    }
+    engine.provincegraph = {
+        "A1": set(),
+        "B1": {"C1"},
+        "C1": {"B1"},
+    }
+    engine.countrytocolorlookup = {
+        "A": (10, 10, 10),
+        "B": (20, 20, 20),
+        "C": (30, 30, 30),
+    }
+    engine.playercountry = "A"
+
+    engine.setupnpc(
+        playercountry="A",
+        economyconfig={
+            "startinggold": 1000,
+            "startingpopulation": 1000,
+            "recruitamount": 10,
+            "recruitgoldcostperunit": 1,
+            "recruitpopulationcostperunit": 1,
+            "mingoldincome": 0,
+            "goldincomedivisor": 1,
+            "minpopulationgrowth": 0,
+            "populationgrowthdivisor": 1,
+        },
+    )
+    engine.syncnpcwars(warpairset={("b", "c")})
+
+    movementorderlist = []
+    summary = engine.runnpcturn(movementorderlist)
+
+    assert summary["invasionOrders"] >= 1
+    assert any(
+        (order["country"] == "B" and order["path"][-1] == "C1")
+        or (order["country"] == "C" and order["path"][-1] == "B1")
+        for order in movementorderlist
+    )
