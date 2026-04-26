@@ -1244,6 +1244,90 @@ def main(eventbus=None, is_fullscreen=False):
 
     eventbus.subscribe(EngineEventType.WARDECLARED, handlewardeclared)
 
+    def applyconsolecommandstate(commandstate):
+        nonlocal playercountry
+        nonlocal playergold
+        nonlocal playerpopulation
+        nonlocal gamephase
+        nonlocal currentturnnumber
+        nonlocal countriesatwarset
+        nonlocal warpairset
+        nonlocal selectedprovinceid
+        nonlocal selectedprovinceidset
+        nonlocal routepreviewset
+        nonlocal frontlineplacementmode
+        nonlocal activefrontlineedgekeyset
+        nonlocal frontlineassignmentlist
+        nonlocal frontlinebordersegmentcache
+        nonlocal countrymenutarget
+        nonlocal countrybordersdirty
+
+        if not isinstance(commandstate, dict):
+            return
+
+        previousplayercountry = playercountry
+        requestedplayercountry = commandstate.get("playercountry", playercountry)
+        if requestedplayercountry is not None:
+            requestedplayercountry = canonicalizecountry(requestedplayercountry)
+
+        if "playergold" in commandstate:
+            playergold = max(0, int(commandstate.get("playergold", playergold)))
+        if "playerpopulation" in commandstate:
+            playerpopulation = max(0, int(commandstate.get("playerpopulation", playerpopulation)))
+        if "currentturnnumber" in commandstate:
+            currentturnnumber = max(1, int(commandstate.get("currentturnnumber", currentturnnumber)))
+
+        if "countriesatwarset" in commandstate:
+            updatedwarset = set()
+            for rawcountry in commandstate.get("countriesatwarset", set()):
+                canonicalcountry = canonicalizecountry(rawcountry)
+                if canonicalcountry:
+                    updatedwarset.add(canonicalcountry)
+            countriesatwarset = updatedwarset
+
+        if "warpairset" in commandstate:
+            updatedwarpairset = set()
+            for rawwarpair in commandstate.get("warpairset", set()):
+                if not isinstance(rawwarpair, (tuple, list)) or len(rawwarpair) != 2:
+                    continue
+                normalizedpair = normalizewarpair(rawwarpair[0], rawwarpair[1])
+                if normalizedpair is not None:
+                    updatedwarpairset.add(normalizedpair)
+            warpairset = updatedwarpairset
+
+        playercountrychanged = requestedplayercountry != previousplayercountry
+        if playercountrychanged:
+            playercountry = requestedplayercountry
+            countrybordersdirty = True
+            selectedprovinceid = None
+            selectedprovinceidset = set()
+            routepreviewset = set()
+            frontlineplacementmode = False
+            activefrontlineedgekeyset = set()
+            frontlineassignmentlist = []
+            frontlinebordersegmentcache = {}
+            countrymenutarget = None
+            if not playercountry:
+                countriesatwarset = set()
+
+            npcdirector.setplayercountry(playercountry)
+            npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
+
+            if playercountry:
+                gamephase = "play"
+                eventbus.emit(
+                    EngineEventType.PLAYERCOUNTRYSELECTED,
+                    {
+                        "country": playercountry,
+                    },
+                )
+
+        if "gamephase" in commandstate:
+            gamephase = commandstate.get("gamephase", gamephase)
+
+        if playercountry and not playercountrychanged:
+            npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
+
     devconsole = developmentconsole(enabled=developmentmode)
     newssystem = NewsSystem(eventbus)
     newssystem.start()
@@ -2270,6 +2354,19 @@ def main(eventbus=None, is_fullscreen=False):
             elif event.type == pygame.KEYDOWN:
 
             # (for quick ctrl f: developer console)
+                commandcontext = {
+                    "playercountry": playercountry,
+                    "playergold": playergold,
+                    "playerpopulation": playerpopulation,
+                    "gamephase": gamephase,
+                    "currentturnnumber": currentturnnumber,
+                    "countriesatwarset": set(countriesatwarset),
+                    "warpairset": set(warpairset),
+                    "npcdirector": npcdirector,
+                    "economyconfig": economyconfig,
+                    "movementorderlist": movementorderlist,
+                    "provincegraph": provincegraph,
+                }
                 if devconsole.handlekeydown(
                     event,
                     provincemap,
@@ -2279,7 +2376,9 @@ def main(eventbus=None, is_fullscreen=False):
                     troopbadgelist,
                     eventbus=eventbus,
                     currentturnnumber=currentturnnumber,
+                    commandcontext=commandcontext,
                 ):
+                    applyconsolecommandstate(commandcontext)
                     continue # handle dev console input
 
 
