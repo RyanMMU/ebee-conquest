@@ -1660,6 +1660,7 @@ def main(eventbus=None, is_fullscreen=False):
                         {
                             "center": provincerectanglescreen.center,
                             "troops": province["troops"],
+                            "country": getprovincecontroller(province), # this is for country flags
                             "backgroundcolor": badgebackground,
                             "bordercolor": badgeborder,
                         }
