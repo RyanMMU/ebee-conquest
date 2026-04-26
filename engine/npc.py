@@ -43,6 +43,11 @@ class NpcDirector:
         self.countryprovinceindex = {}
         self.countrycoreprovinceindex = {}
         self.countryinvadedprovinceindex = {}
+        self.countrystatecountindex = {}
+        self.countryfrontlineallindex = {}
+        self.countryfrontlineenemyindex = {}
+        self.countryenemybordertargetindex = {}
+        self.countrystrengthcache = {}
         self.allcountrycache = []
         self.countryaliaslookup = {}
 
@@ -130,14 +135,25 @@ class NpcDirector:
         controlledindex = defaultdict(list)
         coreindex = defaultdict(list)
         invadedindex = defaultdict(list)
+        stateindex = defaultdict(set)
+
+        # Ebee Super Optimization (ESO) 26/4
+        # O(c*p*n) --> O(p*n)
+        # precompute border and frontline indexes once per turn
+        frontlineallindex = defaultdict(set)
+        frontlineenemyindex = defaultdict(lambda: defaultdict(set))
+        enemybordertargetindex = defaultdict(lambda: defaultdict(set))
 
         for provinceid, province in self.provincemap.items():
             controllercountry = getprovincecontroller(province)
             ownercountry = getprovinceowner(province)
+            stateid = province.get("parentstateid") or province.get("parentid")
 
             if controllercountry:
                 countryset.add(controllercountry)
                 controlledindex[controllercountry].append(provinceid)
+                if stateid is not None:
+                    stateindex[controllercountry].add(stateid)
             if ownercountry:
                 countryset.add(ownercountry)
             if controllercountry and ownercountry and controllercountry == ownercountry:
@@ -145,15 +161,42 @@ class NpcDirector:
             elif ownercountry and controllercountry != ownercountry:
                 invadedindex[ownercountry].append(provinceid)
 
+            if not controllercountry:
+                continue
+
+            for neighborprovinceid in self.provincegraph.get(provinceid, ()): 
+                neighborprovince = self.provincemap.get(neighborprovinceid)
+                if not neighborprovince:
+                    continue
+
+                neighborcountry = getprovincecontroller(neighborprovince)
+                if not neighborcountry or neighborcountry == controllercountry:
+                    continue
+
+                frontlineallindex[controllercountry].add(provinceid)
+                frontlineenemyindex[controllercountry][neighborcountry].add(provinceid)
+                enemybordertargetindex[controllercountry][neighborcountry].add(neighborprovinceid)
+
         self.allcountrycache = sorted(countryset)
         self.countryprovinceindex = {country: sorted(ids) for country, ids in controlledindex.items()}
         self.countrycoreprovinceindex = {country: sorted(ids) for country, ids in coreindex.items()}
         self.countryinvadedprovinceindex = {country: sorted(ids) for country, ids in invadedindex.items()}
+        self.countrystatecountindex = {country: len(stateids) for country, stateids in stateindex.items()}
+        self.countryfrontlineallindex = {country: sorted(provinceids) for country, provinceids in frontlineallindex.items()}
+        self.countryfrontlineenemyindex = {
+            country: {enemy: sorted(provinceids) for enemy, provinceids in byenemy.items()}
+            for country, byenemy in frontlineenemyindex.items()
+        }
+        self.countryenemybordertargetindex = {
+            country: {enemy: sorted(provinceids) for enemy, provinceids in byenemy.items()}
+            for country, byenemy in enemybordertargetindex.items()
+        }
         self.countryaliaslookup = {
             str(country).strip().lower(): str(country).strip()
             for country in self.allcountrycache
             if str(country).strip()
         }
+        self.countrystrengthcache = {}
 
     def _normalizewarpair(self, firstcountry, secondcountry):
         if not firstcountry or not secondcountry:
@@ -194,6 +237,7 @@ class NpcDirector:
         # run one index pass up front so downstream country/province queries are cached
         self.rebuildcountryindexes()
         self._initializecountryeconomy()
+        self._rebuildcountrystrengthcache()
         summary = {
             "countriesProcessed": 0,
             "recruits": 0,
@@ -276,6 +320,17 @@ class NpcDirector:
         return list(self.countryinvadedprovinceindex.get(countryname, ()))
 
     def _countcontrolledstates(self, controlledprovinceids):
+        # Ebee Super Optimization (ESO) 26/4
+        # O(c*s) --> O(1)
+        # use cached state count from index build
+        if controlledprovinceids:
+            sampleprovinceid = controlledprovinceids[0]
+            sampleprovince = self.provincemap.get(sampleprovinceid)
+            if sampleprovince:
+                controllercountry = getprovincecontroller(sampleprovince)
+                if controllercountry in self.countrystatecountindex:
+                    return int(self.countrystatecountindex.get(controllercountry, 0))
+
         stateidset = set()
         for provinceid in controlledprovinceids:
             province = self.provincemap.get(provinceid)
@@ -344,6 +399,19 @@ class NpcDirector:
         return entrenchedturns >= entrenchmentturnrequired
 
     def _frontlineprovinceids(self, countryname, enemycountryset=None):
+        # Ebee Super Optimization (ESO) 26/4
+        # O(p*n) --> O(1)
+        # serve frontline provinces from prebuilt border indexes
+        if enemycountryset is None:
+            return set(self.countryfrontlineallindex.get(countryname, ()))
+
+        byenemy = self.countryfrontlineenemyindex.get(countryname, {})
+        frontlineids = set()
+        for enemycountry in enemycountryset:
+            frontlineids.update(byenemy.get(enemycountry, ()))
+        if frontlineids:
+            return frontlineids
+
         frontlineids = set()
         for provinceid in self._controlledprovinceids(countryname):
             for neighborprovinceid in self.provincegraph.get(provinceid, ()): 
@@ -583,6 +651,12 @@ class NpcDirector:
         }
         incominglookup = {provinceid: 0 for provinceid in targetprovinceidset}
 
+        # Ebee Super Optimization (ESO) 26/4
+        # O(m*t*path) --> O(m*t)
+        # cache source target paths inside one reserve move pass
+        sortedtargetids = sorted(targetprovinceidset)
+        pathcache = {}
+
         dynamicmaxorders = max(maxorders, len(targetprovinceidset) * 3)
         orderscreated = 0
         for sourceprovinceid in sourceprovinceids:
@@ -605,7 +679,7 @@ class NpcDirector:
                 besttargetpath = []
                 besttargetscore = None
 
-                for targetprovinceid in sorted(targetprovinceidset):
+                for targetprovinceid in sortedtargetids:
                     if targetprovinceid == sourceprovinceid:
                         continue
 
@@ -614,13 +688,17 @@ class NpcDirector:
                     if targetdeficit <= 0:
                         continue
 
-                    path = findprovincepath(
-                        sourceprovinceid,
-                        targetprovinceid,
-                        self.provincemap,
-                        self.provincegraph,
-                        allowedprovinceidset=controlledprovinceidset,
-                    )
+                    pathkey = (sourceprovinceid, targetprovinceid)
+                    path = pathcache.get(pathkey)
+                    if path is None:
+                        path = findprovincepath(
+                            sourceprovinceid,
+                            targetprovinceid,
+                            self.provincemap,
+                            self.provincegraph,
+                            allowedprovinceidset=controlledprovinceidset,
+                        )
+                        pathcache[pathkey] = path
                     if len(path) < 2:
                         continue
 
@@ -702,6 +780,13 @@ class NpcDirector:
         )
 
     def _enemybordertargetids(self, countryname, enemycountry):
+        # Ebee Super Optimization (ESO) 26/4
+        # O(p*n) --> O(1)
+        # return cached enemy border targets from turn indexes
+        cachedtargets = self.countryenemybordertargetindex.get(countryname, {}).get(enemycountry)
+        if cachedtargets is not None:
+            return list(cachedtargets)
+
         targetids = set()
         for provinceid in self._controlledprovinceids(countryname):
             for neighborprovinceid in self.provincegraph.get(provinceid, ()): 
@@ -714,6 +799,12 @@ class NpcDirector:
         return sorted(targetids)
 
     def _getcountrystrengthscore(self, countryname):
+        # Ebee Super Optimization (ESO) 26/4
+        # O(c*s) --> O(1)
+        # use cached country strength built once per turn
+        if countryname in self.countrystrengthcache:
+            return int(self.countrystrengthcache[countryname])
+
         controlledprovinceids = self._controlledprovinceids(countryname)
         if not controlledprovinceids:
             return 0
@@ -732,28 +823,53 @@ class NpcDirector:
             + (controlledstatecount * stateweight)
         )
 
-    def _buildattackplans(self, countryname, enemycountry, targetprovinceid):
-        allowedprovinceidset = {
-            provinceid
-            for provinceid, province in self.provincemap.items()
-            if getprovincecontroller(province) in {countryname, enemycountry}
-        }
+    def _rebuildcountrystrengthcache(self):
+        # Ebee Super Optimization (ESO) 26/4
+        # O(c*(p+s)) --> O(c)
+        # precompute country strength values once each turn
+        provinceweight = max(2, self.minimumgarrison // 2)
+        stateweight = max(6, self.minimumgarrison)
+        strengthcache = {}
+
+        for countryname in self._allcountries():
+            controlledprovinceids = self._controlledprovinceids(countryname)
+            if not controlledprovinceids:
+                strengthcache[countryname] = 0
+                continue
+
+            controlledtroops = 0
+            for provinceid in controlledprovinceids:
+                controlledtroops += int(self.provincemap[provinceid].get("troops", 0))
+            controlledstatecount = int(self.countrystatecountindex.get(countryname, 0))
+            strengthcache[countryname] = (
+                controlledtroops
+                + (len(controlledprovinceids) * provinceweight)
+                + (controlledstatecount * stateweight)
+            )
+
+        self.countrystrengthcache = strengthcache
+
+    def _buildattackplans(self, countryname, sourceprovinceids, targetprovinceid, allowedprovinceidset, pathcache):
 
         attackplanlist = []
-        for sourceprovinceid in self._controlledprovinceids(countryname):
+        for sourceprovinceid in sourceprovinceids:
             sourceprovince = self.provincemap[sourceprovinceid]
             sourcetroops = int(sourceprovince.get("troops", 0))
             movabletroops = sourcetroops - self.invasiongarrison
             if movabletroops <= 0:
                 continue
 
-            path = findprovincepath(
-                sourceprovinceid,
-                targetprovinceid,
-                self.provincemap,
-                self.provincegraph,
-                allowedprovinceidset=allowedprovinceidset,
-            )
+            pathkey = (sourceprovinceid, targetprovinceid)
+            path = pathcache.get(pathkey)
+            if path is None:
+                path = findprovincepath(
+                    sourceprovinceid,
+                    targetprovinceid,
+                    self.provincemap,
+                    self.provincegraph,
+                    allowedprovinceidset=allowedprovinceidset,
+                )
+                pathcache[pathkey] = path
             if len(path) < 2:
                 continue
 
@@ -911,12 +1027,27 @@ class NpcDirector:
         # O(big nested branch) --> O(same complexity, lower overhead)
         # attack decision flow split into focused helpers to reduce repeated calculations and branching cost
         orderscreated = 0
+        sourceprovinceids = self._controlledprovinceids(countryname)
+        allowedsetcache = {}
         for enemycountry in warenemyset:
             enemyaggression = self.getenemyaggression(countryname, enemycountry)
             invasionorderlimit, enemyorderlimit = self.getenemyinvasionlimits(len(warenemyset), enemyaggression)
             if orderscreated >= invasionorderlimit:
                 break
             enemyorderscreated = 0
+
+            # Ebee Super Optimization (ESO) 26/4
+            # O(cp*t) --> O(cp)
+            # build allowed conflict provinces once per enemy
+            allowedprovinceidset = allowedsetcache.get(enemycountry)
+            if allowedprovinceidset is None:
+                allowedprovinceidset = {
+                    provinceid
+                    for provinceid, province in self.provincemap.items()
+                    if getprovincecontroller(province) in {countryname, enemycountry}
+                }
+                allowedsetcache[enemycountry] = allowedprovinceidset
+            pathcache = {}
 
             targetprovinceids = self._enemybordertargetids(countryname, enemycountry)
             if not targetprovinceids:
@@ -936,7 +1067,13 @@ class NpcDirector:
                 if orderscreated >= invasionorderlimit or enemyorderscreated >= enemyorderlimit:
                     break
 
-                attackplanlist = self._buildattackplans(countryname, enemycountry, targetprovinceid)
+                attackplanlist = self._buildattackplans(
+                    countryname,
+                    sourceprovinceids,
+                    targetprovinceid,
+                    allowedprovinceidset,
+                    pathcache,
+                )
                 if not attackplanlist:
                     continue
 
