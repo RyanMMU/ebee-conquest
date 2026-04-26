@@ -779,8 +779,8 @@ class EngineUI:
                     badgeentry.get("center"),
                     badgeentry.get("troops", 0),
                     self.troopbadgefont,
-                    self.flags,                          
-                    badgeentry.get("country", "malaysia"),  
+                    self.flags,
+                    badgeentry.get("country"),
                     backgroundcolor=badgeentry.get("backgroundcolor", (0, 0, 0)),
                     bordercolor=badgeentry.get("bordercolor", (165, 165, 165)),
                 )
@@ -959,9 +959,6 @@ def gui_drawtroopcountbadge(
         flag_y = center_y - flag_img.get_height() // 2
         screen.blit(flag_img, (draw_x, flag_y))
         draw_x += flag_img.get_width() + spacing
-    labelrectangle = gui_gettroopbadgerect(centerposition, troopcount, fontobject)
-    badgesurface = gui_gettroopbadgeasset(fontobject, troopcount, backgroundcolor, bordercolor)
-    screen.blit(badgesurface, badgesurface.get_rect(center=labelrectangle.center))
 
     # step 9: draw troop number on the right
     text_y = center_y - text_surf.get_height() // 2
