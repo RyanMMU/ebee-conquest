@@ -110,6 +110,12 @@ def applyedgepan(camerastate, mousex, windowwidth, elapsedseconds, panmargin, pa
     elif mousex >= windowwidth - panmargin:
         camerastate.x -= panpixels
 
+def applyverticalpan(camerastate, mousey, windowheight, elapsedseconds, panmargin, panspeed):
+    panpixels = panspeed * elapsedseconds
+    if mousey <= panmargin:
+        camerastate.y += panpixels
+    elif mousey >= windowheight - panmargin:
+        camerastate.y -= panpixels
 
 def enforceminimumzoom(camerastate, windowwidth, windowheight, mapbox):
     minimumzoom = getminimumzoomforheight(windowheight, mapbox)
