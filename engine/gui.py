@@ -758,28 +758,67 @@ class EngineUI:
 
 
 
-def gui_drawtroopcountbadge(screen, centerposition, troopcount, fontobject, flags, country_name="malaysia"):
-    print("BADGE CALLED")
-
+def gui_drawtroopcountbadge(
+    screen,
+    centerposition,
+    troopcount,
+    fontobject,
+    flags,
+    country_name,
+    backgroundcolor=(0, 0, 0),
+    bordercolor=(165, 165, 165),
+):
     x, y = centerposition
 
-    labelsurface = fontobject.render(str(troopcount), True, (255,255,255))
+    # normalize key
+    country_key = country_name.strip().lower()
 
-    country_name = country_name.lower()
-    flag_img = flags.get(country_name)
+    # render number
+    text_surf = fontobject.render(str(troopcount), True, (255, 255, 255))
 
-    print("country:", country_name)
-    print("flag exists:", flag_img is not None)
+    # get flag
+    flag_img = flags.get(country_key)
 
     padding = 6
-    width = labelsurface.get_width() + padding*2
-    height = labelsurface.get_height() + padding*2
+    spacing = 4
 
-    rect = pygame.Rect(x, y, width, height)
+    # calculate width
+    content_width = text_surf.get_width()
 
-    pygame.draw.rect(screen, (0,0,0), rect)
+    if flag_img:
+        content_width += flag_img.get_width() + spacing
 
-    screen.blit(labelsurface, (x, y))
+    width = content_width + padding * 2
+    height = max(
+        text_surf.get_height(),
+        flag_img.get_height() if flag_img else 0
+    ) + padding * 2
+
+    rect = pygame.Rect(
+        x - width // 2,
+        y - height // 2,
+        width,
+        height
+    )
+
+    # draw badge
+    pygame.draw.rect(screen, backgroundcolor, rect, border_radius=4)
+    pygame.draw.rect(screen, bordercolor, rect, 1, border_radius=4)
+
+    draw_x = rect.x + padding
+
+    # vertical center helper
+    center_y = rect.y + rect.height // 2
+
+    # draw flag FIRST (left)
+    if flag_img:
+        flag_y = center_y - flag_img.get_height() // 2
+        screen.blit(flag_img, (draw_x, flag_y))
+        draw_x += flag_img.get_width() + spacing
+
+    # draw number (right of flag)
+    text_y = center_y - text_surf.get_height() // 2
+    screen.blit(text_surf, (draw_x, text_y))
 
 def gui_drawhoverlabel(screen, fontobject, state, mouseposition):
     if not state:
