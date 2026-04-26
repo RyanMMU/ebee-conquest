@@ -616,9 +616,6 @@ class EngineUI:
             screen.blit(self.hudfont.render(self.hudheadertext, True, (242, 242, 242)), (10, 8))
             screen.blit(self.hudfont.render(self.huddetailtext, True, (236, 236, 236)), (10, 30))
             screen.blit(self.hudsmallfont.render(self.hudcontrolstext, True, (215, 215, 215)), (10, 52))
-<<<<<<< HEAD
-        for badgecenter, badgetroops in self.troopbadgelist:
-=======
         for badgeentry in self.troopbadgelist:
             if isinstance(badgeentry, dict):
                 gui_drawtroopcountbadge(
@@ -632,7 +629,6 @@ class EngineUI:
                 continue
 
             badgecenter, badgetroops = badgeentry
->>>>>>> b0480fe977aa75a66c0fd84c52f7380d86a1d17c
             gui_drawtroopcountbadge(screen, badgecenter, badgetroops, self.troopbadgefont)
         if self.hovertextcurrent:
             mousex, mousey = self.hovermousepos
