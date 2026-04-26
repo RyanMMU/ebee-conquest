@@ -774,6 +774,7 @@ def gui_drawtroopcountbadge(
     labelsurface = fontobject.render(str(troopcount), True, (255, 255, 255))
 
     # get flag
+    country_name = country_name.strip().lower()
     flag_img = flags.get(country_name)
     flag_offset = 0
 
