@@ -337,7 +337,10 @@ def getdragselectedprovinceids(selectionrect, badgehitlist, provincemap, playerc
 
 
 def getprovinceundercursorinstate(mouseposition, stateid, stateshapelist, zoomvalue, camerax, cameray, copyshiftlist):
-    stateobject = next((state for state in stateshapelist if state["id"] == stateid), None)
+    # Ebee Super Optimization (ESO) 27/4
+    # O(s) -> O(1)
+    # fetch hovered states from a direct id lookup
+    stateobject = stateshapelist.get(stateid)
     if not stateobject:
         return None
 
@@ -358,6 +361,74 @@ def getprovinceundercursorinstate(mouseposition, stateid, stateshapelist, zoomva
                     return province
 
     return None
+
+
+def buildstaterenderlookup(playablestateshapelist, expandedstateid, gamephase, defaultshapecolor):
+    staterenderlookup = {}
+    sentinel = object()
+
+    # Ebee Super Optimization (ESO) 27/4
+    # O(k*s*p) -> O(s*p + k*s)
+    # precompute state control and subdivision draw choices once per frame
+    for stateshape in playablestateshapelist:
+        drawitemlist = (stateshape,)
+        uniformsubdivisioncolor = None
+
+        if gamephase != "choosecountry":
+            subdivisions = stateshape.get("subdivisions", ())
+            hasmixedcontrol = False
+            if subdivisions:
+                firstcontroller = sentinel
+                firstnonnullcontroller = None
+                multiplecontrollers = False
+                multiplenonnullcontrollers = False
+                firstcolor = sentinel
+                multiplecolors = False
+
+                for province in subdivisions:
+                    controllercountry = getprovincecontroller(province)
+                    if firstcontroller is sentinel:
+                        firstcontroller = controllercountry
+                    elif controllercountry != firstcontroller:
+                        multiplecontrollers = True
+
+                    if controllercountry is not None:
+                        if firstnonnullcontroller is None:
+                            firstnonnullcontroller = controllercountry
+                        elif controllercountry != firstnonnullcontroller:
+                            multiplenonnullcontrollers = True
+
+                    countrycolor = province.get("countrycolor")
+                    if countrycolor is not None:
+                        if firstcolor is sentinel:
+                            firstcolor = countrycolor
+                        elif countrycolor != firstcolor:
+                            multiplecolors = True
+
+                hasmixedcontrol = multiplecontrollers
+                if firstnonnullcontroller is not None and not multiplenonnullcontrollers:
+                    stateshape["controllercountry"] = firstnonnullcontroller
+                    stateshape["country"] = firstnonnullcontroller
+                    stateshape["countrycolor"] = subdivisions[0].get(
+                        "countrycolor",
+                        stateshape.get("countrycolor", defaultshapecolor),
+                    )
+                else:
+                    stateshape["controllercountry"] = None
+                    stateshape["country"] = None
+
+                if firstcolor is not sentinel and not multiplecolors:
+                    uniformsubdivisioncolor = firstcolor
+
+                if expandedstateid == stateshape["id"] or hasmixedcontrol:
+                    drawitemlist = tuple(subdivisions)
+
+        staterenderlookup[stateshape["id"]] = {
+            "drawitems": drawitemlist,
+            "uniformsubdivisioncolor": uniformsubdivisioncolor,
+        }
+
+    return staterenderlookup
 
 
 def getselectedtroopentries(selectedprovinceidset, selectedprovinceid, provincemap, playercountry):
@@ -987,6 +1058,8 @@ def main(eventbus=None, is_fullscreen=False):
             setprovincecontroller(province, controllercountry, stateshape.get("countrycolor", (85, 85, 85)))
         stateshape["subdivisions"] = subdivisionsforstate
 
+    stateobjectlookup = {stateshape["id"]: stateshape for stateshape in stateshapelist}
+
 
 
     mapbox = getmapbox(stateshapelist)
@@ -1169,6 +1242,13 @@ def main(eventbus=None, is_fullscreen=False):
 
     def getcombatprovinceidset():
         combatprovinceidset = set()
+        # Ebee Super Optimization (ESO) 27/4
+        # O(m*m) -> O(m)
+        # reuse a current-position order index for combat previews
+        movementorderindex = movementmodule.buildmovementordercurrentindex(
+            movementorderlist,
+            currentturnnumber=currentturnnumber,
+        )
         for movementorder in movementorderlist:
             if int(movementorder.get("amount", 0)) <= 0:
                 continue
@@ -1194,26 +1274,11 @@ def main(eventbus=None, is_fullscreen=False):
                 continue
 
             basedefenders = int(nextprovince.get("troops", 0))
-            movingdefenders = 0
-            for candidateorder in movementorderlist:
-                if candidateorder is movementorder:
-                    continue
-                if int(candidateorder.get("amount", 0)) <= 0:
-                    continue
-
-                candidateresumeturn = candidateorder.get("_resumeonturn")
-                if candidateresumeturn is not None and currentturnnumber is not None:
-                    if int(currentturnnumber) < int(candidateresumeturn):
-                        continue
-
-                if candidateorder.get("current") != nextprovinceid:
-                    continue
-
-                candidatecountry = candidateorder.get("controllercountry", candidateorder.get("country"))
-                if candidatecountry != defendingcountry:
-                    continue
-
-                movingdefenders += int(candidateorder.get("amount", 0))
+            movingdefenders = sum(
+                int(candidateorder.get("amount", 0))
+                for candidateorder in movementorderindex.get((nextprovinceid, defendingcountry), ())
+                if candidateorder is not movementorder
+            )
 
             if basedefenders + movingdefenders > 0:
                 combatprovinceidset.add(nextprovinceid)
@@ -1442,6 +1507,16 @@ def main(eventbus=None, is_fullscreen=False):
                     drawcamerax = camerax + copyshift
                     blitblackworldslice(screen, blackedoutworldsurface, mapbox, zoomvalue, drawcamerax, cameray)
 
+        staterenderlookup = buildstaterenderlookup(
+            playablestateshapelist,
+            expandedstateid,
+            gamephase,
+            defaultshapecolor,
+        )
+        pendingpulsevalue = None
+        if gamephase == "choosecountry" and pendingcountry:
+            pendingpulsevalue = 0.35 + 0.45 * (0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.008))
+
         for copyshift in copyshiftlist:
             drawcamerax = camerax + copyshift
 
@@ -1450,31 +1525,8 @@ def main(eventbus=None, is_fullscreen=False):
                 if not staterectanglescreen.colliderect(screenrectangle):
                     continue
 
-                if gamephase == "choosecountry":
-                    drawitemlist = [stateshape]
-                else:
-                    subdivisions = stateshape.get("subdivisions", [])
-                    if subdivisions:
-                        controllercountries = {getprovincecontroller(province) for province in subdivisions}
-                        controllercountries.discard(None)
-                        if len(controllercountries) == 1:
-                            statecontroller = next(iter(controllercountries))
-                            stateshape["controllercountry"] = statecontroller
-                            stateshape["country"] = statecontroller
-                            stateshape["countrycolor"] = subdivisions[0].get("countrycolor", stateshape.get("countrycolor", defaultshapecolor))
-                        else:
-                            stateshape["controllercountry"] = None
-                            stateshape["country"] = None
-
-                    hasmixedcontrol = False #contested state 
-                    if subdivisions:
-                        subdivisioncontrollers = {getprovincecontroller(province) for province in subdivisions}
-                        hasmixedcontrol = len(subdivisioncontrollers) > 1
-
-                    if (expandedstateid == stateshape["id"] and subdivisions) or hasmixedcontrol:
-                        drawitemlist = subdivisions
-                    else:
-                        drawitemlist = [stateshape]
+                staterenderinfo = staterenderlookup.get(stateshape["id"], {})
+                drawitemlist = staterenderinfo.get("drawitems", (stateshape,))
             # FOR QUICK SEARCH: "mixed control state"
 
 
@@ -1540,8 +1592,7 @@ def main(eventbus=None, is_fullscreen=False):
                             basefillcolor = (75, 75, 75)
 
                         if pendingcountry and stateshape.get("country") == pendingcountry:
-                            pulsevalue = 0.35 + 0.45 * (0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.008))
-                            basefillcolor = gui_lightencolor(basefillcolor, pulsevalue)
+                            basefillcolor = gui_lightencolor(basefillcolor, pendingpulsevalue)
 
 
                     elif drawitem.get("id") in selectedprovinceidset:
@@ -1564,13 +1615,9 @@ def main(eventbus=None, is_fullscreen=False):
 
                     else:
                         if drawitem is stateshape and stateshape.get("subdivisions"):
-                            ownercolors = {
-                                province.get("countrycolor")
-                                for province in stateshape["subdivisions"]
-                                if province.get("countrycolor") is not None
-                            }
-                            if len(ownercolors) == 1:
-                                basefillcolor = next(iter(ownercolors))
+                            uniformsubdivisioncolor = staterenderinfo.get("uniformsubdivisioncolor")
+                            if uniformsubdivisioncolor is not None:
+                                basefillcolor = uniformsubdivisioncolor
                             else:
                                 basefillcolor = drawitem.get("countrycolor", stateshape.get("countrycolor", defaultshapecolor))
                         else:
@@ -1987,7 +2034,7 @@ def main(eventbus=None, is_fullscreen=False):
                 if gamephase == "choosecountry":
 
                     if hoveredstateid:
-                        selectedstateobject = next((state for state in stateshapelist if state["id"] == hoveredstateid), None)
+                        selectedstateobject = stateobjectlookup.get(hoveredstateid)
                         if selectedstateobject and selectedstateobject.get("country"):
 
                             #engine bus
@@ -2171,7 +2218,7 @@ def main(eventbus=None, is_fullscreen=False):
                     hoveredstateprovince = getprovinceundercursorinstate(
                         event.pos,
                         hoveredstateid,
-                        stateshapelist,
+                        stateobjectlookup,
                         zoomvalue,
                         camerax,
                         cameray,
@@ -2220,7 +2267,7 @@ def main(eventbus=None, is_fullscreen=False):
                 # Only open the country interaction menu when the click is on a state (no hovered province).
                 if hoveredprovinceid is None:
                     if hoveredstateid is not None:
-                        selectedstateobject = next((state for state in stateshapelist if state["id"] == hoveredstateid), None)
+                        selectedstateobject = stateobjectlookup.get(hoveredstateid)
                         if selectedstateobject:
                             destinationcountry = selectedstateobject.get("controllercountry", selectedstateobject.get("country"))
                             if playercountry and destinationcountry and destinationcountry != playercountry:
