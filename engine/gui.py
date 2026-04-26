@@ -739,7 +739,7 @@ class EngineUI:
 
 
 
-# for old_engien | IGNORE!
+
 def gui_drawtroopcountbadge(
     screen,
     centerposition,
