@@ -778,7 +778,7 @@ def gui_drawtroopcountbadge(
     country_name = "Malaysia"  
 
     # test direct game
-    test_img = pygame.image.load("assets/flags/malaysia.png")
+    test_img = pygame.image.load("flags/malaysia.png")
     screen.blit(test_img, (50, 50))
 
     # render text
