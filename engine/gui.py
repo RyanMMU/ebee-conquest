@@ -31,6 +31,28 @@ countrylabelvisiblezoommultiplier = 6
 # troopbadgelist: a list of (centerposition, troopcount) tuples for rendering troop count badges on provinces
 
 
+FLAG_PATH = "assets/flags"
+
+def load_flags():
+    flags = {}
+
+    country_map = {
+        "Malaysia": "malaysia.png",
+    }
+
+    for country, file in country_map.items():
+        path = os.path.join(FLAG_PATH, file)
+        if os.path.exists(path):
+            img = pygame.image.load(path).convert_alpha()
+            img = pygame.transform.scale(img, (20, 14))
+            flags[country] = img
+
+    return flags
+
+
+flags = load_flags()
+
+
 def gui_gettroopbadgerect(centerposition, troopcount, fontobject):
 
     labelsurface = fontobject.render(str(troopcount), True, (255, 255, 255))
@@ -794,8 +816,6 @@ def gui_drawtroopcountbadge(
 
     # draw text
     screen.blit(labelsurface, (draw_x, rect.y + padding))
-
-flags = load_flags()
 
 
 def gui_drawhoverlabel(screen, fontobject, state, mouseposition):
