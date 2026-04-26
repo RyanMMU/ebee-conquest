@@ -32,13 +32,11 @@ countrylabelvisiblezoommultiplier = 6
 # troopbadgelist: a list of (centerposition, troopcount) tuples for rendering troop count badges on provinces
 
 
-FLAG_PATH = "assets/flags"
-
 def load_flags():
     flags = {}
 
     country_map = {
-        "Malaysia": "malaysia.png",
+        "malaysia": "malaysia.png",
     }
 
     for country, file in country_map.items():
@@ -49,9 +47,6 @@ def load_flags():
             flags[country] = img
 
     return flags
-
-
-flags = load_flags()
 
 
 def gui_gettroopbadgerect(centerposition, troopcount, fontobject):
