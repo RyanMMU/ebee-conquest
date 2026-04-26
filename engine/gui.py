@@ -617,7 +617,7 @@ class EngineUI:
             screen.blit(self.hudfont.render(self.huddetailtext, True, (236, 236, 236)), (10, 30))
             screen.blit(self.hudsmallfont.render(self.hudcontrolstext, True, (215, 215, 215)), (10, 52))
         for badgecenter, badgetroops in self.troopbadgelist:
-            gui_drawtroopcountbadge(screen, badgecenter, badgetroops, self.troopbadgefont, country_name)
+            gui_drawtroopcountbadge(screen, badgecenter, badgetroops, self.troopbadgefont)
         if self.hovertextcurrent:
             mousex, mousey = self.hovermousepos
             gui_drawhoverlabel(screen, self.hoverfont, self.hovertextcurrent, (mousex, mousey))
