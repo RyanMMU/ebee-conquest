@@ -39,10 +39,10 @@ from .events import EventBus, EngineEventType
 from .apicalltest.newsbannereventtest import NewsSystem, NewsPopup # TEST API CALL
 
 
+# THIS FILE IS A MESS!!!!
+# Write everything twice or something i forgot
 
-
-
-print("CURRENT VERSION - APRIL 19 2024")
+print("CURRENT VERSION - APRIL 29 2024")
 # MAIN GAME LOOP FILE
 
 
@@ -2527,6 +2527,8 @@ def main(eventbus=None, is_fullscreen=False):
 
             elif event.type == pygame.MOUSEWHEEL:
                 if devconsole.visible:
+                    continue
+                if runtimeui.focusview.isopen:
                     continue
 
                 

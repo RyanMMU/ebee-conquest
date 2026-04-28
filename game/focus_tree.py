@@ -21,7 +21,7 @@ class Focus:
     def fromdata(cls, data: Mapping[str, Any]):
         focusid = str(data.get("id", "")).strip()
         if not focusid:
-            raise ValueError("Focus id cannot be empty.")
+            raise ValueError("fail!! id canot be empty")
 
         title = str(data.get("title", focusid)).strip() or focusid
         description = str(data.get("description", "")).strip()
@@ -61,7 +61,7 @@ class FocusStartResult:
     focusid: str | None = None
     reason: str = ""
 
-
+# @dataclass(frozen=True)
 @dataclass(frozen=True)
 class FocusAdvanceResult:
     activefocusid: str | None = None
@@ -94,10 +94,22 @@ class FocusTree:
         self.exclusives = self.buildexclusives()
         self.validate()
 
+
+
+
+
+#@dataclass(frozen=True)
+
+
+    # create empty focus tree with no focus
     @classmethod
     def empty(cls, country: str | None = None):
         name = f"{country} Focus Tree" if country else "Focus Tree"
         return cls("empty", country, name, ())
+
+
+
+
 
     def buildexclusives(self):
         exclusives = {focusid: set() for focusid in self.focuses}
@@ -107,6 +119,10 @@ class FocusTree:
                 exclusives.setdefault(otherid, set()).add(focus.id)
         return exclusives
 
+
+
+
+    # check for prerequisite
     def validate(self):
         focusids = set(self.focuses)
         for focus in self.focuses.values():
@@ -120,6 +136,8 @@ class FocusTree:
                 missing = ", ".join(sorted(missingexclusive))
                 raise ValueError(f"Focus '{focus.id}' references unknown mutually exclusive focuses: {missing}")
 
+
+    # focus start
     def startfocus(self, focusid: str):
         focus = self.focuses.get(str(focusid or "").strip())
         if focus is None:
@@ -128,18 +146,26 @@ class FocusTree:
         canstart, reason = self.canstartfocus(focus.id)
         if not canstart:
             return self.startresult(False, focus.id, reason)
+        # print("start focus", focus.id)
+
+
 
         self.activeid = focus.id
         self.activeturns = self.progress.get(focus.id, 0)
         return self.startresult(True, focus.id, f"Started focus: {focus.title}")
 
+
+
     def advanceturn(self, context: FocusEffectContext | None = None):
         if self.activeid is None:
             return FocusAdvanceResult(message="No active focus.")
 
+
         focus = self.focuses[self.activeid]
         self.activeturns += 1
         self.progress[focus.id] = min(self.activeturns, focus.turncount)
+
+
 
         if self.activeturns < focus.turncount:
             remaining = focus.turncount - self.activeturns
@@ -150,6 +176,7 @@ class FocusTree:
                 turnsrequired=focus.turncount,
                 message=self.lastmessage,
             )
+
 
         appliedeffects = ()
         if context is not None:
@@ -169,27 +196,38 @@ class FocusTree:
             message=self.lastmessage,
         )
 
+
+
+
+
+
     def canstartfocus(self, focusid: str):
         focus = self.focuses.get(focusid)
         if focus is None:
-            return False, "Focus does not exist."
+            return False, "Focus does not exist"
         if focus.id in self.completedids:
-            return False, "Focus already completed."
+            return False, "Focus already CONMPLETED!."
         if self.activeid is not None:
             activefocus = self.focuses.get(self.activeid)
             activetitle = activefocus.title if activefocus else self.activeid
-            return False, f"Another focus is active: {activetitle}"
+            return False, f"Another focus is ACTIVE: {activetitle}"
 
         missing = self.missingprerequisites(focus.id)
         if missing:
-            return False, "Missing prerequisites: " + ", ".join(missing)
+            return False, "MISSING prerequisites: " + ", ".join(missing)
+
 
         blocked = self.completedexclusivefocuses(focus.id)
         if blocked:
-            return False, "Blocked by mutually exclusive focus: " + ", ".join(blocked)
+            return False, "BLOCKED by mutually exclusive focus: " + ", ".join(blocked)
+
+
 
         return True, ""
 
+
+
+    #check for missing prerequisites
     def missingprerequisites(self, focusid: str):
         focus = self.focuses.get(focusid)
         if focus is None:
@@ -200,6 +238,9 @@ class FocusTree:
         blocked = self.exclusives.get(focusid, set()) & self.completedids
         return tuple(sorted(blocked))
 
+
+
+    # view data for the ui
     def viewdata(self):
         focusviews = []
         for focus in self.focuses.values():
@@ -239,6 +280,9 @@ class FocusTree:
             "lastmessage": self.lastmessage,
         }
 
+
+
+
     def savestate(self):
         return {
             "activefocusid": self.activeid,
@@ -246,7 +290,6 @@ class FocusTree:
             "completedids": sorted(self.completedids),
             "progress": dict(self.progress),
         }
-
     def loadstate(self, state: Mapping[str, Any] | None):
         if not state:
             return
@@ -268,18 +311,25 @@ class FocusTree:
             self.activeid = None
             self.activeturns = 0
 
+
+
+
+
+
+
+    # determine focus status for the ui
     def focusstatus(self, focusid: str, canstart: bool):
         if focusid in self.completedids:
-            return "completed"
+            return "COMPLETE!!"
         if focusid == self.activeid:
-            return "active"
+            return "ACTIVE!"
         if self.completedexclusivefocuses(focusid):
-            return "blocked"
+            return "BLOCKED!"
         if self.missingprerequisites(focusid):
-            return "locked"
+            return "LOCKED!"
         if canstart:
-            return "available"
-        return "waiting"
+            return "AVAILABLE"
+        return "WAITING"
 
     def startresult(self, success: bool, focusid: str | None, reason: str):
         self.lastmessage = reason

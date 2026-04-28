@@ -8,17 +8,37 @@ class FocusTreeView:
         self.data = {"name": "Focus Tree", "focuses": []}
         self.isopen = False
         self.detailid = None
-        self.noderects: dict[str, pygame.Rect] = {}
-        self.closerect = pygame.Rect(0, 0, 1, 1)
+        self.noderects: dict[str, pygame.Rect] = {} # focusid to screen rect
+        self.closerect = pygame.Rect(0, 0, 1, 1) # close button rect
         self.startrect = pygame.Rect(0, 0, 1, 1)
         self.detailrect = pygame.Rect(0, 0, 1, 1)
+        self.worldrects: dict[str, pygame.Rect] = {} # focusid to world rect
         self.iconcache = {}
         self.rootpath = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+        self.zoom = 0.85
+        self.minzoom = 0.45
+        self.maxzoom = 1.75
+        self.panx = 0.0
+        self.pany = 0.0
+        self.dragging = False
+        self.dragbutton = None
+        self.dragstart = (0, 0)
+        self.panstart = (0.0, 0.0)
+        self.layoutready = False
+        self.datakey = None
+        self.viewsize = None
 
     def setdata(self, data):
-        self.data = data or {"name": "Focus Tree", "focuses": []}
+        self.data = data or {"name": "Focus Tree", "focuses": []} # check for key
+        newkey = self.makekey() # make a key based on the focuses data, so we can detect changes and reset layout if needed
+        if newkey != self.datakey:
+            self.datakey = newkey
+            self.layoutready = False
+            self.detailid = None
         if self.detailid and self.findfocus(self.detailid) is None:
             self.detailid = None
+
+
 
     def openview(self):
         self.isopen = True
@@ -33,7 +53,7 @@ class FocusTreeView:
         else:
             self.openview()
 
-    def handleevent(self, event):
+    def handleevent(self, event): # EVENT HANDLER
         if not self.isopen:
             return None
 
@@ -41,33 +61,145 @@ class FocusTreeView:
             self.closeview()
             return None
 
-        if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
+        if event.type == pygame.MOUSEWHEEL:
+            self.zoomat(pygame.mouse.get_pos(), event.y)
             return None
 
-        position = event.pos
-        if self.closerect.collidepoint(position):
-            self.closeview()
+        if event.type == pygame.MOUSEMOTION and self.dragging:
+            position = event.pos
+            self.panx = self.panstart[0] + position[0] - self.dragstart[0]
+            self.pany = self.panstart[1] + position[1] - self.dragstart[1]
             return None
 
-        focus = self.findfocus(self.detailid)
-        if focus and self.detailrect.collidepoint(position):
-            if self.startrect.collidepoint(position) and focus.get("canstart"):
-                return ("startfocus", self.detailid)
+        if event.type == pygame.MOUSEBUTTONUP and self.dragging:
+            if event.button == self.dragbutton:
+                self.dragging = False
+                self.dragbutton = None
             return None
 
-        for focusid, rect in self.noderects.items():
-            if rect.collidepoint(position):
-                self.detailid = focusid
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            position = event.pos
+            if event.button in (2, 3):
+                self.begindrag(position, event.button)
                 return None
 
-        return None
+            if event.button != 1:
+                return None
 
+            if self.closerect.collidepoint(position):
+                self.closeview()
+                return None
+
+            focus = self.findfocus(self.detailid)
+            if focus and self.detailrect.collidepoint(position):
+                if self.startrect.collidepoint(position) and focus.get("canstart"):
+                    return ("startfocus", self.detailid)
+                return None
+
+            for focusid, rect in self.noderects.items():
+                if rect.collidepoint(position):
+                    self.detailid = focusid
+                    return None
+
+            self.begindrag(position, event.button)
+            return None
+
+        return None
+    
     def pointerover(self, position):
         return self.isopen
 
+
+
+
+
+
+
+
+
+
+
+
+
+    def makekey(self):
+        focuses = []
+        for focus in self.data.get("focuses", ()):
+            if not isinstance(focus, dict):
+                continue
+            focuses.append(
+                (
+                    focus.get("id"),
+                    int(focus.get("x", 0) or 0),
+                    int(focus.get("y", 0) or 0),
+                    focus.get("icon", ""),
+                )
+            ) # sample: ('focus_id', 0, 0, 'icon.png')
+        return tuple(focuses)
+
+
+    # dragging and zooming
+    def begindrag(self, position, button):
+        self.dragging = True
+        self.dragbutton = button
+        self.dragstart = position
+        self.panstart = (self.panx, self.pany)
+
+    def zoomat(self, position, amount):
+        oldzoom = self.zoom
+        newzoom = oldzoom * (1.14 ** int(amount))
+        newzoom = max(self.minzoom, min(self.maxzoom, newzoom))
+        if abs(newzoom - oldzoom) < 0.001:
+            return
+
+        worldx = (position[0] - self.panx) / oldzoom
+        worldy = (position[1] - self.pany) / oldzoom
+        self.zoom = newzoom
+        self.panx = position[0] - worldx * newzoom
+        self.pany = position[1] - worldy * newzoom
+
+
+    # for the layout
+    def centerlayout(self, viewrect):
+        bounds = self.worldbounds() #check the bounds of the world rects, so we can center the layout in the view
+        focusarea = pygame.Rect(0, 84, viewrect.width, max(1, viewrect.height - 120))
+        self.panx = focusarea.centerx - bounds.centerx * self.zoom
+        self.pany = focusarea.centery - bounds.centery * self.zoom
+
+    def worldbounds(self):
+        if not self.worldrects:
+            return pygame.Rect(0, 0, 1, 1)
+        bounds = None
+        for rect in self.worldrects.values():
+            bounds = rect.copy() if bounds is None else bounds.union(rect)
+        return bounds or pygame.Rect(0, 0, 1, 1)
+
+    def screentorect(self, rect):
+        return pygame.Rect(
+            int(rect.x * self.zoom + self.panx),
+            int(rect.y * self.zoom + self.pany),
+            max(1, int(rect.width * self.zoom)),
+            max(1, int(rect.height * self.zoom)),
+        )
+
+    def screenpoint(self, point):
+        return (
+            int(point[0] * self.zoom + self.panx),
+            int(point[1] * self.zoom + self.pany),
+        )
+
+
+
+    # MAIN RENDER METHOD
+
     def draw(self, surface, titlefont, font, mouse):
         viewrect = surface.get_rect()
+        # if the view size has changedneed to redo the layout
+        if self.viewsize != viewrect.size:
+            self.viewsize = viewrect.size
+            self.layoutready = False
         pygame.draw.rect(surface, (13, 17, 23), viewrect)
+
+
 
         self.closerect = pygame.Rect(viewrect.right - 150, 18, 118, 34)
         title = str(self.data.get("name") or "Focus Tree")
@@ -78,15 +210,17 @@ class FocusTreeView:
         if message:
             self.fittext(surface, message, font, (190, 205, 230), pygame.Rect(32, 55, viewrect.width - 220, 22))
 
-        focuses = [focus for focus in self.data.get("focuses", ()) if isinstance(focus, dict)]
+        focuses = [focus for focus in self.data.get("focuses", ()) if isinstance(focus, dict)] # filter out invalid focuses
         if not focuses:
-            note = font.render("No focus tree data for this country yet.", True, (205, 205, 205))
+            note = font.render("Cant find any focus data for this country", True, (205, 205, 205))
             surface.blit(note, note.get_rect(center=viewrect.center))
             self.noderects = {}
             return
 
         self.layoutnodes(viewrect, focuses)
         self.drawconnectors(surface, focuses)
+
+
 
         for focus in focuses:
             rect = self.noderects.get(focus.get("id"))
@@ -95,73 +229,103 @@ class FocusTreeView:
 
         focus = self.findfocus(self.detailid)
         if focus:
-            self.drawdetails(surface, focus, titlefont, font)
+            self.drawdetails(surface, focus, titlefont, font) # draw the details panel for the selected focus
 
-    def layoutnodes(self, viewrect, focuses):
-        nodew = 166
-        nodeh = 92
-        left = 70
-        right = 70
-        top = 122
-        bottom = 70
 
+
+
+    def layoutnodes(self, viewrect, focuses): #world rect for each focus, to make the connecting line thing
+        nodew = 190
+        nodeh = 108
+        spacex = 420
+        spacey = 270
         minx = min(int(focus.get("x", 0) or 0) for focus in focuses)
-        maxx = max(int(focus.get("x", 0) or 0) for focus in focuses)
         miny = min(int(focus.get("y", 0) or 0) for focus in focuses)
-        maxy = max(int(focus.get("y", 0) or 0) for focus in focuses)
-        spanx = max(1, maxx - minx)
-        spany = max(1, maxy - miny)
-        stepx = max(120, (viewrect.width - left - right - nodew) // spanx)
-        stepy = max(110, (viewrect.height - top - bottom - nodeh) // spany)
 
-        self.noderects = {}
+        self.worldrects = {}
+        self.noderects = {} # list of focus rects for mouse interaction, calculated from worldrects and current zoom/pan
+
+
+
         for focus in focuses:
             focusid = focus.get("id")
             if not focusid:
                 continue
             focusx = int(focus.get("x", 0) or 0)
             focusy = int(focus.get("y", 0) or 0)
-            x = left + (focusx - minx) * stepx
-            y = top + (focusy - miny) * stepy
-            self.noderects[focusid] = pygame.Rect(x, y, nodew, nodeh)
+            x = (focusx - minx) * spacex
+            y = (focusy - miny) * spacey
+            self.worldrects[focusid] = pygame.Rect(x, y, nodew, nodeh)
 
+
+
+        if not self.layoutready:
+            self.centerlayout(viewrect)
+            self.layoutready = True
+
+        for focusid, rect in self.worldrects.items():
+            self.noderects[focusid] = self.screentorect(rect)
+
+
+
+    # render the conenectors 
     def drawconnectors(self, surface, focuses):
+
         for focus in focuses:
-            target = self.noderects.get(focus.get("id"))
+            target = self.worldrects.get(focus.get("id"))
             if target is None:
                 continue
+
+
             for prerequisite in focus.get("prerequisites", ()):
-                source = self.noderects.get(prerequisite)
+                source = self.worldrects.get(prerequisite)
                 if source is None:
                     continue
-                start = source.midbottom
-                end = target.midtop
+                start = self.screenpoint(source.midbottom)
+                end = self.screenpoint(target.midtop)
                 bend = (start[0], start[1] + (end[1] - start[1]) // 2)
                 bendtwo = (end[0], bend[1])
-                pygame.draw.lines(surface, (72, 80, 91), False, (start, bend, bendtwo, end), 3)
-                pygame.draw.lines(surface, (112, 124, 140), False, (start, bend, bendtwo, end), 1)
+                linew = max(1, int(3 * self.zoom))
+                pygame.draw.lines(surface, (72, 80, 91), False, (start, bend, bendtwo, end), linew + 1)
+                pygame.draw.lines(surface, (112, 124, 140), False, (start, bend, bendtwo, end), max(1, linew - 1))
 
+
+
+
+    # to render a focus node with the icon and title and color
     def drawnode(self, surface, focus, rect, font, mouse):
         status = str(focus.get("status", "locked"))
         fill, border = self.statuscolors(status)
         if rect.collidepoint(mouse):
             fill = tuple(min(255, value + 16) for value in fill)
 
+
+        # draw the node background and border
         pygame.draw.rect(surface, fill, rect, border_radius=4)
         pygame.draw.rect(surface, border, rect, 2, border_radius=4)
         pygame.draw.rect(surface, border, pygame.Rect(rect.x, rect.y, rect.width, 6), border_radius=3)
 
         icon = self.loadicon(focus.get("icon"))
-        iconrect = pygame.Rect(rect.centerx - 23, rect.y + 13, 46, 34)
+        iconw = max(18, int(46 * self.zoom))
+        iconh = max(14, int(34 * self.zoom))
+
+        # check icon rect and center
+        iconrect = pygame.Rect(rect.centerx - iconw // 2, rect.y + max(8, int(14 * self.zoom)), iconw, iconh)
         if icon:
-            surface.blit(icon, icon.get_rect(center=iconrect.center))
+            drawicon = pygame.transform.smoothscale(icon, (iconw, iconh))
+            surface.blit(drawicon, drawicon.get_rect(center=iconrect.center))
         else:
             pygame.draw.rect(surface, (30, 34, 40), iconrect, border_radius=2)
             pygame.draw.rect(surface, (116, 126, 140), iconrect, 1, border_radius=2)
 
-        titlerect = pygame.Rect(rect.x + 8, rect.y + 56, rect.width - 16, 28)
-        self.fittext(surface, str(focus.get("title") or focus.get("id")), font, (244, 244, 244), titlerect)
+        # draw the title if zoomed in enough
+        if self.zoom >= 0.7:
+            titlerect = pygame.Rect(rect.x + 8, rect.y + int(61 * self.zoom), rect.width - 16, 28)
+            self.fittext(surface, str(focus.get("title") or focus.get("id")), font, (244, 244, 244), titlerect)
 
+
+
+    # render the detail window 
     def drawdetails(self, surface, focus, titlefont, font):
         width = surface.get_width()
         height = surface.get_height()
@@ -170,17 +334,22 @@ class FocusTreeView:
         panelx = width - panelw - 34 if width >= 820 else 40
         self.detailrect = pygame.Rect(panelx, 82, panelw, panelh)
 
+
+        # draw the panel background and border
         pygame.draw.rect(surface, (20, 24, 31), self.detailrect, border_radius=4)
         pygame.draw.rect(surface, (96, 104, 116), self.detailrect, 2, border_radius=4)
 
         x = self.detailrect.x + 18
         y = self.detailrect.y + 16
         contentw = self.detailrect.width - 36
+
         titlelines = self.wraptext(str(focus.get("title") or focus.get("id")), titlefont, contentw)
         for line in titlelines[:2]:
             surface.blit(titlefont.render(line, True, (238, 220, 165)), (x, y))
             y += titlefont.get_height() + 2
 
+
+        # decsription
         y += 8
         y = self.drawwrappedblock(surface, str(focus.get("description") or ""), font, (220, 220, 220), x, y, contentw, 5)
         y += 8
@@ -195,6 +364,8 @@ class FocusTreeView:
         y = self.drawfield(surface, "Mutually exclusive", self.namelist(focus.get("mutuallyexclusive", ())), font, x, y, contentw)
         y = self.drawfield(surface, "Effects", self.effecttext(focus.get("effects", ())), font, x, y, contentw)
 
+
+
         reason = str(focus.get("blockingreason") or "")
         if reason:
             y += 4
@@ -203,6 +374,10 @@ class FocusTreeView:
         self.startrect = pygame.Rect(x, self.detailrect.bottom - 52, contentw, 34)
         self.drawbutton(surface, self.startrect, bool(focus.get("canstart")), "Start Focus", font)
 
+
+
+
+    #RENDER UTILITIES
     def drawfield(self, surface, label, value, font, x, y, width):
         labeltext = font.render(f"{label}:", True, (185, 195, 210))
         surface.blit(labeltext, (x, y))
@@ -237,6 +412,7 @@ class FocusTreeView:
         rendered = font.render(fitted, True, color)
         surface.blit(rendered, rendered.get_rect(center=rect.center))
 
+    #stole from console.py
     def wraptext(self, text, font, width):
         words = str(text or "").split()
         if not words:
@@ -255,6 +431,8 @@ class FocusTreeView:
         if line:
             lines.append(line)
         return lines
+
+
 
     def loadicon(self, iconpath):
         iconpath = str(iconpath or "").strip()
@@ -282,6 +460,11 @@ class FocusTreeView:
 
         self.iconcache[filepath] = image
         return image
+
+
+
+
+
 
     def findfocus(self, focusid):
         for focus in self.data.get("focuses", ()):
@@ -315,6 +498,11 @@ class FocusTreeView:
                 parts.append(str(effecttype))
         return ", ".join(parts) if parts else "None"
 
+
+
+
+
+    # i have no idea what to name this, it just returns the fill and border colors for a focus node based on its status
     def statuscolors(self, status):
         colors = {
             "completed": ((42, 98, 67), (142, 222, 160)),
