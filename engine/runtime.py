@@ -12,6 +12,8 @@ ctypes.windll.user32.SetProcessDPIAware()
 #TODO - OPTIMIZATION: consider using numpy for heavy geometry calculations and data handling, especially for large maps with many provinces and complex shapes. This could significantly improve performance for operations like point-in-polygon tests, polygon transformations, and adjacency graph construction.
 #Local module
 from game.ingame_ui import InGameUI
+from game.focus_effects import FocusEffectContext
+from game.focus_loader import loadfocustreeforcountry
 from engine.console import developmentconsole, loaddevmodeflag 
 from engine.gui import (
     gui_lightencolor,
@@ -1132,6 +1134,7 @@ def main(eventbus=None, is_fullscreen=False):
         recruitgoldcostperunit,
         recruitpopulationcostperunit,
     ) = initializeplayereconomy(economyconfig)
+    focustree = loadfocustreeforcountry(None)
 
     npcdirector = npcmodule.NpcDirector(
         provincemap,
@@ -1925,6 +1928,7 @@ def main(eventbus=None, is_fullscreen=False):
             hovertext,
             mouseposition_full,
             troopbadgelist,
+            focustree.viewdata(),
         )
         runtimeui.update(elapsedseconds)
         runtimeui.draw(screen)
@@ -1981,6 +1985,7 @@ def main(eventbus=None, is_fullscreen=False):
                     countrymenutarget = None
                     npcdirector.setplayercountry(playercountry)
                     npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
+                    focustree = loadfocustreeforcountry(playercountry)
                     eventbus.emit(
                         EngineEventType.PLAYERCOUNTRYSELECTED,
                         {
@@ -2037,6 +2042,27 @@ def main(eventbus=None, is_fullscreen=False):
                             )
                 continue
 
+            if uiaction == InGameUI.actiontogglefocuspanel and gamephase == "play":
+                continue
+
+            if (
+                isinstance(uiaction, tuple)
+                and len(uiaction) == 2
+                and uiaction[0] == InGameUI.actionstartfocus
+                and gamephase == "play"
+            ):
+                focusstartresult = focustree.startfocus(uiaction[1])
+                if focusstartresult.success:
+                    eventbus.emit(
+                        EngineEventType.FOCUSSTARTED,
+                        {
+                            "country": playercountry,
+                            "focusId": focusstartresult.focusid,
+                            "turn": currentturnnumber,
+                        },
+                    )
+                continue
+
 
 
 
@@ -2050,6 +2076,25 @@ def main(eventbus=None, is_fullscreen=False):
                     currentturnnumber=currentturnnumber,
                 )
                 countrybordersdirty = True
+                focuseffectcontext = FocusEffectContext(
+                    gold=playergold,
+                    population=playerpopulation,
+                    economyconfig=economyconfig,
+                    country=playercountry,
+                )
+                focusturnresult = focustree.advanceturn(focuseffectcontext)
+                playergold = max(0, int(focuseffectcontext.gold))
+                playerpopulation = max(0, int(focuseffectcontext.population))
+                if focusturnresult.completedfocusid:
+                    eventbus.emit(
+                        EngineEventType.FOCUSCOMPLETED,
+                        {
+                            "country": playercountry,
+                            "focusId": focusturnresult.completedfocusid,
+                            "turn": currentturnnumber,
+                            "appliedEffects": [dict(effect) for effect in focusturnresult.appliedeffects],
+                        },
+                    )
                 playergold,playerpopulation = applyendturneconomy(
                     playercountry,
                     provincemap,
@@ -2499,6 +2544,25 @@ def main(eventbus=None, is_fullscreen=False):
                         currentturnnumber=currentturnnumber,
                     )
                     countrybordersdirty = True
+                    focuseffectcontext = FocusEffectContext(
+                        gold=playergold,
+                        population=playerpopulation,
+                        economyconfig=economyconfig,
+                        country=playercountry,
+                    )
+                    focusturnresult = focustree.advanceturn(focuseffectcontext)
+                    playergold = max(0, int(focuseffectcontext.gold))
+                    playerpopulation = max(0, int(focuseffectcontext.population))
+                    if focusturnresult.completedfocusid:
+                        eventbus.emit(
+                            EngineEventType.FOCUSCOMPLETED,
+                            {
+                                "country": playercountry,
+                                "focusId": focusturnresult.completedfocusid,
+                                "turn": currentturnnumber,
+                                "appliedEffects": [dict(effect) for effect in focusturnresult.appliedeffects],
+                            },
+                        )
                     playergold, playerpopulation = applyendturneconomy(
                         playercountry,
                         provincemap,

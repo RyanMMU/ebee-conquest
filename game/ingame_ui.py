@@ -3,6 +3,8 @@ import os
 
 import pygame
 
+from .focus_ui import FocusTreeView
+
 ctypes.windll.user32.SetProcessDPIAware()
 
 
@@ -20,6 +22,7 @@ class LeftBar:
     def __init__(self, rect: pygame.Rect):
         self.rect = rect
         self.items: list[str] = []
+        self.item_rects: dict[str, pygame.Rect] = {}
 
     def set_items(self, items: list[str]):
         self.items = list(items)
@@ -28,6 +31,7 @@ class LeftBar:
         pygame.draw.rect(surface, (50, 50, 50), self.rect)
         pygame.draw.rect(surface, (25, 25, 25), self.rect, 1)
 
+        self.item_rects = {}
         for i, item in enumerate(self.items):
             if not str(item).strip():
                 continue
@@ -37,6 +41,8 @@ class LeftBar:
             w = self.rect.width - 20
             h = 40
             rect = pygame.Rect(x, y, w, h)
+            item_key = str(item).strip().upper()
+            self.item_rects[item_key] = rect
 
             if "CLEAR ALL" in item:
                 color = (0, 120, 0) if rect.collidepoint(mouse_pos) else (0, 220, 0)
@@ -100,6 +106,8 @@ class InGameUI:
     actionsplit = "split"
     actionmerge = "merge"
     actionfrontline = "frontline"
+    actiontogglefocuspanel = "togglefocuspanel"
+    actionstartfocus = "startfocus"
 
     def __init__(self, window_size):
         self.window_size = window_size
@@ -130,6 +138,7 @@ class InGameUI:
         self._troopbadgelist = []
         self._hovertext = None
         self._hovermousepos = (0, 0)
+        self.focusview = FocusTreeView()
 
         self._flags = self._load_flags()
 
@@ -295,6 +304,7 @@ class InGameUI:
         hovertext,
         mouseposition,
         troopbadgelist,
+        focusview=None,
     ):
         self.gamephase = gamephase
         self.pendingcountry = pendingcountry
@@ -311,6 +321,8 @@ class InGameUI:
         self._troopbadgelist = list(troopbadgelist or [])
         self._hovertext = hovertext
         self._hovermousepos = tuple(mouseposition or (0, 0))
+        if focusview is not None:
+            self.focusview.setdata(focusview)
         # reflow after state changes (tab visibility depends on selection/menu)
         self.applylayout()
 
@@ -333,6 +345,9 @@ class InGameUI:
         return
 
     def process_event(self, event):
+        if self.focusview.isopen:
+            return self.focusview.handleevent(event)
+
         if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
             return None
 
@@ -341,6 +356,13 @@ class InGameUI:
             if self.pendingcountry and self._choose_rect.collidepoint(pos):
                 return self.actionchoosecountry
             return None
+
+        for item, rect in (self.leftbar.item_rects or {}).items():
+            if rect.collidepoint(pos):
+                if item == "FOCUS TREE":
+                    self.focusview.toggleview()
+                    return self.actiontogglefocuspanel
+                return None
 
         # bottom tabs
         for item, rect in (self.bottom_buttons.item_rects or {}).items():
@@ -385,6 +407,8 @@ class InGameUI:
 
     def ispointeroverui(self, mouseposition):
         # reserve bars and action buttons as UI
+        if self.focusview.pointerover(mouseposition):
+            return True
         if self._endturn_rect.collidepoint(mouseposition):
             return True
         if self.leftbar.rect.collidepoint(mouseposition):
@@ -546,6 +570,10 @@ class InGameUI:
             for ts in text_surfs:
                 surface.blit(ts, (rect.x + padding, ty))
                 ty += ts.get_height()
+
+        if self.focusview.isopen:
+            self.focusview.draw(surface, self.title_font, self.font, mouse)
+            return
 
         # Right panel content (seamless integration)
         selected_tab = self.bottom_buttons.selected

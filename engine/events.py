@@ -19,6 +19,8 @@ class EngineEventType(str, Enum):
     NEXTTURN = "nextturn"
     WARDECLARED = "wardeclared"
     TROOPSRECRUITED = "troopsrecruited"
+    FOCUSSTARTED = "focusstarted"
+    FOCUSCOMPLETED = "focuscompleted"
 
 
 # main event handling 
