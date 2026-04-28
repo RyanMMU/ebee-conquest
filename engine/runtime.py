@@ -2473,6 +2473,40 @@ def main(eventbus=None, is_fullscreen=False):
                 
 
             elif event.type == pygame.KEYDOWN:
+                # Space = next turn (only in play phase, and not while dev console is capturing input)
+                if event.key == pygame.K_SPACE and gamephase == "play" and not devconsole.visible:
+                    processmovementorders(
+                        movementorderlist,
+                        provincemap,
+                        emit=eventbus.emit,
+                        currentturnnumber=currentturnnumber,
+                    )
+                    countrybordersdirty = True
+                    playergold, playerpopulation = applyendturneconomy(
+                        playercountry,
+                        provincemap,
+                        playergold,
+                        playerpopulation,
+                    )
+                    npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
+                    npcdirector.executeturn(
+                        movementorderlist,
+                        currentturnnumber,
+                    )
+                    frontlineupdates = refreshfrontlines()
+                    currentturnnumber += 1
+                    routepreviewset = frontlineupdates
+                    eventbus.emit(
+                        EngineEventType.NEXTTURN,
+                        {
+                            "turn": currentturnnumber,
+                            "playerCountry": playercountry,
+                            "playerGold": playergold,
+                            "playerPopulation": playerpopulation,
+                        },
+                    )
+                    continue
+
 
             # (for quick ctrl f: developer console)
                 commandcontext = {

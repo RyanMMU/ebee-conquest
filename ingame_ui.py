@@ -70,7 +70,8 @@ class BottomButtons:
         h = 30
         spacing = 10
         total_width = len(self.items) * w + (len(self.items) - 1) * spacing if self.items else 0
-        start_x = self.rect.x + (self.rect.width - total_width) // 2
+        available_width = max(0, self.rect.width)
+        start_x = self.rect.x + max(0, (available_width - total_width) // 2)
 
         self.item_rects = {}
         for i, item in enumerate(self.items):
@@ -470,7 +471,40 @@ class InGameUI:
         )
         surface.blit(self.font.render(stats_text, True, (220, 220, 220)), (stats_x, stats_y + 2))
 
-        # hover tooltip (full-window coords)
+        # troop badges on top of the map (map-local centers need viewport offset)
+        for entry in self._troopbadgelist:
+            if not isinstance(entry, dict):
+                continue
+            center = entry.get("center")
+            if not center:
+                continue
+            cx = int(center[0] + self.map_rect.x)
+            cy = int(center[1] + self.map_rect.y)
+            troops = int(entry.get("troops", 0))
+            country_name = entry.get("country")
+            country_key = str(country_name or "").strip().lower().replace(" ", "_").replace("-", "_")
+            flag_img = self._flags.get(country_key) if country_key else None
+
+            label = self.font.render(str(troops), True, (255, 255, 255))
+            pad_x, pad_y = 6, 4
+            spacing = 4
+            content_w = label.get_width() + (flag_img.get_width() + spacing if flag_img else 0)
+            content_h = max(label.get_height(), flag_img.get_height() if flag_img else 0)
+            rect = pygame.Rect(0, 0, content_w + pad_x * 2, content_h + pad_y * 2)
+            rect.center = (cx, cy)
+            background = entry.get("backgroundcolor", (0, 0, 0))
+            border = entry.get("bordercolor", (165, 165, 165))
+            pygame.draw.rect(surface, background, rect, border_radius=4)
+            pygame.draw.rect(surface, border, rect, 1, border_radius=4)
+
+            draw_x = rect.x + pad_x
+            center_y = rect.y + rect.height // 2
+            if flag_img:
+                surface.blit(flag_img, (draw_x, center_y - flag_img.get_height() // 2))
+                draw_x += flag_img.get_width() + spacing
+            surface.blit(label, (draw_x, center_y - label.get_height() // 2))
+
+        # hover tooltip (full-window coords) must be on top of badges
         if self._hovertext:
             tooltip_lines = []
             if isinstance(self._hovertext, dict):
@@ -499,7 +533,6 @@ class InGameUI:
             mx, my = self._hovermousepos
             x = int(mx + 16)
             y = int(my + 16)
-            # keep on screen
             x = max(0, min(surface.get_width() - box_w, x))
             y = max(0, min(surface.get_height() - box_h, y))
             rect = pygame.Rect(x, y, box_w, box_h)
@@ -510,37 +543,6 @@ class InGameUI:
             for ts in text_surfs:
                 surface.blit(ts, (rect.x + padding, ty))
                 ty += ts.get_height()
-
-        # troop badges on top of the map (map-local centers need viewport offset)
-        for entry in self._troopbadgelist:
-            if not isinstance(entry, dict):
-                continue
-            center = entry.get("center")
-            if not center:
-                continue
-            cx = int(center[0] + self.map_rect.x)
-            cy = int(center[1] + self.map_rect.y)
-            troops = int(entry.get("troops", 0))
-            country_name = entry.get("country")
-            country_key = str(country_name or "").strip().lower().replace(" ", "_").replace("-", "_")
-            flag_img = self._flags.get(country_key) if country_key else None
-
-            label = self.font.render(str(troops), True, (255, 255, 255))
-            pad_x, pad_y = 6, 4
-            spacing = 4
-            content_w = label.get_width() + (flag_img.get_width() + spacing if flag_img else 0)
-            content_h = max(label.get_height(), flag_img.get_height() if flag_img else 0)
-            rect = pygame.Rect(0, 0, content_w + pad_x * 2, content_h + pad_y * 2)
-            rect.center = (cx, cy)
-            pygame.draw.rect(surface, (0, 0, 0), rect, border_radius=4)
-            pygame.draw.rect(surface, (165, 165, 165), rect, 1, border_radius=4)
-
-            draw_x = rect.x + pad_x
-            center_y = rect.y + rect.height // 2
-            if flag_img:
-                surface.blit(flag_img, (draw_x, center_y - flag_img.get_height() // 2))
-                draw_x += flag_img.get_width() + spacing
-            surface.blit(label, (draw_x, center_y - label.get_height() // 2))
 
         # Right panel content (seamless integration)
         selected_tab = self.bottom_buttons.selected
@@ -584,8 +586,8 @@ class InGameUI:
 
         # Recruit action only shows in RECRUIT tab (and only when no country menu)
         elif selected_tab == "RECRUIT":
-            # keep recruit button above troop decision buttons, but near the top so troop list doesn't collide
-            self._recruit_action_rect.topleft = (content_rect.x, content_rect.y + 34)
+            # place recruit action near troop decision buttons
+            self._recruit_action_rect.topleft = (content_rect.x, self._split_rect.y - 44)
             recruit_label = f"RECRUIT +{int(self.recruitamount)}"
             draw_btn(self._recruit_action_rect, self.recruitenabled, recruit_label, primary=True)
             y_cursor = max(y_cursor, self._recruit_action_rect.bottom + 12)
@@ -600,8 +602,8 @@ class InGameUI:
                 (content_rect.x, y_cursor + 26),
             )
 
-            # avoid rendering troop header/list in the cramped space above the decision buttons
-            list_top = max(y_cursor + 50, content_rect.y + 90)
+            # avoid rendering troop header/list in the cramped space near buttons/recruit
+            list_top = max(y_cursor + 50, content_rect.y + 90, self._recruit_action_rect.bottom + 10)
             list_bottom = self._split_rect.y - 10
             maxrows = max(0, (list_bottom - list_top) // 20)
             maxrows = min(10, maxrows)
