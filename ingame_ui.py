@@ -154,6 +154,7 @@ class InGameUI:
                 "LOGISTICS",
                 "COMBAT",
                 "INTEL",
+                "FOCUS TREE"
             ]
         )
         self.bottom_buttons.set_items(
@@ -368,15 +369,17 @@ class InGameUI:
                     return self.actionrecruit
                 return None
 
-        # troop selection actions
-        if self._selectedtroopentries:
-            totaltroops = sum(max(0, int(e.get("troops", 0))) for e in self._selectedtroopentries if isinstance(e, dict))
-            if self._split_rect.collidepoint(pos) and totaltroops > 1:
-                return self.actionsplit
-            if self._merge_rect.collidepoint(pos) and len(self._selectedtroopentries) > 1:
-                return self.actionmerge
-            if self._frontline_rect.collidepoint(pos) and totaltroops > 0:
-                return self.actionfrontline
+        # troop selection actions (only in RECRUIT tab and only when troops > 0)
+        if selected_tab == "RECRUIT" and self._selectedtroopentries:
+            selected = [e for e in self._selectedtroopentries if isinstance(e, dict)]
+            totaltroops = sum(max(0, int(e.get("troops", 0))) for e in selected)
+            if totaltroops > 0:
+                if self._split_rect.collidepoint(pos) and totaltroops > 1:
+                    return self.actionsplit
+                if self._merge_rect.collidepoint(pos) and len(selected) > 1:
+                    return self.actionmerge
+                if self._frontline_rect.collidepoint(pos):
+                    return self.actionfrontline
 
         return None
 
@@ -590,37 +593,38 @@ class InGameUI:
             self._recruit_action_rect.topleft = (content_rect.x, self._split_rect.y - 44)
             recruit_label = f"RECRUIT +{int(self.recruitamount)}"
             draw_btn(self._recruit_action_rect, self.recruitenabled, recruit_label, primary=True)
-            y_cursor = max(y_cursor, self._recruit_action_rect.bottom + 12)
+            y_cursor = max(y_cursor, content_rect.y + 24)
 
-        # Troop decision section always lives in right panel (if any selected)
-        selected = [e for e in (self._selectedtroopentries or []) if isinstance(e, dict)]
-        if selected:
+        # Troop info + decision buttons only show in RECRUIT tab, and only when troops > 0
+        if selected_tab == "RECRUIT" and not self._countrymenutarget:
+            selected = [e for e in (self._selectedtroopentries or []) if isinstance(e, dict)]
             totaltroops = sum(max(0, int(e.get("troops", 0))) for e in selected)
-            surface.blit(self.font.render("Troops", True, (240, 240, 240)), (content_rect.x, y_cursor + 4))
-            surface.blit(
-                self.font.render(f"{len(selected)} selected (Total: {totaltroops})", True, (210, 210, 210)),
-                (content_rect.x, y_cursor + 26),
-            )
+            if totaltroops > 0:
+                # fixed layout: header/list region above recruit+buttons
+                header_y = content_rect.y + 60
+                surface.blit(self.font.render("Troops", True, (240, 240, 240)), (content_rect.x, header_y))
+                surface.blit(
+                    self.font.render(f"{len(selected)} selected (Total: {totaltroops})", True, (210, 210, 210)),
+                    (content_rect.x, header_y + 22),
+                )
 
-            # avoid rendering troop header/list in the cramped space near buttons/recruit
-            list_top = max(y_cursor + 50, content_rect.y + 90, self._recruit_action_rect.bottom + 10)
-            list_bottom = self._split_rect.y - 10
-            maxrows = max(0, (list_bottom - list_top) // 20)
-            maxrows = min(10, maxrows)
-            for i in range(maxrows):
-                if i >= len(selected):
-                    break
-                prov = selected[i].get("provinceid", "unknown")
-                troops = int(selected[i].get("troops", 0))
-                line = f"{prov}: {troops}"
-                surface.blit(self.font.render(line, True, (210, 210, 210)), (content_rect.x, list_top + i * 20))
-            if len(selected) > maxrows and maxrows > 0:
-                overflow = len(selected) - maxrows
-                surface.blit(self.font.render(f"... +{overflow} more", True, (170, 170, 170)), (content_rect.x, list_top + (maxrows - 1) * 20))
+                list_top = header_y + 46
+                list_bottom = min(self._recruit_action_rect.y, self._split_rect.y) - 10
+                maxrows = max(0, (list_bottom - list_top) // 20)
+                maxrows = min(10, maxrows)
+                for i in range(maxrows):
+                    if i >= len(selected):
+                        break
+                    prov = selected[i].get("provinceid", "unknown")
+                    troops = int(selected[i].get("troops", 0))
+                    line = f"{prov}: {troops}"
+                    surface.blit(self.font.render(line, True, (210, 210, 210)), (content_rect.x, list_top + i * 20))
+                if len(selected) > maxrows and maxrows > 0:
+                    overflow = len(selected) - maxrows
+                    surface.blit(self.font.render(f"... +{overflow} more", True, (170, 170, 170)), (content_rect.x, list_top + (maxrows - 1) * 20))
 
-            split_enabled = totaltroops > 1
-            merge_enabled = len(selected) > 1
-            frontline_enabled = totaltroops > 0
-            draw_btn(self._split_rect, split_enabled, "split")
-            draw_btn(self._merge_rect, merge_enabled, "merge")
-            draw_btn(self._frontline_rect, frontline_enabled, "CANCEL" if self._frontlineplacementmode else "frontline")
+                split_enabled = totaltroops > 1
+                merge_enabled = len(selected) > 1
+                draw_btn(self._split_rect, split_enabled, "split")
+                draw_btn(self._merge_rect, merge_enabled, "merge")
+                draw_btn(self._frontline_rect, True, "CANCEL" if self._frontlineplacementmode else "frontline")
