@@ -75,6 +75,11 @@ while run:
         if event.type == pygame.QUIT:
             run = False
 
+
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                run = False
+
         if event.type == pygame.MOUSEBUTTONDOWN:
             if menu == 'settings':
                 vol_bar_rect = pygame.Rect(button_m, 280, button_width, 30)
@@ -118,18 +123,15 @@ while run:
                     print('loading game....')
 
 
+        if event.type == pygame.MOUSEBUTTONUP:
+                if event.button == 1:
+                    volume_drag = False
 
-
-
-    if event.type == pygame.MOUSEBUTTONUP:
-        if event.button == 1:
-            volume_drag = False
-
-    if event.type == pygame.MOUSEMOTION:
-        if volume_drag and menu == 'settings':
-            volume = int((mouse[0] - button_m) / button_width * 100)
-            volume = max(0, min(100, volume))
-            pygame.mixer.music.set_volume(volume / 100)
+        if event.type == pygame.MOUSEMOTION:
+            if volume_drag and menu == 'settings':
+                volume = int((mouse[0] - button_m) / button_width * 100)
+                volume = max(0, min(100, volume))
+                pygame.mixer.music.set_volume(volume / 100)
 
 
 
