@@ -37,9 +37,9 @@ class EbeeEngine:
 
     def __init__(
         self,
-        statefilepath="states.svg",
-        provincefilepath="provinces.svg",
-        countrydatafilepath="countries.json",
+        statefilepath="map/states.svg",
+        provincefilepath="map/provinces.svg",
+        countrydatafilepath="map/countries.json",
     ):
         
 

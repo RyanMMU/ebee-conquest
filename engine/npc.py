@@ -1,21 +1,13 @@
-import math
 from collections import defaultdict
 
-from .economy import (
-    canrecruittroops,
-    getdefaulteconomyconfig,
-    getendturneconomydelta,
-    getrecruitcosts,
-)
-from .events import EngineEventType
-from .movement import (
-    entrenchmentdefensemultiplier,
-    entrenchmentturnrequired,
-    findprovincepath,
-    getprovincecontroller,
-    getprovinceowner,
-    markprovincetroopactivity,
-)
+from .economy import getdefaulteconomyconfig
+from .npcactions import NpcTurnActions
+from .npcdefense import NpcDefensePlanner
+from .npceconomy import NpcEconomyPlanner
+from .npcindex import NpcCountryIndex, NpcWorldIndex
+from .npcinvasion import NpcInvasionPlanner
+from .npcpersonality import NpcPersonality
+from .npcstrength import NpcStrengthEvaluator
 
 
 class NpcDirector:
@@ -38,20 +30,7 @@ class NpcDirector:
         self.warpairset = set()
         self.warlookup = defaultdict(set)
         self.countryeconomy = {}
-        self.provincetroopsintel = {}
         self.currentturnnumber = 1
-        self.countryprovinceindex = {}
-        self.countrycoreprovinceindex = {}
-        self.countryinvadedprovinceindex = {}
-        self.countryprovincecountindex = {}
-        self.countrytroopcountindex = {}
-        self.countrystatecountindex = {}
-        self.countryfrontlineallindex = {}
-        self.countryfrontlineenemyindex = {}
-        self.countryenemybordertargetindex = {}
-        self.countrystrengthcache = {}
-        self.allcountrycache = []
-        self.countryaliaslookup = {}
 
         self.minimumgarrison = max(5, int(self.economyconfig.get("recruitamount", 100) // 4))
         self.maxdefenseordersperturn = 4
@@ -85,13 +64,102 @@ class NpcDirector:
             int(self.economyconfig.get("npcstatepopulationbonusperextrastate", 2)),
         )
 
+        self.defaultpersonality = NpcPersonality.default()
+        self.countrypersonalitylookup = {}
+
+        self.countryindex = NpcCountryIndex(self.provincemap, self.provincegraph)
+        self.worldindex = self.countryindex
+        self.actionwriter = NpcTurnActions(
+            self.provincemap,
+            self.countrytocolorlookup,
+            self.countryindex,
+            emit=self.emit,
+        )
+        self.strengthevaluator = NpcStrengthEvaluator(
+            self.provincemap,
+            self.economyconfig,
+            self.countryindex,
+            self.minimumgarrison,
+        )
+        self.economyplanner = NpcEconomyPlanner(
+            self.provincemap,
+            self.economyconfig,
+            self.countryindex,
+            self.actionwriter,
+            self.npcrecruitslotsperturn,
+            self.npcrecruitgoldcostmultiplier,
+            self.npcrecruitpopulationcostmultiplier,
+            self.npcstategoldbonusperextrastate,
+            self.npcstatepopulationbonusperextrastate,
+        )
+        self.defenseplanner = NpcDefensePlanner(
+            self.provincemap,
+            self.provincegraph,
+            self.economyconfig,
+            self.countryindex,
+            self.strengthevaluator,
+            self.actionwriter,
+            self.minimumgarrison,
+            self.maxdefenseordersperturn,
+            self.frontlineoffensivereservefraction,
+        )
+        self.invasionplanner = NpcInvasionPlanner(
+            self.provincemap,
+            self.provincegraph,
+            self.economyconfig,
+            self.countryindex,
+            self.strengthevaluator,
+            self.actionwriter,
+            self.invasiongarrison,
+            self.maxinvasionordersperturn,
+            self.maxinvasiontargetsperenemy,
+            self.attritionattackthresholdratio,
+            self.attritionattackcommitratio,
+        )
+
+        self._syncindexaliases()
+        self._syncstrengthaliases()
         self._initializecountryeconomy()
         self._refreshprovincetroopsintel()
         self.rebuildcountryindexes()
 
+    def _syncindexaliases(self):
+        self.countryprovinceindex = self.countryindex.countryprovinceindex
+        self.countrycoreprovinceindex = self.countryindex.countrycoreprovinceindex
+        self.countryinvadedprovinceindex = self.countryindex.countryinvadedprovinceindex
+        self.countryprovincecountindex = self.countryindex.countryprovincecountindex
+        self.countrytroopcountindex = self.countryindex.countrytroopcountindex
+        self.countrystatecountindex = self.countryindex.countrystatecountindex
+        self.countryfrontlineallindex = self.countryindex.countryfrontlineallindex
+        self.countryfrontlineenemyindex = self.countryindex.countryfrontlineenemyindex
+        self.countryenemybordertargetindex = self.countryindex.countryenemybordertargetindex
+        self.allcountrycache = self.countryindex.allcountrycache
+        self.countryaliaslookup = self.countryindex.countryaliaslookup
+
+    def _syncstrengthaliases(self):
+        self.provincetroopsintel = self.strengthevaluator.provincetroopsintel
+        self.countrystrengthcache = self.strengthevaluator.countrystrengthcache
+
     def setplayercountry(self, playercountry):
         self.playercountry = playercountry
         self._initializecountryeconomy()
+
+    def setcountrypersonality(self, countryname, personality):
+        canonicalcountry = self._canonicalizecountry(countryname)
+        if not canonicalcountry:
+            return False
+        if personality is None:
+            self.countrypersonalitylookup.pop(canonicalcountry, None)
+            return True
+        if not isinstance(personality, NpcPersonality):
+            return False
+        self.countrypersonalitylookup[canonicalcountry] = personality
+        return True
+
+    def getpersonality(self, countryname):
+        # todo: focus tree choices can override or adjust this personality later.
+        canonicalcountry = self._canonicalizecountry(countryname)
+        return self.countrypersonalitylookup.get(canonicalcountry, self.defaultpersonality)
 
     def sync_player_wars(self, playercountry, countriesatwarset, warpairset=None):
         self.playercountry = playercountry
@@ -130,122 +198,32 @@ class NpcDirector:
             self.warlookup[secondcountry].add(firstcountry)
 
     def rebuildcountryindexes(self):
-        # ESO optimization 24/04
-        # O(c*p) --> O(p)
-        # build all per-country province indexes once per turn and reuse in lookups
-        countryset = set()
-        controlledindex = defaultdict(list)
-        coreindex = defaultdict(list)
-        invadedindex = defaultdict(list)
-        stateindex = defaultdict(set)
-        # Ebee Super Optimization (ESO) 27/4
-        # O(c*p) -> O(1)
-        # cache province counts and troop totals while indexing countries
-        provincecountindex = defaultdict(int)
-        troopcountindex = defaultdict(int)
-
-        # Ebee Super Optimization (ESO) 26/4
-        # O(c*p*n) --> O(p*n)
-        # precompute border and frontline indexes once per turn
-        frontlineallindex = defaultdict(set)
-        frontlineenemyindex = defaultdict(lambda: defaultdict(set))
-        enemybordertargetindex = defaultdict(lambda: defaultdict(set))
-
-        for provinceid, province in self.provincemap.items():
-            controllercountry = getprovincecontroller(province)
-            ownercountry = getprovinceowner(province)
-            stateid = province.get("parentstateid") or province.get("parentid")
-
-            if controllercountry:
-                countryset.add(controllercountry)
-                controlledindex[controllercountry].append(provinceid)
-                provincecountindex[controllercountry] += 1
-                troopcountindex[controllercountry] += max(0, int(province.get("troops", 0)))
-                if stateid is not None:
-                    stateindex[controllercountry].add(stateid)
-            if ownercountry:
-                countryset.add(ownercountry)
-            if controllercountry and ownercountry and controllercountry == ownercountry:
-                coreindex[controllercountry].append(provinceid)
-            elif ownercountry and controllercountry != ownercountry:
-                invadedindex[ownercountry].append(provinceid)
-
-            if not controllercountry:
-                continue
-
-            for neighborprovinceid in self.provincegraph.get(provinceid, ()): 
-                neighborprovince = self.provincemap.get(neighborprovinceid)
-                if not neighborprovince:
-                    continue
-
-                neighborcountry = getprovincecontroller(neighborprovince)
-                if not neighborcountry or neighborcountry == controllercountry:
-                    continue
-
-                frontlineallindex[controllercountry].add(provinceid)
-                frontlineenemyindex[controllercountry][neighborcountry].add(provinceid)
-                enemybordertargetindex[controllercountry][neighborcountry].add(neighborprovinceid)
-
-        self.allcountrycache = tuple(sorted(countryset))
-        self.countryprovinceindex = {country: tuple(sorted(ids)) for country, ids in controlledindex.items()}
-        self.countrycoreprovinceindex = {country: tuple(sorted(ids)) for country, ids in coreindex.items()}
-        self.countryinvadedprovinceindex = {country: tuple(sorted(ids)) for country, ids in invadedindex.items()}
-        self.countryprovincecountindex = dict(provincecountindex)
-        self.countrytroopcountindex = dict(troopcountindex)
-        self.countrystatecountindex = {country: len(stateids) for country, stateids in stateindex.items()}
-        self.countryfrontlineallindex = {country: tuple(sorted(provinceids)) for country, provinceids in frontlineallindex.items()}
-        self.countryfrontlineenemyindex = {
-            country: {enemy: tuple(sorted(provinceids)) for enemy, provinceids in byenemy.items()}
-            for country, byenemy in frontlineenemyindex.items()
-        }
-        self.countryenemybordertargetindex = {
-            country: {enemy: tuple(sorted(provinceids)) for enemy, provinceids in byenemy.items()}
-            for country, byenemy in enemybordertargetindex.items()
-        }
-        self.countryaliaslookup = {
-            str(country).strip().lower(): str(country).strip()
-            for country in self.allcountrycache
-            if str(country).strip()
-        }
-        self.countrystrengthcache = {}
+        self.countryindex.rebuild()
+        self._syncindexaliases()
+        self.strengthevaluator.clearcache()
+        self._syncstrengthaliases()
 
     def _normalizewarpair(self, firstcountry, secondcountry):
-        if not firstcountry or not secondcountry:
-            return None
-
-        first = self._canonicalizecountry(firstcountry)
-        second = self._canonicalizecountry(secondcountry)
-        if not first or not second:
-            return None
-        if first == second:
-            return None
-        if first <= second:
-            return (first, second)
-        return (second, first)
+        normalizedpair = self.countryindex.normalizewarpair(firstcountry, secondcountry)
+        self._syncindexaliases()
+        return normalizedpair
 
     def _canonicalizecountry(self, countryname):
-        if countryname is None:
-            return None
-
-        countrytext = str(countryname).strip()
-        if not countrytext:
-            return None
-
-        if not self.countryaliaslookup:
-            self.rebuildcountryindexes()
-        return self.countryaliaslookup.get(countrytext.lower(), countrytext)
+        canonicalcountry = self.countryindex.canonicalizecountry(countryname)
+        self._syncindexaliases()
+        return canonicalcountry
 
     def executeturn(self, movementorderlist, turnnumber, developmentmode=False):
-        # Keep signature compatibility; NPC behavior ignores development mode.
+        # keep signature compatibility; npc behavior ignores development mode.
         _ = developmentmode
         if movementorderlist is None:
             movementorderlist = []
 
         self.currentturnnumber = int(turnnumber)
+        self.strengthevaluator.setturnnumber(turnnumber)
+        self.actionwriter.setemit(self.emit)
 
-        # ESO optimization 24/04
-        # O(c*p*k) --> O(p + c*k)
-        # run one index pass up front so downstream country/province queries are cached
+        # eso: build indexes up front so planners reuse cached country data.
         self.rebuildcountryindexes()
         self._initializecountryeconomy()
         self._rebuildcountrystrengthcache()
@@ -264,21 +242,48 @@ class NpcDirector:
                 continue
 
             summary["countriesProcessed"] += 1
+            personality = self.getpersonality(countryname)
 
-            self._applycountryeconomy(countryname, controlledprovinceids)
+            # todo: route npc focus tree decisions into these planner calls later.
+            self.economyplanner.applycountryeconomy(
+                self.countryeconomy,
+                countryname,
+                controlledprovinceids,
+                personality=personality,
+            )
 
-            recruited = self._recruittroops(countryname, turnnumber)
+            recruited = self.economyplanner.recruittroops(
+                self.countryeconomy,
+                countryname,
+                self.warlookup,
+                turnnumber,
+                personality=personality,
+            )
             if recruited:
                 summary["recruits"] += 1
 
-            defenseorders = self._reacttoinvasion(countryname, movementorderlist, turnnumber)
-            invasionorders = self._invadecountry(countryname, movementorderlist, turnnumber)
+            defenseorders = self.defenseplanner.reacttoinvasion(
+                countryname,
+                self.warlookup,
+                movementorderlist,
+                turnnumber,
+                personality=personality,
+            )
+            invasionorders = self.invasionplanner.invadecountry(
+                countryname,
+                self.warlookup,
+                movementorderlist,
+                turnnumber,
+                personality=personality,
+            )
             idleborderorders = 0
             if not set(self.warlookup.get(countryname, set())):
-                idleborderorders = self._buildupborderforceswhenidle(
+                idleborderorders = self.defenseplanner.buildupborderforceswhenidle(
                     countryname,
+                    self.warlookup,
                     movementorderlist,
                     turnnumber,
+                    personality=personality,
                 )
 
             summary["defenseOrders"] += defenseorders
@@ -294,20 +299,12 @@ class NpcDirector:
         return summary
 
     def _allcountries(self):
-        if not self.allcountrycache:
-            self.rebuildcountryindexes()
-        return self.allcountrycache
+        countries = self.countryindex.allcountries()
+        self._syncindexaliases()
+        return countries
 
     def _initializecountryeconomy(self):
-        startinggold = int(self.economyconfig.get("startinggold", 0))
-        startingpopulation = int(self.economyconfig.get("startingpopulation", 0))
-
-        for countryname in self._allcountries():
-            if countryname not in self.countryeconomy:
-                self.countryeconomy[countryname] = {
-                    "gold": startinggold,
-                    "population": startingpopulation,
-                }
+        self.economyplanner.initializecountryeconomy(self.countryeconomy)
 
     def _npcountries(self):
         allcountries = self._allcountries()
@@ -316,613 +313,162 @@ class NpcDirector:
         return [countryname for countryname in allcountries if countryname != self.playercountry]
 
     def _controlledprovinceids(self, countryname):
-        if not self.countryprovinceindex and self.provincemap:
-            self.rebuildcountryindexes()
-        return self.countryprovinceindex.get(countryname, ())
+        provinceids = self.countryindex.controlledprovinceids(countryname)
+        self._syncindexaliases()
+        return provinceids
 
     def _corecontrolledprovinceids(self, countryname):
-        if not self.countrycoreprovinceindex and self.provincemap:
-            self.rebuildcountryindexes()
-        return self.countrycoreprovinceindex.get(countryname, ())
+        provinceids = self.countryindex.corecontrolledprovinceids(countryname)
+        self._syncindexaliases()
+        return provinceids
 
     def _invadedprovinceids(self, countryname):
-        if not self.countryinvadedprovinceindex and self.provincemap:
-            self.rebuildcountryindexes()
-        return self.countryinvadedprovinceindex.get(countryname, ())
+        provinceids = self.countryindex.invadedprovinceids(countryname)
+        self._syncindexaliases()
+        return provinceids
 
     def _countcontrolledstates(self, controlledprovinceids):
-        # Ebee Super Optimization (ESO) 26/4
-        # O(c*s) --> O(1)
-        # use cached state count from index build
-        if controlledprovinceids:
-            sampleprovinceid = controlledprovinceids[0]
-            sampleprovince = self.provincemap.get(sampleprovinceid)
-            if sampleprovince:
-                controllercountry = getprovincecontroller(sampleprovince)
-                if controllercountry in self.countrystatecountindex:
-                    return int(self.countrystatecountindex.get(controllercountry, 0))
-
-        stateidset = set()
-        for provinceid in controlledprovinceids:
-            province = self.provincemap.get(provinceid)
-            if not province:
-                continue
-
-            stateid = province.get("parentstateid") or province.get("parentid")
-            if stateid is None:
-                continue
-            stateidset.add(stateid)
-
-        return len(stateidset)
+        return self.economyplanner.countcontrolledstates(controlledprovinceids)
 
     def _applycountryeconomy(self, countryname, controlledprovinceids):
-        economystate = self.countryeconomy.get(countryname)
-        if not economystate:
-            return
-
-        controlledprovincecount = len(controlledprovinceids)
-
-        goldincome, populationgrowth = getendturneconomydelta(controlledprovincecount, economyconfig=self.economyconfig)
-
-        controlledstatecount = self._countcontrolledstates(controlledprovinceids)
-        extracontrolledstates = max(0, controlledstatecount - 1)
-        goldincome += extracontrolledstates * self.npcstategoldbonusperextrastate
-        populationgrowth += extracontrolledstates * self.npcstatepopulationbonusperextrastate
-
-        economystate["gold"] += goldincome
-        economystate["population"] += populationgrowth
+        self.economyplanner.applycountryeconomy(
+            self.countryeconomy,
+            countryname,
+            controlledprovinceids,
+            personality=self.getpersonality(countryname),
+        )
 
     def _refreshprovincetroopsintel(self):
-        self.provincetroopsintel = {
-            provinceid: int(province.get("troops", 0))
-            for provinceid, province in self.provincemap.items()
-        }
+        self.strengthevaluator.refreshintel()
+        self._syncstrengthaliases()
 
     def _getestimateddefenders(self, provinceid):
-        if provinceid in self.provincetroopsintel:
-            basecount = int(self.provincetroopsintel[provinceid])
-        else:
-            province = self.provincemap.get(provinceid)
-            if not province:
-                return 0
-            basecount = int(province.get("troops", 0))
-
-        province = self.provincemap.get(provinceid)
-        if not province:
-            return basecount
-
-        lastactivityturn = int(province.get("lasttroopactivityturn", 0))
-        entrenchedturns = max(0, int(self.currentturnnumber) - lastactivityturn)
-        if basecount > 0 and entrenchedturns >= entrenchmentturnrequired:
-            return int(math.ceil(basecount * entrenchmentdefensemultiplier))
-
-        return basecount
+        return self.strengthevaluator.estimateddefenders(provinceid)
 
     def _istargetprovinceentrenched(self, provinceid):
-        province = self.provincemap.get(provinceid)
-        if not province:
-            return False
-        if int(province.get("troops", 0)) <= 0:
-            return False
-
-        lastactivityturn = int(province.get("lasttroopactivityturn", 0))
-        entrenchedturns = max(0, int(self.currentturnnumber) - lastactivityturn)
-        return entrenchedturns >= entrenchmentturnrequired
+        return self.strengthevaluator.targetentrenched(provinceid)
 
     def _frontlineprovinceids(self, countryname, enemycountryset=None):
-        # Ebee Super Optimization (ESO) 26/4
-        # O(p*n) --> O(1)
-        # serve frontline provinces from prebuilt border indexes
-        if enemycountryset is None:
-            return self.countryfrontlineallindex.get(countryname, ())
-
-        byenemy = self.countryfrontlineenemyindex.get(countryname, {})
-        frontlineids = set()
-        for enemycountry in enemycountryset:
-            frontlineids.update(byenemy.get(enemycountry, ()))
-        if frontlineids:
-            return frontlineids
-
-        frontlineids = set()
-        for provinceid in self._controlledprovinceids(countryname):
-            for neighborprovinceid in self.provincegraph.get(provinceid, ()): 
-                neighborprovince = self.provincemap.get(neighborprovinceid)
-                if not neighborprovince:
-                    continue
-
-                neighborcountry = getprovincecontroller(neighborprovince)
-                if not neighborcountry or neighborcountry == countryname:
-                    continue
-                if enemycountryset is not None and neighborcountry not in enemycountryset:
-                    continue
-
-                frontlineids.add(provinceid)
-                break
-
-        return frontlineids
+        return self.countryindex.frontlineprovinceids(countryname, enemycountryset=enemycountryset)
 
     def _estimateadjacentenemythreat(self, countryname, provinceid, enemycountryset=None):
-        threatvalue = 0
-        for neighborprovinceid in self.provincegraph.get(provinceid, ()): 
-            neighborprovince = self.provincemap.get(neighborprovinceid)
-            if not neighborprovince:
-                continue
-
-            neighborcountry = getprovincecontroller(neighborprovince)
-            if not neighborcountry or neighborcountry == countryname:
-                continue
-            if enemycountryset is not None and neighborcountry not in enemycountryset:
-                continue
-
-            threatvalue += self._getestimateddefenders(neighborprovinceid)
-
-        return threatvalue
-
-    def _getfrontlinedesiredtroops(self, countryname, provinceid, enemycountryset=None):
-        enemythreat = self._estimateadjacentenemythreat(
+        return self.defenseplanner.estimateadjacentenemythreat(
             countryname,
             provinceid,
             enemycountryset=enemycountryset,
         )
-        recruitamount = int(self.economyconfig.get("recruitamount", 100))
-        pressurebuffer = max(2, recruitamount // 10)
-        return max(self.minimumgarrison, enemythreat + pressurebuffer)
+
+    def _getfrontlinedesiredtroops(self, countryname, provinceid, enemycountryset=None):
+        return self.defenseplanner.frontlinedesiredtroops(
+            countryname,
+            provinceid,
+            enemycountryset=enemycountryset,
+        )
 
     def _getfrontlineoffensivebaseline(self, countryname, frontlineprovincecount):
-        if frontlineprovincecount <= 0:
-            return self.minimumgarrison
-
-        # Ebee Super Optimization (ESO) 27/4
-        # O(c*p) -> O(1)
-        # reuse cached per-country troop totals during frontline planning
-        totalcountrytroops = int(self.countrytroopcountindex.get(countryname, 0))
-        offensivereservetroops = int(totalcountrytroops * self.frontlineoffensivereservefraction)
-        return max(self.minimumgarrison, offensivereservetroops // frontlineprovincecount)
+        return self.defenseplanner.frontlineoffensivebaseline(countryname, frontlineprovincecount)
 
     def _pickrecruitprovinceids(self, countryname, maxcount=1):
-        if maxcount <= 0:
-            return []
-
-        coreprovinceids = self._corecontrolledprovinceids(countryname)
-        if not coreprovinceids:
-            return []
-        coreprovinceidset = set(coreprovinceids)
-
-        warenemyset = set(self.warlookup.get(countryname, set()))
-        if warenemyset:
-            frontlinecoreprovinceids = [
-                provinceid
-                for provinceid in sorted(self._frontlineprovinceids(countryname, warenemyset))
-                if provinceid in coreprovinceidset
-            ]
-            candidateprovinceids = frontlinecoreprovinceids if frontlinecoreprovinceids else coreprovinceids
-        else:
-            peacebordercoreprovinceids = [
-                provinceid
-                for provinceid in sorted(self._frontlineprovinceids(countryname))
-                if provinceid in coreprovinceidset
-            ]
-            candidateprovinceids = peacebordercoreprovinceids if peacebordercoreprovinceids else coreprovinceids
-
-        candidateprovinceids = sorted(
-            candidateprovinceids,
-            key=lambda provinceid: (
-                int(self.provincemap[provinceid].get("troops", 0)),
-                provinceid,
-            ),
+        return self.economyplanner.pickrecruitprovinceids(
+            countryname,
+            self.warlookup,
+            maxcount=maxcount,
+            personality=self.getpersonality(countryname),
         )
-        return candidateprovinceids[:maxcount]
 
     def _pickrecruitprovince(self, countryname):
-        targetprovinceids = self._pickrecruitprovinceids(countryname, maxcount=1)
-        if not targetprovinceids:
-            return None
-
-        return targetprovinceids[0]
-
-    def _recruittroops(self, countryname, turnnumber):
-        targetprovinceids = self._pickrecruitprovinceids(countryname, maxcount=self.npcrecruitslotsperturn)
-        if not targetprovinceids:
-            return False
-
-        economystate = self.countryeconomy.get(countryname)
-        if not economystate:
-            return False
-
-        recruitamount = int(self.economyconfig.get("recruitamount", 100))
-        recruitgoldcostperunit = int(self.economyconfig.get("recruitgoldcostperunit", 1))
-        recruitpopulationcostperunit = int(self.economyconfig.get("recruitpopulationcostperunit", 1))
-        recruitslotcount = max(1, min(len(targetprovinceids), int(self.npcrecruitslotsperturn)))
-        perprovincebase = recruitamount // recruitslotcount
-        remainder = recruitamount % recruitslotcount
-
-        recruitedany = False
-        for recruitindex, targetprovinceid in enumerate(targetprovinceids[:recruitslotcount]):
-            provinceamount = perprovincebase + (1 if recruitindex < remainder else 0)
-            if provinceamount <= 0:
-                continue
-
-            basegoldcost, basepopulationcost = getrecruitcosts(
-                provinceamount,
-                recruitgoldcostperunit,
-                recruitpopulationcostperunit,
-            )
-            requiredgold = max(1, int(round(basegoldcost * self.npcrecruitgoldcostmultiplier)))
-            requiredpopulation = max(1, int(round(basepopulationcost * self.npcrecruitpopulationcostmultiplier)))
-
-            if not canrecruittroops(
-                economystate.get("gold", 0),
-                economystate.get("population", 0),
-                requiredgold,
-                requiredpopulation,
-            ):
-                continue
-
-            self.provincemap[targetprovinceid]["troops"] += provinceamount
-            self.countrytroopcountindex[countryname] = int(self.countrytroopcountindex.get(countryname, 0)) + provinceamount
-            markprovincetroopactivity(self.provincemap[targetprovinceid], turnnumber)
-            economystate["gold"] -= requiredgold
-            economystate["population"] -= requiredpopulation
-
-            self._emit(
-                EngineEventType.TROOPSRECRUITED,
-                {
-                    "country": countryname,
-                    "provinceId": targetprovinceid,
-                    "amount": provinceamount,
-                    "turn": turnnumber,
-                    "isNpc": True,
-                },
-            )
-            recruitedany = True
-
-        return recruitedany
-
-    def _findshortestpathtotarget(self, sourceprovinceid, targetprovinceids, allowedprovinceidset):
-        bestpath = []
-        bestpathlength = None
-        besttargetid = None
-
-        for targetprovinceid in sorted(targetprovinceids):
-            path = findprovincepath(
-                sourceprovinceid,
-                targetprovinceid,
-                self.provincemap,
-                self.provincegraph,
-                allowedprovinceidset=allowedprovinceidset,
-            )
-            if len(path) < 2:
-                continue
-
-            pathlength = len(path)
-            if bestpathlength is None or pathlength < bestpathlength:
-                bestpath = path
-                bestpathlength = pathlength
-                besttargetid = targetprovinceid
-
-        return besttargetid, bestpath
-
-    def _appendmovementorder(self, movementorderlist, countryname, sourceprovinceid, path, troopcount, turnnumber):
-        sourceprovince = self.provincemap[sourceprovinceid]
-        movementorderlist.append(
-            {
-                "amount": troopcount,
-                "path": path,
-                "index": 0,
-                "current": path[0],
-                "speedmodifier": 1.0,
-                "controllercountry": countryname,
-                "country": countryname,
-                "countrycolor": sourceprovince.get("countrycolor", self.countrytocolorlookup.get(countryname)),
-                "ordercreatedturn": turnnumber,
-            }
+        return self.economyplanner.pickrecruitprovince(
+            countryname,
+            self.warlookup,
+            personality=self.getpersonality(countryname),
         )
 
-        self._emit(
-            EngineEventType.MOVEORDERCREATED,
-            {
-                "sourceProvinceId": sourceprovinceid,
-                "destinationProvinceId": path[-1],
-                "path": list(path),
-                "troops": troopcount,
-                "country": countryname,
-                "turn": turnnumber,
-                "isNpc": True,
-            },
+    def _recruittroops(self, countryname, turnnumber):
+        return self.economyplanner.recruittroops(
+            self.countryeconomy,
+            countryname,
+            self.warlookup,
+            turnnumber,
+            personality=self.getpersonality(countryname),
+        )
+
+    def _findshortestpathtotarget(self, sourceprovinceid, targetprovinceids, allowedprovinceidset):
+        return self.defenseplanner.findshortestpathtotarget(
+            sourceprovinceid,
+            targetprovinceids,
+            allowedprovinceidset,
+        )
+
+    def _appendmovementorder(self, movementorderlist, countryname, sourceprovinceid, path, troopcount, turnnumber):
+        self.actionwriter.appendmovementorder(
+            movementorderlist,
+            countryname,
+            sourceprovinceid,
+            path,
+            troopcount,
+            turnnumber,
         )
 
     def _movereservestotargets(self, countryname, targetprovinceids, movementorderlist, turnnumber, maxorders):
-        if not targetprovinceids:
-            return 0
-
-        controlledprovinceidset = set(self._controlledprovinceids(countryname))
-        if not controlledprovinceidset:
-            return 0
-
-        targetprovinceidset = set(targetprovinceids)
-        sourceprovinceids = sorted(
-            controlledprovinceidset,
-            key=lambda provinceid: int(self.provincemap[provinceid].get("troops", 0)),
-            reverse=True,
-        )
-        if not sourceprovinceids:
-            return 0
-
-        enemycountryset = set(self.warlookup.get(countryname, set()))
-        offensivebaseline = self._getfrontlineoffensivebaseline(countryname, len(targetprovinceidset))
-        targetdesiredlookup = {
-            provinceid: max(
-                self._getfrontlinedesiredtroops(
-                    countryname,
-                    provinceid,
-                    enemycountryset=enemycountryset,
-                ),
-                offensivebaseline,
-            )
-            for provinceid in targetprovinceidset
-        }
-        incominglookup = {provinceid: 0 for provinceid in targetprovinceidset}
-
-        # Ebee Super Optimization (ESO) 26/4
-        # O(m*t*path) --> O(m*t)
-        # cache source target paths inside one reserve move pass
-        sortedtargetids = sorted(targetprovinceidset)
-        pathcache = {}
-
-        dynamicmaxorders = max(maxorders, len(targetprovinceidset) * 3)
-        orderscreated = 0
-        for sourceprovinceid in sourceprovinceids:
-            if orderscreated >= dynamicmaxorders:
-                break
-
-            sourceprovince = self.provincemap[sourceprovinceid]
-            while orderscreated < dynamicmaxorders:
-                sourcetroops = int(sourceprovince.get("troops", 0))
-                if sourceprovinceid in targetdesiredlookup:
-                    minholdingtroops = max(self.minimumgarrison, targetdesiredlookup[sourceprovinceid])
-                else:
-                    minholdingtroops = self.minimumgarrison
-
-                movabletroops = sourcetroops - minholdingtroops
-                if movabletroops <= 0:
-                    break
-
-                besttargetid = None
-                besttargetpath = []
-                besttargetscore = None
-
-                for targetprovinceid in sortedtargetids:
-                    if targetprovinceid == sourceprovinceid:
-                        continue
-
-                    projectedtroops = int(self.provincemap[targetprovinceid].get("troops", 0)) + incominglookup[targetprovinceid]
-                    targetdeficit = targetdesiredlookup[targetprovinceid] - projectedtroops
-                    if targetdeficit <= 0:
-                        continue
-
-                    pathkey = (sourceprovinceid, targetprovinceid)
-                    path = pathcache.get(pathkey)
-                    if path is None:
-                        path = findprovincepath(
-                            sourceprovinceid,
-                            targetprovinceid,
-                            self.provincemap,
-                            self.provincegraph,
-                            allowedprovinceidset=controlledprovinceidset,
-                        )
-                        pathcache[pathkey] = path
-                    if len(path) < 2:
-                        continue
-
-                    targetscore = (targetdeficit * 100) - len(path)
-                    if besttargetscore is None or targetscore > besttargetscore:
-                        besttargetid = targetprovinceid
-                        besttargetpath = path
-                        besttargetscore = targetscore
-
-                if besttargetid is None or len(besttargetpath) < 2:
-                    break
-
-                projectedtroops = int(self.provincemap[besttargetid].get("troops", 0)) + incominglookup[besttargetid]
-                targetdeficit = targetdesiredlookup[besttargetid] - projectedtroops
-                movecount = min(movabletroops, max(1, targetdeficit))
-                if movecount <= 0:
-                    break
-
-                sourceprovince["troops"] -= movecount
-                self.countrytroopcountindex[countryname] = max(
-                    0,
-                    int(self.countrytroopcountindex.get(countryname, 0)) - movecount,
-                )
-                markprovincetroopactivity(sourceprovince, turnnumber)
-                self._appendmovementorder(
-                    movementorderlist,
-                    countryname,
-                    sourceprovinceid,
-                    besttargetpath,
-                    movecount,
-                    turnnumber,
-                )
-                incominglookup[besttargetid] += movecount
-                orderscreated += 1
-
-        return orderscreated
-
-    def _buildupborderforceswhenidle(self, countryname, movementorderlist, turnnumber):
-        borderprovinceids = sorted(self._frontlineprovinceids(countryname))
-        if not borderprovinceids:
-            return 0
-
-        maxidleorders = max(2, min(10, len(borderprovinceids) * 2))
-        return self._movereservestotargets(
+        return self.defenseplanner.movereservestotargets(
             countryname,
-            borderprovinceids,
+            targetprovinceids,
+            self.warlookup,
             movementorderlist,
             turnnumber,
-            maxorders=maxidleorders,
+            maxorders,
+            personality=self.getpersonality(countryname),
+        )
+
+    def _buildupborderforceswhenidle(self, countryname, movementorderlist, turnnumber):
+        return self.defenseplanner.buildupborderforceswhenidle(
+            countryname,
+            self.warlookup,
+            movementorderlist,
+            turnnumber,
+            personality=self.getpersonality(countryname),
         )
 
     def _reacttoinvasion(self, countryname, movementorderlist, turnnumber):
-        warenemyset = set(self.warlookup.get(countryname, set()))
-        if not warenemyset:
-            return 0
-
-        invadedprovinceids = self._invadedprovinceids(countryname)
-        if invadedprovinceids:
-            invadercountryset = set()
-            for provinceid in invadedprovinceids:
-                province = self.provincemap.get(provinceid)
-                if not province:
-                    continue
-                controllercountry = getprovincecontroller(province)
-                if controllercountry and controllercountry != countryname:
-                    invadercountryset.add(controllercountry)
-
-            targetfrontlineids = self._frontlineprovinceids(countryname, invadercountryset)
-            if not targetfrontlineids:
-                targetfrontlineids = self._frontlineprovinceids(countryname, warenemyset)
-        else:
-            targetfrontlineids = self._frontlineprovinceids(countryname, warenemyset)
-
-        if not targetfrontlineids:
-            return 0
-
-        return self._movereservestotargets(
+        return self.defenseplanner.reacttoinvasion(
             countryname,
-            targetfrontlineids,
+            self.warlookup,
             movementorderlist,
             turnnumber,
-            maxorders=self.maxdefenseordersperturn,
+            personality=self.getpersonality(countryname),
         )
 
     def _enemybordertargetids(self, countryname, enemycountry):
-        # Ebee Super Optimization (ESO) 26/4
-        # O(p*n) --> O(1)
-        # return cached enemy border targets from turn indexes
-        cachedtargets = self.countryenemybordertargetindex.get(countryname, {}).get(enemycountry)
-        if cachedtargets is not None:
-            return cachedtargets
-
-        targetids = set()
-        for provinceid in self._controlledprovinceids(countryname):
-            for neighborprovinceid in self.provincegraph.get(provinceid, ()): 
-                neighborprovince = self.provincemap.get(neighborprovinceid)
-                if not neighborprovince:
-                    continue
-                if getprovincecontroller(neighborprovince) == enemycountry:
-                    targetids.add(neighborprovinceid)
-
-        return sorted(targetids)
+        return self.countryindex.enemybordertargetids(countryname, enemycountry)
 
     def _getcountrystrengthscore(self, countryname):
-        # Ebee Super Optimization (ESO) 26/4
-        # O(c*s) --> O(1)
-        # use cached country strength built once per turn
-        if countryname in self.countrystrengthcache:
-            return int(self.countrystrengthcache[countryname])
-
-        controlledprovincecount = int(self.countryprovincecountindex.get(countryname, 0))
-        if controlledprovincecount <= 0:
-            return 0
-
-        provinceweight = max(2, self.minimumgarrison // 2)
-        stateweight = max(6, self.minimumgarrison)
-        return (
-            int(self.countrytroopcountindex.get(countryname, 0))
-            + (controlledprovincecount * provinceweight)
-            + (int(self.countrystatecountindex.get(countryname, 0)) * stateweight)
-        )
+        return self.strengthevaluator.countrystrengthscore(countryname)
 
     def _rebuildcountrystrengthcache(self):
-        # Ebee Super Optimization (ESO) 26/4
-        # O(c*(p+s)) --> O(c)
-        # precompute country strength values once each turn
-        provinceweight = max(2, self.minimumgarrison // 2)
-        stateweight = max(6, self.minimumgarrison)
-        strengthcache = {}
-
-        # Ebee Super Optimization (ESO) 27/4
-        # O(c*p) -> O(c)
-        # derive strength from cached country totals instead of rescanning provinces
-        for countryname in self._allcountries():
-            controlledprovincecount = int(self.countryprovincecountindex.get(countryname, 0))
-            if controlledprovincecount <= 0:
-                strengthcache[countryname] = 0
-                continue
-
-            controlledtroops = int(self.countrytroopcountindex.get(countryname, 0))
-            controlledstatecount = int(self.countrystatecountindex.get(countryname, 0))
-            strengthcache[countryname] = (
-                controlledtroops
-                + (controlledprovincecount * provinceweight)
-                + (controlledstatecount * stateweight)
-            )
-
-        self.countrystrengthcache = strengthcache
+        self.strengthevaluator.rebuild()
+        self._syncstrengthaliases()
 
     def _buildattackplans(self, countryname, sourceprovinceids, targetprovinceid, allowedprovinceidset, pathcache):
-
-        attackplanlist = []
-        for sourceprovinceid in sourceprovinceids:
-            sourceprovince = self.provincemap[sourceprovinceid]
-            sourcetroops = int(sourceprovince.get("troops", 0))
-            movabletroops = sourcetroops - self.invasiongarrison
-            if movabletroops <= 0:
-                continue
-
-            pathkey = (sourceprovinceid, targetprovinceid)
-            path = pathcache.get(pathkey)
-            if path is None:
-                path = findprovincepath(
-                    sourceprovinceid,
-                    targetprovinceid,
-                    self.provincemap,
-                    self.provincegraph,
-                    allowedprovinceidset=allowedprovinceidset,
-                )
-                pathcache[pathkey] = path
-            if len(path) < 2:
-                continue
-
-            attackplanlist.append(
-                {
-                    "sourceProvinceId": sourceprovinceid,
-                    "path": path,
-                    "troops": movabletroops,
-                }
-            )
-
-        attackplanlist.sort(
-            key=lambda entry: (
-                len(entry["path"]),
-                -entry["troops"],
-                entry["sourceProvinceId"],
-            )
+        return self.invasionplanner.buildattackplans(
+            countryname,
+            sourceprovinceids,
+            targetprovinceid,
+            allowedprovinceidset,
+            pathcache,
         )
-        return attackplanlist
 
     def getenemyaggression(self, countryname, enemycountry):
-        attackerstrength = float(self._getcountrystrengthscore(countryname))
-        enemystrength = float(self._getcountrystrengthscore(enemycountry))
-        strengthratio = (attackerstrength + 1.0) / (enemystrength + 1.0)
-        return max(1.0, min(2.2, strengthratio))
+        return self.strengthevaluator.enemyaggression(
+            countryname,
+            enemycountry,
+            personality=self.getpersonality(countryname),
+        )
 
     def getenemyinvasionlimits(self, warenemycount, enemyaggression):
-        totalorderlimit = max(
-            self.maxinvasionordersperturn * max(1, warenemycount),
-            warenemycount * max(2, self.maxinvasiontargetsperenemy) * 3,
-        )
-        enemyorderlimit = max(2, int(self.maxinvasionordersperturn * enemyaggression))
-        return totalorderlimit, enemyorderlimit
+        return self.invasionplanner.enemyinvasionlimits(warenemycount, enemyaggression)
 
     def gettargetcountlimit(self, targetprovinceids, enemyaggression):
-        return max(
-            self.maxinvasiontargetsperenemy,
-            min(
-                len(targetprovinceids),
-                max(2, int(len(targetprovinceids) * (0.55 + 0.35 * enemyaggression))),
-            ),
-        )
+        return self.invasionplanner.targetcountlimit(targetprovinceids, enemyaggression)
 
     def shouldskipattritionattack(
         self,
@@ -931,15 +477,12 @@ class NpcDirector:
         enemyaggression,
         targetisentrenched,
     ):
-        effectiveattritionthreshold = max(
-            0.45,
-            self.attritionattackthresholdratio - ((enemyaggression - 1.0) * 0.25),
+        return self.invasionplanner.shouldskipattritionattack(
+            totalattackers,
+            defendercount,
+            enemyaggression,
+            targetisentrenched,
         )
-        if targetisentrenched:
-            # entrenched defenders are harder to dislodge; allow attrition attacks to start earlier
-            effectiveattritionthreshold = max(0.35, effectiveattritionthreshold - 0.12)
-        minimumattritionforce = max(1, int(defendercount * effectiveattritionthreshold))
-        return totalattackers < minimumattritionforce
 
     def getassaulttroopgoal(
         self,
@@ -949,38 +492,16 @@ class NpcDirector:
         targetisentrenched,
         hasfreshdefenderdrop,
     ):
-        cancapture = totalattackers > defendercount
-        bonuscapturecommitratio = 1.0 + max(0.0, min(0.65, (enemyaggression - 1.0) * 0.4))
-        if cancapture:
-            troopssendneeded = max(
-                defendercount + 1,
-                int(defendercount * bonuscapturecommitratio) + 1,
-            )
-            return min(totalattackers, max(1, troopssendneeded))
-
-        # If current defenders dropped far below previous intel this turn,
-        # avoid instant opportunistic attrition attacks; require capture-level force.
-        if hasfreshdefenderdrop:
-            return None
-        if self.shouldskipattritionattack(totalattackers, defendercount, enemyaggression, targetisentrenched):
-            return None
-
-        effectivecommitratio = min(
-            1.35,
-            self.attritionattackcommitratio + ((enemyaggression - 1.0) * 0.2),
+        return self.invasionplanner.assaulttroopgoal(
+            totalattackers,
+            defendercount,
+            enemyaggression,
+            targetisentrenched,
+            hasfreshdefenderdrop,
         )
-        if targetisentrenched:
-            effectivecommitratio = min(1.5, effectivecommitratio + 0.12)
-        targetassaultforce = max(1, int(defendercount * effectivecommitratio))
-        troopssendneeded = min(totalattackers, targetassaultforce)
-        return min(totalattackers, max(1, troopssendneeded))
 
     def getattackwavesize(self, defendercount, enemyaggression):
-        recruitamount = int(self.economyconfig.get("recruitamount", 100))
-        return max(
-            1,
-            int(max(recruitamount // 2, defendercount * (0.35 + (enemyaggression - 1.0) * 0.15))),
-        )
+        return self.invasionplanner.attackwavesize(defendercount, enemyaggression)
 
     def issueattackwaves(
         self,
@@ -996,134 +517,29 @@ class NpcDirector:
         invasionorderlimit,
         enemyorderlimit,
     ):
-        wavesizebase = self.getattackwavesize(defendercount, enemyaggression)
-        for attackplan in attackplanlist:
-            if (
-                orderscreated >= invasionorderlimit
-                or enemyorderscreated >= enemyorderlimit
-                or troopssendneeded <= 0
-            ):
-                break
-
-            sourceprovinceid = attackplan["sourceProvinceId"]
-            sourceprovince = self.provincemap[sourceprovinceid]
-            sourcetroops = int(sourceprovince.get("troops", 0))
-            movabletroops = sourcetroops - self.invasiongarrison
-            if movabletroops <= 0:
-                continue
-
-            movingtroops = min(movabletroops, max(1, min(troopssendneeded, wavesizebase)))
-            sourceprovince["troops"] -= movingtroops
-            self.countrytroopcountindex[countryname] = max(
-                0,
-                int(self.countrytroopcountindex.get(countryname, 0)) - movingtroops,
-            )
-            markprovincetroopactivity(sourceprovince, turnnumber)
-            self._appendmovementorder(
-                movementorderlist,
-                countryname,
-                sourceprovinceid,
-                attackplan["path"],
-                movingtroops,
-                turnnumber,
-            )
-            orderscreated += 1
-            enemyorderscreated += 1
-            troopssendneeded -= movingtroops
-
-        return orderscreated, enemyorderscreated
+        return self.invasionplanner.issueattackwaves(
+            countryname,
+            attackplanlist,
+            troopssendneeded,
+            defendercount,
+            enemyaggression,
+            movementorderlist,
+            turnnumber,
+            orderscreated,
+            enemyorderscreated,
+            invasionorderlimit,
+            enemyorderlimit,
+        )
 
     def _invadecountry(self, countryname, movementorderlist, turnnumber):
-        warenemyset = sorted(set(self.warlookup.get(countryname, set())))
-        if not warenemyset:
-            return 0
-
-        # ESO optimization 24/04
-        # O(big nested branch) --> O(same complexity, lower overhead)
-        # attack decision flow split into focused helpers to reduce repeated calculations and branching cost
-        orderscreated = 0
-        sourceprovinceids = self._controlledprovinceids(countryname)
-        allowedsetcache = {}
-        for enemycountry in warenemyset:
-            enemyaggression = self.getenemyaggression(countryname, enemycountry)
-            invasionorderlimit, enemyorderlimit = self.getenemyinvasionlimits(len(warenemyset), enemyaggression)
-            if orderscreated >= invasionorderlimit:
-                break
-            enemyorderscreated = 0
-
-            # Ebee Super Optimization (ESO) 26/4
-            # O(cp*t) --> O(cp)
-            # build allowed conflict provinces once per enemy
-            allowedprovinceidset = allowedsetcache.get(enemycountry)
-            if allowedprovinceidset is None:
-                allowedprovinceidset = {
-                    provinceid
-                    for provinceid, province in self.provincemap.items()
-                    if getprovincecontroller(province) in {countryname, enemycountry}
-                }
-                allowedsetcache[enemycountry] = allowedprovinceidset
-            pathcache = {}
-
-            targetprovinceids = self._enemybordertargetids(countryname, enemycountry)
-            if not targetprovinceids:
-                continue
-
-            targetcountlimit = self.gettargetcountlimit(targetprovinceids, enemyaggression)
-
-            prioritizedtargetids = sorted(
-                targetprovinceids,
-                key=lambda provinceid: (
-                    self._getestimateddefenders(provinceid),
-                    provinceid,
-                ),
-            )[:targetcountlimit]
-
-            for targetprovinceid in prioritizedtargetids:
-                if orderscreated >= invasionorderlimit or enemyorderscreated >= enemyorderlimit:
-                    break
-
-                attackplanlist = self._buildattackplans(
-                    countryname,
-                    sourceprovinceids,
-                    targetprovinceid,
-                    allowedprovinceidset,
-                    pathcache,
-                )
-                if not attackplanlist:
-                    continue
-
-                defendercount = self._getestimateddefenders(targetprovinceid)
-                targetisentrenched = self._istargetprovinceentrenched(targetprovinceid)
-                currentdefendercount = int(self.provincemap[targetprovinceid].get("troops", 0))
-                previousrawdefendercount = int(self.provincetroopsintel.get(targetprovinceid, currentdefendercount))
-                hasfreshdefenderdrop = currentdefendercount < previousrawdefendercount
-                totalattackers = sum(plan["troops"] for plan in attackplanlist)
-
-                troopssendneeded = self.getassaulttroopgoal(
-                    totalattackers,
-                    defendercount,
-                    enemyaggression,
-                    targetisentrenched,
-                    hasfreshdefenderdrop,
-                )
-                if troopssendneeded is None:
-                    continue
-                orderscreated, enemyorderscreated = self.issueattackwaves(
-                    countryname,
-                    attackplanlist,
-                    troopssendneeded,
-                    defendercount,
-                    enemyaggression,
-                    movementorderlist,
-                    turnnumber,
-                    orderscreated,
-                    enemyorderscreated,
-                    invasionorderlimit,
-                    enemyorderlimit,
-                )
-
-        return orderscreated
+        return self.invasionplanner.invadecountry(
+            countryname,
+            self.warlookup,
+            movementorderlist,
+            turnnumber,
+            personality=self.getpersonality(countryname),
+        )
 
     def _emit(self, eventname, payload):
-        if callable(self.emit):
-            self.emit(eventname, payload)
+        self.actionwriter.setemit(self.emit)
+        self.actionwriter.emit(eventname, payload)

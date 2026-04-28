@@ -12,6 +12,7 @@ defaulteconomy = {
     "goldincomedivisor": 5,
     "minpopulationgrowth": 10,
     "populationgrowthdivisor": 3,
+    "populationgrowthbonus": 0,
 }
 
 
@@ -39,6 +40,8 @@ def getendturneconomydelta(ownedprovincecount, economyconfig=None):
     config = economyconfig or defaulteconomy
     goldincome = max(config["mingoldincome"], ownedprovincecount // config["goldincomedivisor"])
     populationgrowth = max(config["minpopulationgrowth"], ownedprovincecount // config["populationgrowthdivisor"])
+    populationgrowth += int(config.get("populationgrowthbonus", 0) or 0)
+    populationgrowth = max(0, populationgrowth)
     # print("economy delta", goldincome, populationgrowth)
     return goldincome, populationgrowth
 

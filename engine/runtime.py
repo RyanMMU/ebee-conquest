@@ -11,9 +11,11 @@ ctypes.windll.user32.SetProcessDPIAware()
 
 #TODO - OPTIMIZATION: consider using numpy for heavy geometry calculations and data handling, especially for large maps with many provinces and complex shapes. This could significantly improve performance for operations like point-in-polygon tests, polygon transformations, and adjacency graph construction.
 #Local module
+from game.ingame_ui import InGameUI
+from game.focus_effects import FocusEffectContext
+from game.focus_loader import loadfocustreeforcountry
 from engine.console import developmentconsole, loaddevmodeflag 
 from engine.gui import (
-    EngineUI,
     gui_lightencolor,
     gui_gettroopbadgerect,
     gui_shouldshowtroopbadges,
@@ -37,19 +39,19 @@ from .events import EventBus, EngineEventType
 from .apicalltest.newsbannereventtest import NewsSystem, NewsPopup # TEST API CALL
 
 
+# THIS FILE IS A MESS!!!!
+# Write everything twice or something i forgot
 
-
-
-print("CURRENT VERSION - APRIL 19 2024")
+print("CURRENT VERSION - APRIL 29 2024")
 # MAIN GAME LOOP FILE
 
 
 # configuration
 
 #filepath = "map.csv"
-statefilepath = "states.svg"
-provincefilepath = "provinces.svg"
-countrydatafilepath = "countries.json"
+statefilepath = "map/states.svg"
+provincefilepath = "map/provinces.svg"
+countrydatafilepath = "map/countries.json"
 defaultwindowwidth = 1280
 defaultwindowheight = 720
 backgroundcolor = (30, 30, 30)
@@ -293,7 +295,7 @@ def getbadgehitprovinceid(mouseposition, badgehitlist):
             return badgeentry["provinceid"]
     return None
 
-with open("countries.json", "r", encoding="utf-8") as f:
+with open(countrydatafilepath, "r", encoding="utf-8") as f:
     countries_full = json.load(f)
 # ESO optimization 22/04
 # O(c*s) --> O(1)
@@ -1099,7 +1101,9 @@ def main(eventbus=None, is_fullscreen=False):
 
     
     windowwidth, windowheight = screen.get_size()
-    camerastate = cameramodule.createcamerastate(windowwidth, windowheight, mapbox)
+    runtimeui = InGameUI((windowwidth, windowheight))
+    maprect = runtimeui.map_rect
+    camerastate = cameramodule.createcamerastate(maprect.width, maprect.height, mapbox)
 
 
 
@@ -1130,7 +1134,14 @@ def main(eventbus=None, is_fullscreen=False):
         recruitgoldcostperunit,
         recruitpopulationcostperunit,
     ) = initializeplayereconomy(economyconfig)
+    focustree = loadfocustreeforcountry(None)
 
+
+    # THIS is the NPC instance
+    # controls non player country
+    # access to runtime data but not rendering or input
+    # provincemap and provincegraph for decision making, 
+    # can emit orders through eventbus, economyconfig for economic decisions, countrytocolorlookup for any color needs
     npcdirector = npcmodule.NpcDirector(
         provincemap,
         provincegraph,
@@ -1397,7 +1408,11 @@ def main(eventbus=None, is_fullscreen=False):
     newssystem = NewsSystem(eventbus)
     newssystem.start()
     newspopup = NewsPopup()
-    runtimeui = EngineUI((windowwidth, windowheight))
+    # UI chrome + map viewport
+    # runtime-owned font/caches (previously stored on EngineUI)
+    troopbadgefont = pygame.font.SysFont("Arial", 16)
+    countrylabelfont = pygame.font.SysFont("Arial", 18, bold=True)
+    countrylabelcache = {}
 
     dragselectstart = None
     dragselectcurrent = None
@@ -1412,22 +1427,75 @@ def main(eventbus=None, is_fullscreen=False):
 
 
     isrunning = True
+    choosecountry_fit_state = {"done": False, "w": None, "h": None}
     while isrunning:
         elapsedseconds = clock.tick(60) / 1000.0
         esomodule.updaterollingfpshistory(fpshistory, clock.get_fps(), fpshistorymaxsamples)
-        mouseposition = pygame.mouse.get_pos()
+        mouseposition_full = pygame.mouse.get_pos()
         #this gives x and y (0 and 1)
+        mainwindowwidth, mainwindowheight = screen.get_size()
+        runtimeui.setwindowsize((mainwindowwidth, mainwindowheight))
+        maprect = runtimeui.map_rect
+
+        screen_main = screen
+        screen = screen_main.subsurface(maprect)
+        mapscreen = screen
+        mouseposition = (mouseposition_full[0] - maprect.x, mouseposition_full[1] - maprect.y)
         windowwidth, windowheight = screen.get_size()
         minimumzoomforframe = cameramodule.getminimumzoomforheight(windowheight, mapbox)
 
-        cameramodule.applyedgepan(
-            camerastate,
-            mouseposition[0],
-            windowwidth,
-            elapsedseconds,
-            edgepanmargin,
-            edgepanspeed,
-        )
+        # choosecountry: focus viewport on playable countries (fit once per viewport size)
+        if gamephase == "choosecountry":
+            if (
+                not choosecountry_fit_state["done"]
+                or choosecountry_fit_state["w"] != windowwidth
+                or choosecountry_fit_state["h"] != windowheight
+            ):
+                minx = miny = float("inf")
+                maxx = maxy = float("-inf")
+                for stateshape in playablestateshapelist:
+                    rect = stateshape.get("rectangle")
+                    if rect is None:
+                        continue
+                    minx = min(minx, float(rect.left))
+                    miny = min(miny, float(rect.top))
+                    maxx = max(maxx, float(rect.right))
+                    maxy = max(maxy, float(rect.bottom))
+
+                if minx < float("inf") and maxx > float("-inf"):
+                    bbox_w = max(1.0, (maxx - minx))
+                    bbox_h = max(1.0, (maxy - miny))
+                    margin = 40.0
+                    bbox_w += margin * 2
+                    bbox_h += margin * 2
+
+                    zoom_x = windowwidth / bbox_w
+                    zoom_y = windowheight / bbox_h
+                    targetzoom = max(minimumzoomvalue, min(maximumzoomvalue, min(zoom_x, zoom_y)))
+                    camerastate.zoom = targetzoom
+                    camerastate.targetzoom = targetzoom
+
+                    center_world_x = (minx + maxx) * 0.5
+                    center_world_y = (miny + maxy) * 0.5
+                    camerastate.x = windowwidth * 0.5 - center_world_x * targetzoom
+                    camerastate.y = windowheight * 0.5 - center_world_y * targetzoom
+                    cameramodule.clampcamerastate(camerastate, windowheight, mapbox)
+
+                choosecountry_fit_state["done"] = True
+                choosecountry_fit_state["w"] = windowwidth
+                choosecountry_fit_state["h"] = windowheight
+        else:
+            choosecountry_fit_state["done"] = False
+
+        # TEMP: disable horizontal edge scrolling (re-enable later)
+        # cameramodule.applyedgepan(
+        #     camerastate,
+        #     mouseposition[0],
+        #     windowwidth,
+        #     elapsedseconds,
+        #     edgepanmargin,
+        #     edgepanspeed,
+        # )
         #cameramodule.applyverticalpan(
         #    camerastate,
         #    mouseposition[1],
@@ -1457,6 +1525,7 @@ def main(eventbus=None, is_fullscreen=False):
         camerax = camerastate.x
         cameray = camerastate.y
 
+        # draw the map inside the viewport subsurface
         screen.fill(backgroundcolor)
 
         hovertext = None
@@ -1516,6 +1585,10 @@ def main(eventbus=None, is_fullscreen=False):
         pendingpulsevalue = None
         if gamephase == "choosecountry" and pendingcountry:
             pendingpulsevalue = 0.35 + 0.45 * (0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.008))
+
+        countrymenupulsevalue = None
+        if gamephase == "play" and countrymenutarget:
+            countrymenupulsevalue = 0.35 + 0.45 * (0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.008))
 
         for copyshift in copyshiftlist:
             drawcamerax = camerax + copyshift
@@ -1625,6 +1698,19 @@ def main(eventbus=None, is_fullscreen=False):
 
 
 
+                    # Pulse-highlight the whole targeted country on the map (like choose-country phase).
+                    if (
+                        gamephase == "play"
+                        and countrymenutarget
+                        and countrymenupulsevalue is not None
+                        and drawitem.get("id") not in selectedprovinceidset
+                        and drawitem.get("id") not in routepreviewset
+                        and drawitem.get("id") not in movingprovinceidset
+                    ):
+                        drawcountry = drawitem.get("controllercountry", drawitem.get("country"))
+                        if drawcountry == countrymenutarget:
+                            basefillcolor = gui_lightencolor(basefillcolor, countrymenupulsevalue)
+
                     finalfillcolor = hovercolor if itemhovered else basefillcolor
                     for drawpolygon in drawpolygonlist:
                         pygame.draw.polygon(screen, finalfillcolor, drawpolygon)
@@ -1667,7 +1753,7 @@ def main(eventbus=None, is_fullscreen=False):
                     )
 
                     # for quick search: "troop badge hitbox"
-                    troopbadgerect = gui_gettroopbadgerect(provincerectanglescreen.center, province["troops"], runtimeui.troopbadgefont)
+                    troopbadgerect = gui_gettroopbadgerect(provincerectanglescreen.center, province["troops"], troopbadgefont)
                     troopbadgehitlist.append(
                         {
                             "provinceid": provinceid,
@@ -1715,8 +1801,8 @@ def main(eventbus=None, is_fullscreen=False):
                 cameray,
                 copyshiftlist,
                 screenrectangle,
-                runtimeui.countrylabelfont,
-                runtimeui.countrylabelcache,
+                countrylabelfont,
+                countrylabelcache,
                 gamephase,
             )
 
@@ -1824,6 +1910,9 @@ def main(eventbus=None, is_fullscreen=False):
             developmentmode=developmentmode,
         )
 
+        # switch back to the full window surface for UI chrome
+        screen = screen_main
+
         runtimeui.sync(
             gamephase,
             pendingcountry,
@@ -1843,8 +1932,9 @@ def main(eventbus=None, is_fullscreen=False):
             selectedtroopentries,
             frontlineplacementmode,
             hovertext,
-            mouseposition,
+            mouseposition_full,
             troopbadgelist,
+            focustree.viewdata(),
         )
         runtimeui.update(elapsedseconds)
         runtimeui.draw(screen)
@@ -1861,8 +1951,8 @@ def main(eventbus=None, is_fullscreen=False):
             if selectionrect.width > 0 or selectionrect.height > 0:
                 overlaysurface = pygame.Surface((selectionrect.width or 1, selectionrect.height or 1), pygame.SRCALPHA)
                 overlaysurface.fill((95, 145, 255, 45))
-                screen.blit(overlaysurface, selectionrect.topleft)
-                pygame.draw.rect(screen, (95, 145, 255), selectionrect, width=1)
+                mapscreen.blit(overlaysurface, selectionrect.topleft)
+                pygame.draw.rect(mapscreen, (95, 145, 255), selectionrect, width=1)
 
 
 
@@ -1879,7 +1969,38 @@ def main(eventbus=None, is_fullscreen=False):
         for event in pygame.event.get():
             uiaction = runtimeui.process_event(event)
 
-            if uiaction == EngineUI.actiondeclarewar and gamephase == "play":
+            eventmappos = None
+            if hasattr(event, "pos"):
+                eventmappos = (event.pos[0] - maprect.x, event.pos[1] - maprect.y)
+
+            if uiaction == InGameUI.actionchoosecountry and gamephase == "choosecountry":
+                if pendingcountry:
+                    playercountry = pendingcountry
+                    gamephase = "play"
+                    countrybordersdirty = True
+                    expandedstateid = None
+                    selectedprovinceid = None
+                    selectedprovinceidset = set()
+                    routepreviewset = set()
+                    frontlineplacementmode = False
+                    activefrontlineedgekeyset = set()
+                    frontlineassignmentlist = []
+                    frontlinebordersegmentcache = {}
+                    countriesatwarset = set()
+                    warpairset = set()
+                    countrymenutarget = None
+                    npcdirector.setplayercountry(playercountry)
+                    npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
+                    focustree = loadfocustreeforcountry(playercountry)
+                    eventbus.emit(
+                        EngineEventType.PLAYERCOUNTRYSELECTED,
+                        {
+                            "country": playercountry,
+                        },
+                    )
+                continue
+
+            if uiaction == "declarewar" and gamephase == "play":
                 if countrymenutarget and countrymenutarget != playercountry:
                     eventbus.emit(
                         EngineEventType.WARDECLARED,
@@ -1892,7 +2013,7 @@ def main(eventbus=None, is_fullscreen=False):
                 countrymenutarget = None
                 continue
 
-            if uiaction == EngineUI.actionrecruit and gamephase == "play":
+            if uiaction == InGameUI.actionrecruit and gamephase == "play":
                 if selectedprovinceid:
                     selectedprovince = provincemap[selectedprovinceid]
                     if (
@@ -1927,12 +2048,33 @@ def main(eventbus=None, is_fullscreen=False):
                             )
                 continue
 
+            if uiaction == InGameUI.actiontogglefocuspanel and gamephase == "play":
+                continue
+
+            if (
+                isinstance(uiaction, tuple)
+                and len(uiaction) == 2
+                and uiaction[0] == InGameUI.actionstartfocus
+                and gamephase == "play"
+            ):
+                focusstartresult = focustree.startfocus(uiaction[1])
+                if focusstartresult.success:
+                    eventbus.emit(
+                        EngineEventType.FOCUSSTARTED,
+                        {
+                            "country": playercountry,
+                            "focusId": focusstartresult.focusid,
+                            "turn": currentturnnumber,
+                        },
+                    )
+                continue
+
 
 
 
             # for quick search: "end turn button"
             # ON END TURN, process movement orders, apply economy, increment turn, emit next turn event
-            if uiaction == EngineUI.actionendturn and gamephase == "play":
+            if uiaction == InGameUI.actionendturn and gamephase == "play":
                 processmovementorders(
                     movementorderlist,
                     provincemap,
@@ -1940,6 +2082,25 @@ def main(eventbus=None, is_fullscreen=False):
                     currentturnnumber=currentturnnumber,
                 )
                 countrybordersdirty = True
+                focuseffectcontext = FocusEffectContext(
+                    gold=playergold,
+                    population=playerpopulation,
+                    economyconfig=economyconfig,
+                    country=playercountry,
+                )
+                focusturnresult = focustree.advanceturn(focuseffectcontext)
+                playergold = max(0, int(focuseffectcontext.gold))
+                playerpopulation = max(0, int(focuseffectcontext.population))
+                if focusturnresult.completedfocusid:
+                    eventbus.emit(
+                        EngineEventType.FOCUSCOMPLETED,
+                        {
+                            "country": playercountry,
+                            "focusId": focusturnresult.completedfocusid,
+                            "turn": currentturnnumber,
+                            "appliedEffects": [dict(effect) for effect in focusturnresult.appliedeffects],
+                        },
+                    )
                 playergold,playerpopulation = applyendturneconomy(
                     playercountry,
                     provincemap,
@@ -1965,7 +2126,7 @@ def main(eventbus=None, is_fullscreen=False):
                 )
                 continue
 
-            if uiaction == EngineUI.actionsplit and gamephase == "play":
+            if uiaction == "split" and gamephase == "play":
                 selectedids = [entry["provinceid"] for entry in selectedtroopentries]
                 splitresult = splitselectedtroops(
                     provincemap,
@@ -1979,7 +2140,7 @@ def main(eventbus=None, is_fullscreen=False):
                     routepreviewset = set()
                 continue
 
-            if uiaction == EngineUI.actionmerge and gamephase == "play":
+            if uiaction == "merge" and gamephase == "play":
                 selectedids = [entry["provinceid"] for entry in selectedtroopentries]
                 mergeresult = mergeselectedtroops(
                     provincemap,
@@ -1993,7 +2154,7 @@ def main(eventbus=None, is_fullscreen=False):
                     routepreviewset = set()
                 continue
 
-            if uiaction == EngineUI.actionfrontline and gamephase == "play":
+            if uiaction == "frontline" and gamephase == "play":
                 hastroopsselected = any(int(entry.get("troops", 0)) > 0 for entry in selectedtroopentries)
                 frontlineplacementmode = bool(hastroopsselected) and not frontlineplacementmode
                 routepreviewset = set()
@@ -2049,31 +2210,6 @@ def main(eventbus=None, is_fullscreen=False):
                                 },
                             )
 
-                    if runtimeui.clickchoosebutton(event.pos) and pendingcountry:
-                        playercountry = pendingcountry
-                        gamephase = "play"
-                        countrybordersdirty = True
-                        expandedstateid = None
-                        selectedprovinceid = None
-                        selectedprovinceidset = set()
-                        routepreviewset = set()
-                        frontlineplacementmode = False
-                        activefrontlineedgekeyset = set()
-                        frontlineassignmentlist = []
-                        frontlinebordersegmentcache = {}
-                        countriesatwarset = set()
-                        warpairset = set()
-                        countrymenutarget = None
-                        npcdirector.setplayercountry(playercountry)
-                        npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
-                        eventbus.emit(
-                            EngineEventType.PLAYERCOUNTRYSELECTED,
-                            {
-                                "country": playercountry,
-                            },
-                        )
-
-
                     continue
 
                 if gamephase == "play" and frontlineplacementmode:
@@ -2126,19 +2262,24 @@ def main(eventbus=None, is_fullscreen=False):
                         countrymenutarget = None
                         continue
 
-                    dragselectstart = event.pos
-                    dragselectcurrent = event.pos
+                    if eventmappos is None or not pygame.Rect(0, 0, maprect.width, maprect.height).collidepoint(eventmappos):
+                        continue
+                    dragselectstart = eventmappos
+                    dragselectcurrent = eventmappos
                     isdragselecting = True
 
             elif event.type == pygame.MOUSEMOTION:
                 if isdragselecting:
-                    dragselectcurrent = event.pos
+                    if eventmappos is not None:
+                        dragselectcurrent = eventmappos
 
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
                 if gamephase != "play" or not isdragselecting:
                     continue
 
-                dragselectcurrent = event.pos
+                if eventmappos is None:
+                    continue
+                dragselectcurrent = eventmappos
                 selectionrect = makerectfrompoints(dragselectstart, dragselectcurrent)
                 isdragselecting = False
 
@@ -2171,7 +2312,7 @@ def main(eventbus=None, is_fullscreen=False):
                     dragselectcurrent = None
                     continue
 
-                clickedbadgeprovinceid = getbadgehitprovinceid(event.pos, troopbadgehitlist)
+                clickedbadgeprovinceid = getbadgehitprovinceid(eventmappos, troopbadgehitlist)
                 if clickedbadgeprovinceid:
                     selectedprovince = provincemap.get(clickedbadgeprovinceid)
                     if selectedprovince and getprovincecontroller(selectedprovince) == playercountry:
@@ -2217,7 +2358,7 @@ def main(eventbus=None, is_fullscreen=False):
 
 
                     hoveredstateprovince = getprovinceundercursorinstate(
-                        event.pos,
+                        eventmappos,
                         hoveredstateid,
                         stateobjectlookup,
                         zoomvalue,
@@ -2393,6 +2534,8 @@ def main(eventbus=None, is_fullscreen=False):
             elif event.type == pygame.MOUSEWHEEL:
                 if devconsole.visible:
                     continue
+                if runtimeui.focusview.isopen:
+                    continue
 
                 
                 mousex, mousey = pygame.mouse.get_pos()
@@ -2400,6 +2543,59 @@ def main(eventbus=None, is_fullscreen=False):
                 
 
             elif event.type == pygame.KEYDOWN:
+                # Space = next turn (only in play phase, and not while dev console is capturing input)
+                if event.key == pygame.K_SPACE and gamephase == "play" and not devconsole.visible:
+                    processmovementorders(
+                        movementorderlist,
+                        provincemap,
+                        emit=eventbus.emit,
+                        currentturnnumber=currentturnnumber,
+                    )
+                    countrybordersdirty = True
+                    focuseffectcontext = FocusEffectContext(
+                        gold=playergold,
+                        population=playerpopulation,
+                        economyconfig=economyconfig,
+                        country=playercountry,
+                    )
+                    focusturnresult = focustree.advanceturn(focuseffectcontext)
+                    playergold = max(0, int(focuseffectcontext.gold))
+                    playerpopulation = max(0, int(focuseffectcontext.population))
+                    if focusturnresult.completedfocusid:
+                        eventbus.emit(
+                            EngineEventType.FOCUSCOMPLETED,
+                            {
+                                "country": playercountry,
+                                "focusId": focusturnresult.completedfocusid,
+                                "turn": currentturnnumber,
+                                "appliedEffects": [dict(effect) for effect in focusturnresult.appliedeffects],
+                            },
+                        )
+                    playergold, playerpopulation = applyendturneconomy(
+                        playercountry,
+                        provincemap,
+                        playergold,
+                        playerpopulation,
+                    )
+                    npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
+                    npcdirector.executeturn(
+                        movementorderlist,
+                        currentturnnumber,
+                    )
+                    frontlineupdates = refreshfrontlines()
+                    currentturnnumber += 1
+                    routepreviewset = frontlineupdates
+                    eventbus.emit(
+                        EngineEventType.NEXTTURN,
+                        {
+                            "turn": currentturnnumber,
+                            "playerCountry": playercountry,
+                            "playerGold": playergold,
+                            "playerPopulation": playerpopulation,
+                        },
+                    )
+                    continue
+
 
             # (for quick ctrl f: developer console)
                 commandcontext = {
@@ -2435,24 +2631,26 @@ def main(eventbus=None, is_fullscreen=False):
             elif event.type == pygame.VIDEORESIZE:
                 if is_fullscreen: 
                     continue
-                oldwindowwidth, oldwindowheight = screen.get_size()
+                oldmaprect = maprect
                 newwindowwidth = max(400, event.w)
                 newwindowheight = max(300, event.h)
 
                 screen = pygame.display.set_mode((newwindowwidth, newwindowheight), pygame.RESIZABLE)
+                runtimeui.setwindowsize((newwindowwidth, newwindowheight))
+                maprect = runtimeui.map_rect
                 cameramodule.resizecamerastate(
                     camerastate,
-                    oldwindowwidth,
-                    oldwindowheight,
-                    newwindowwidth,
-                    newwindowheight,
+                    oldmaprect.width,
+                    oldmaprect.height,
+                    maprect.width,
+                    maprect.height,
                     mapbox,
                 )
-                cameramodule.clampcamerastate(camerastate, newwindowheight, mapbox)
+                cameramodule.clampcamerastate(camerastate, maprect.height, mapbox)
                 zoomvalue = camerastate.zoom
                 camerax = camerastate.x
                 cameray = camerastate.y
-                runtimeui.setwindowsize((newwindowwidth, newwindowheight))
+                continue
 
 
 
