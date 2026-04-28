@@ -65,7 +65,7 @@ def scale_button():
 
     button_m = (w // 2) - (button_width // 2)
 
-    button_m = (w // 2) - (button_width // 2)
+
 
 menu = 'main' 
 run = True
@@ -367,7 +367,7 @@ while run:
 
     pygame.display.flip()
 
-    clock.tick(500)
+    clock.tick(240)
 
 
  
