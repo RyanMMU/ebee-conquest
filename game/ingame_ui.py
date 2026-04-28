@@ -178,7 +178,7 @@ class InGameUI:
 
     def _load_flags(self):
         flags = {}
-        flag_path = os.path.normpath(os.path.join(os.path.dirname(__file__), "flags"))
+        flag_path = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "flags"))
         if not os.path.isdir(flag_path):
             return flags
 
@@ -426,7 +426,7 @@ class InGameUI:
             color = (0, 200, 0) if enabled else (50, 50, 50)
             pygame.draw.rect(surface, color, self._choose_rect)
             pygame.draw.rect(surface, (25, 25, 25), self._choose_rect, 1)
-            label = self.font.render("CHOOSE COUNTRY", True, (0, 0, 0) if enabled else (210, 210, 210))
+            label = self.font.render("choose country", True, (0, 0, 0) if enabled else (210, 210, 210))
             surface.blit(label, label.get_rect(center=self._choose_rect.center))
             if self.pendingcountry:
                 selected = self.font.render(f"Selected: {self.pendingcountry}", True, (230, 230, 230))
@@ -555,6 +555,7 @@ class InGameUI:
         content_rect = self.rightbar.rect.inflate(-24, -24)
         content_rect.topleft = (self.rightbar.rect.x + 12, self.rightbar.rect.y + 12)
 
+        # base panel
         pygame.draw.rect(surface, (18, 18, 18), content_rect, border_radius=2)
         pygame.draw.rect(surface, (25, 25, 25), content_rect, 1, border_radius=2)
 
@@ -579,12 +580,25 @@ class InGameUI:
         if self._countrymenutarget:
             alreadyatwar = self._countrymenutarget in self._countriesatwarset
             surface.blit(self.font.render("Country actions", True, (240, 240, 240)), (content_rect.x, y_cursor + 6))
-            surface.blit(self.font.render(str(self._countrymenutarget), True, (220, 220, 220)), (content_rect.x, y_cursor + 30))
+            # country identity (no glow; map highlight handles the emphasis)
+            country_key = str(self._countrymenutarget or "").strip().lower().replace(" ", "_").replace("-", "_")
+            flag_img = self._flags.get(country_key) if country_key else None
+            draw_x = content_rect.x
+            draw_y = y_cursor + 30
+            if flag_img:
+                surface.blit(flag_img, (draw_x, draw_y + 2))
+                draw_x += flag_img.get_width() + 6
+            surface.blit(self.font.render(str(self._countrymenutarget), True, (220, 220, 220)), (draw_x, draw_y))
             status = "Status: at war" if alreadyatwar else "Status: peace"
             surface.blit(self.font.render(status, True, (205, 205, 215)), (content_rect.x, y_cursor + 52))
             # button gets its own row (no overlap)
             self._declarewar_rect.topleft = (content_rect.x, y_cursor + 82)
-            draw_btn(self._declarewar_rect, not alreadyatwar, "Declare War" if not alreadyatwar else "Already at war!", primary=False)
+            draw_btn(
+                self._declarewar_rect,
+                not alreadyatwar,
+                "Declare War" if not alreadyatwar else "Already at war!",
+                primary=False,
+            )
             y_cursor += 130
 
         # Recruit action only shows in RECRUIT tab (and only when no country menu)

@@ -11,7 +11,7 @@ ctypes.windll.user32.SetProcessDPIAware()
 
 #TODO - OPTIMIZATION: consider using numpy for heavy geometry calculations and data handling, especially for large maps with many provinces and complex shapes. This could significantly improve performance for operations like point-in-polygon tests, polygon transformations, and adjacency graph construction.
 #Local module
-from ingame_ui import InGameUI
+from game.ingame_ui import InGameUI
 from engine.console import developmentconsole, loaddevmodeflag 
 from engine.gui import (
     gui_lightencolor,
@@ -47,9 +47,9 @@ print("CURRENT VERSION - APRIL 19 2024")
 # configuration
 
 #filepath = "map.csv"
-statefilepath = "states.svg"
-provincefilepath = "provinces.svg"
-countrydatafilepath = "countries.json"
+statefilepath = "map/states.svg"
+provincefilepath = "map/provinces.svg"
+countrydatafilepath = "map/countries.json"
 defaultwindowwidth = 1280
 defaultwindowheight = 720
 backgroundcolor = (30, 30, 30)
@@ -293,7 +293,7 @@ def getbadgehitprovinceid(mouseposition, badgehitlist):
             return badgeentry["provinceid"]
     return None
 
-with open("countries.json", "r", encoding="utf-8") as f:
+with open(countrydatafilepath, "r", encoding="utf-8") as f:
     countries_full = json.load(f)
 # ESO optimization 22/04
 # O(c*s) --> O(1)
@@ -1577,6 +1577,10 @@ def main(eventbus=None, is_fullscreen=False):
         if gamephase == "choosecountry" and pendingcountry:
             pendingpulsevalue = 0.35 + 0.45 * (0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.008))
 
+        countrymenupulsevalue = None
+        if gamephase == "play" and countrymenutarget:
+            countrymenupulsevalue = 0.35 + 0.45 * (0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.008))
+
         for copyshift in copyshiftlist:
             drawcamerax = camerax + copyshift
 
@@ -1684,6 +1688,19 @@ def main(eventbus=None, is_fullscreen=False):
                             basefillcolor = drawitem.get("countrycolor", stateshape.get("countrycolor", defaultshapecolor))
 
 
+
+                    # Pulse-highlight the whole targeted country on the map (like choose-country phase).
+                    if (
+                        gamephase == "play"
+                        and countrymenutarget
+                        and countrymenupulsevalue is not None
+                        and drawitem.get("id") not in selectedprovinceidset
+                        and drawitem.get("id") not in routepreviewset
+                        and drawitem.get("id") not in movingprovinceidset
+                    ):
+                        drawcountry = drawitem.get("controllercountry", drawitem.get("country"))
+                        if drawcountry == countrymenutarget:
+                            basefillcolor = gui_lightencolor(basefillcolor, countrymenupulsevalue)
 
                     finalfillcolor = hovercolor if itemhovered else basefillcolor
                     for drawpolygon in drawpolygonlist:

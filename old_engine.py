@@ -22,9 +22,9 @@ print("CURRENT VERSION - APRIL 3 2024")
 # configuration
 
 #filepath = "map.csv"
-statefilepath = "states.svg"
-provincefilepath = "provinces.svg"
-countrydatafilepath = "countries.json"
+statefilepath = "map/states.svg"
+provincefilepath = "map/provinces.svg"
+countrydatafilepath = "map/countries.json"
 defaultwindowwidth = 1280
 defaultwindowheight = 720
 backgroundcolor = (30, 30, 30)

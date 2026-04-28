@@ -1,5 +1,6 @@
 import pygame
 import sys
+import os
 
 from engine.runtime import main
 
@@ -9,6 +10,10 @@ def lerp(start, end, t):
     return start + (end - start) * t
 
 WIDTH,HEIGHT = 1280,720
+
+_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
+_FONTS = os.path.join(_ROOT, "fonts")
+_IMAGES = os.path.join(_ROOT, "images")
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
@@ -30,8 +35,8 @@ ease_fullscreen = 1
 volume_drag = False
 
 
-main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 18)
-settings_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 36)
+main_font = pygame.font.Font(os.path.join(_FONTS, "Inter_18pt-Medium.ttf"), 18)
+settings_font = pygame.font.Font(os.path.join(_FONTS, "Inter_18pt-Medium.ttf"), 36)
 
 
 
@@ -52,7 +57,7 @@ def scale_button():
     
     button_width = int(BASE_W * scale)
     button_height = int(BASE_H * scale)
-    main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', int(BASE_FONT * scale))
+    main_font = pygame.font.Font(os.path.join(_FONTS, "Inter_18pt-Medium.ttf"), int(BASE_FONT * scale))
     
     total_height = button_height * 4 + gap * 3
     start_y = (h - total_height) // 2
@@ -73,7 +78,7 @@ volume = 50
 
 
 
-bg_image = pygame.image.load('Game Menu UI Design (1).png').convert()
+bg_image = pygame.image.load(os.path.join(_IMAGES, "Game Menu UI Design (1).png")).convert()
 bg_image = pygame.transform.smoothscale(bg_image,(WIDTH, HEIGHT))
 
 def glow(screen,x,y,w,h):
@@ -129,7 +134,10 @@ while run:
 
                     scale_button()
                     w, h = screen.get_size()
-                    bg_image = pygame.transform.smoothscale(pygame.image.load('Game Menu UI Design (1).png').convert(), (w, h))
+                    bg_image = pygame.transform.smoothscale(
+                        pygame.image.load(os.path.join(_IMAGES, "Game Menu UI Design (1).png")).convert(),
+                        (w, h),
+                    )
 
 
 

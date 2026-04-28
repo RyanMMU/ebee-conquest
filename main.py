@@ -1,4 +1,4 @@
-import menu_gui as menu
+import game.menu_gui as menu
 # NOTE!!
 # This is a DIRECT engine launcher, not meant for normal gameplay. 
 # This is only used for testing and debugging only. 
