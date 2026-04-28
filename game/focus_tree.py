@@ -318,18 +318,19 @@ class FocusTree:
 
 
     # determine focus status for the ui
+    # this directly links to coloring and availability in the ui, so it is important to keep this logic consistent and not add any additional status types without updating the ui accordingly
     def focusstatus(self, focusid: str, canstart: bool):
         if focusid in self.completedids:
-            return "COMPLETE!!"
+            return "completed"
         if focusid == self.activeid:
-            return "ACTIVE!"
+            return "active"
         if self.completedexclusivefocuses(focusid):
-            return "BLOCKED!"
+            return "blocked"
         if self.missingprerequisites(focusid):
-            return "LOCKED!"
+            return "locked"
         if canstart:
-            return "AVAILABLE"
-        return "WAITING"
+            return "available"
+        return "waiting"
 
     def startresult(self, success: bool, focusid: str | None, reason: str):
         self.lastmessage = reason
