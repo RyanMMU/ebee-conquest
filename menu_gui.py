@@ -21,7 +21,7 @@ ease2= 1
 ease3= 1
 ease4 = 1
 ease_backbutton = 1
-expand = 1
+
 
 
 is_fullscreen = False
@@ -34,15 +34,42 @@ main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 18)
 settings_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 36)
 
 
+
+def scale_button():
+    global button_m, button_width, button_height, button_y_positions, main_font
+    w, h = screen.get_size()
+
+    if is_fullscreen:
+        button_width = int(297 * 1.3)
+        button_height = int(53 * 1.3)
+        main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', int(18 * 1.3))
+        
+        gap = 35
+        total_height = button_height * 4 + gap * 3
+        start_y = (h - total_height) // 2
+        button_y_positions = {
+            'new_game': start_y,
+            'load_game': start_y + button_height + gap,
+            'settings': start_y + (button_height + gap) * 2,
+            'quit': start_y + (button_height + gap) * 3
+        }
+    else:
+        button_width = 297
+        button_height = 53
+        main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 18)
+        button_y_positions = {
+            'new_game': 170,
+            'load_game': 255,
+            'settings': 345,
+            'quit': 430
+        }
+
+    button_m = (w // 2) - (button_width // 2)
+
 menu = 'main' 
 run = True
 volume = 50
 
-
-
-button_width = 297
-button_height = 53
-button_m=(WIDTH // 2) - (button_width // 2)
 
 
 bg_image = pygame.image.load('Game Menu UI Design (1).png').convert()
@@ -67,6 +94,8 @@ def button(screen,x,y,w,h):
 
 clock = pygame.time.Clock()
 
+
+scale_button()
 while run:
     mouse = pygame.mouse.get_pos()
     screen.blit(bg_image, (0, 0))
@@ -76,9 +105,7 @@ while run:
             run = False
 
 
-        if event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_ESCAPE:
-                run = False
+
 
         if event.type == pygame.MOUSEBUTTONDOWN:
             if menu == 'settings':
@@ -92,34 +119,35 @@ while run:
 
 
 
-                if button_m < mouse[0] < button_m + button_width and 330 < mouse[1] < 383:
+                if button_m < mouse[0] < button_m + button_width and 310 < mouse[1] < 363:
                     is_fullscreen = not is_fullscreen
                     if is_fullscreen:
                         screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
                     else:
                         screen = pygame.display.set_mode((WIDTH, HEIGHT))
+
+                    scale_button()
                     w, h = screen.get_size()
-                    button_m = (w // 2) - (button_width // 2)
                     bg_image = pygame.transform.smoothscale(pygame.image.load('Game Menu UI Design (1).png').convert(), (w, h))
 
 
 
-                if button_m < mouse[0] < button_m + button_width and 400 < mouse[1] < 453:
+                if button_m < mouse[0] < button_m + button_width and 420 < mouse[1] < 473:
                             menu = 'main'
 
             elif menu == 'main':
-                if button_m < mouse[0] < button_m + button_width and 170 < mouse[1] < 223:
-                    main(is_fullscreen=is_fullscreen) 
+                if button_m < mouse[0] < button_m + button_width and button_y_positions['new_game'] < mouse[1] < button_y_positions['new_game'] + button_height:
+                    main(is_fullscreen=is_fullscreen)
                     pygame.quit()
                     sys.exit()
                     
-                elif button_m < mouse[0] < button_m+button_width and 345 < mouse[1] < 390:
+                elif button_m < mouse[0] < button_m+button_width and button_y_positions['settings'] < mouse[1] < button_y_positions['settings'] + button_height:
                     menu = 'settings'
 
-                elif button_m < mouse[0] < button_m + button_width and 430 < mouse[1] < 490:
+                elif button_m < mouse[0] < button_m + button_width and button_y_positions['quit'] < mouse[1] < button_y_positions['quit'] + button_height:
                     run = False
 
-                elif button_m < mouse[0] < button_m + button_width and 255 < mouse[1] < 345:
+                elif button_m < mouse[0] < button_m + button_width and button_y_positions['load_game'] < mouse[1] < button_y_positions['load_game'] + button_height:
                     print('loading game....')
 
 
@@ -141,24 +169,24 @@ while run:
                     
     if menu == 'main':
         
-        hover = button_m < mouse[0] < button_m + button_width and 170 < mouse[1] < 223
+        
+        y_pos = button_y_positions['new_game']
+        hover = button_m < mouse[0] < button_m + button_width and y_pos < mouse[1] < y_pos + button_height
+
         
         new_w = int(button_width * ease)
         new_x = button_m - (new_w - button_width) // 2
         
         new_h = int(button_height * ease)
 
-        new_y = 170 - (new_h - button_height) // 2
-
-        txt1 = main_font.render('NEW GAME',True,text)
-        txt1_rect = txt1.get_rect(center=(new_x + new_w // 2, new_y + new_h // 2))
-        screen.blit(txt1, txt1_rect)
+       
+        new_y = y_pos - (new_h - button_height) // 2
 
         
         if hover:
             expand = 1.15
         else:
-            expand = 1
+            expand = 1 
 
         ease = lerp(ease, expand, 0.15)
 
@@ -168,20 +196,23 @@ while run:
             glow(screen, new_x, new_y, new_w, new_h)
         button(screen, new_x, new_y, new_w, new_h)
 
+        txt1 = main_font.render('NEW GAME',True,text)
+        txt1_rect = txt1.get_rect(center=(new_x + new_w // 2, new_y + new_h // 2))
+        screen.blit(txt1, txt1_rect)
+
             
-    
-        hover = button_m < mouse[0] < button_m + button_width and 345 < mouse[1] < 390
+        
+        y_pos = button_y_positions['settings']
+        hover = button_m < mouse[0] < button_m + button_width and y_pos < mouse[1] < y_pos + button_height
 
         new_w = int(button_width * ease2)
         new_x = button_m - (new_w - button_width) // 2
         
         new_h = int(button_height * ease2)
 
-        new_y = 345 - (new_h - button_height) // 2
+        
+        new_y = y_pos - (new_h - button_height) // 2
 
-        txt2 = main_font.render('SETTINGS',True,text)
-        txt2_rect = txt2.get_rect(center=(button_m + button_width // 2, 345 + button_height // 2))
-        screen.blit(txt2, txt2_rect)
 
 
         if hover:
@@ -197,21 +228,24 @@ while run:
             glow(screen, new_x, new_y, new_w, new_h)
         button(screen, new_x, new_y, new_w, new_h)
 
+        txt2 = main_font.render('SETTINGS',True,text)
+        txt2_rect = txt2.get_rect(center=(new_x + new_w // 2, new_y + new_h // 2))
+        screen.blit(txt2, txt2_rect)
 
 
-        hover = button_m < mouse[0] < button_m + button_width and 430 < mouse[1] < 490
+
+        y_pos = button_y_positions['quit']
+        hover = button_m < mouse[0] < button_m + button_width and y_pos < mouse[1] < y_pos + button_height
         new_w = int(button_width * ease3)
         new_x = button_m - (new_w - button_width) // 2
         
         new_h = int(button_height * ease3)
 
-        new_y = 430 - (new_h - button_height) // 2
+       
+        new_y = y_pos - (new_h - button_height) // 2
 
 
-        txt3 = main_font.render('QUIT', True, text)
-        txt3_rect = txt3.get_rect(center=(button_m + button_width // 2, 430 + button_height // 2))
-        screen.blit(txt3, txt3_rect)
-
+      
         if hover:
             expand = 1.15
         else:
@@ -226,19 +260,23 @@ while run:
         button(screen, new_x, new_y, new_w, new_h)
 
 
+        txt3 = main_font.render('QUIT', True, text)
+        txt3_rect = txt3.get_rect(center=(new_x + new_w // 2, new_y + new_h // 2))
+        screen.blit(txt3, txt3_rect)
 
 
-        hover = button_m < mouse[0] < button_m + button_width and 255 < mouse[1] < 345
+
+
+        y_pos = button_y_positions['load_game']
+        hover = button_m < mouse[0] < button_m + button_width and y_pos < mouse[1] < y_pos + button_height
         new_w = int(button_width * ease4)
         new_x = button_m - (new_w - button_width) // 2
         
         new_h = int(button_height * ease4)
 
-        new_y = 255 - (new_h - button_height) // 2
 
-        txt5 = main_font.render('LOAD GAME', True, text)
-        txt5_rect = txt5.get_rect(center=(button_m + button_width // 2, 255 + button_height // 2))
-        screen.blit(txt5, txt5_rect)
+        new_y = y_pos - (new_h - button_height) // 2
+       
 
         if hover:
             expand = 1.15
@@ -252,6 +290,10 @@ while run:
         if ease4 > 1.01:
             glow(screen, new_x, new_y, new_w, new_h)
         button(screen, new_x, new_y, new_w, new_h)
+
+        txt5 = main_font.render('LOAD GAME', True, text)
+        txt5_rect = txt5.get_rect(center=(new_x + new_w // 2, new_y + new_h // 2))
+        screen.blit(txt5, txt5_rect)
 
 
 
@@ -279,12 +321,12 @@ while run:
         pygame.draw.circle(screen, (255, 255, 255), (knob, 295), 8)
 
         
-        hover_fullscreen = button_m < mouse[0] < button_m + button_width and 330 < mouse[1] < 383
+        hover_fullscreen = button_m < mouse[0] < button_m + button_width and 310 < mouse[1] < 363
 
         new_w = int(button_width * ease_fullscreen)
         new_x = button_m - (new_w - button_width) // 2
         new_h = int(button_height * ease_fullscreen)
-        new_y = 330 - (new_h - button_height) // 2
+        new_y = 310 - (new_h - button_height) // 2
 
         if hover_fullscreen:
             expand = 1.15
@@ -302,11 +344,11 @@ while run:
         screen.blit(fullscreen_text, fs_box)
 
     
-        hover_back = button_m < mouse[0] < button_m + button_width and 400 < mouse[1] < 453
+        hover_back = button_m < mouse[0] < button_m + button_width and 420 < mouse[1] < 473
         new_w = int(button_width * ease_backbutton)
         new_x = button_m - (new_w - button_width) // 2
         new_h = int(button_height * ease_backbutton)
-        new_y = 400 - (new_h - button_height) // 2
+        new_y = 420 - (new_h - button_height) // 2
 
         if hover_back:
             expand = 1.15
