@@ -1136,6 +1136,12 @@ def main(eventbus=None, is_fullscreen=False):
     ) = initializeplayereconomy(economyconfig)
     focustree = loadfocustreeforcountry(None)
 
+
+    # THIS is the NPC instance
+    # controls non player country
+    # access to runtime data but not rendering or input
+    # provincemap and provincegraph for decision making, 
+    # can emit orders through eventbus, economyconfig for economic decisions, countrytocolorlookup for any color needs
     npcdirector = npcmodule.NpcDirector(
         provincemap,
         provincegraph,
