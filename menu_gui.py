@@ -39,30 +39,31 @@ def scale_button():
     global button_m, button_width, button_height, button_y_positions, main_font
     w, h = screen.get_size()
 
+    
+    BASE_W, BASE_H = 297, 53
+    BASE_FONT = 18
+
     if is_fullscreen:
-        button_width = int(297 * 1.3)
-        button_height = int(53 * 1.3)
-        main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', int(18 * 1.3))
-        
+        scale = 1.3 
         gap = 35
-        total_height = button_height * 4 + gap * 3
-        start_y = (h - total_height) // 2
-        button_y_positions = {
-            'new_game': start_y,
-            'load_game': start_y + button_height + gap,
-            'settings': start_y + (button_height + gap) * 2,
-            'quit': start_y + (button_height + gap) * 3
-        }
     else:
-        button_width = 297
-        button_height = 53
-        main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', 18)
-        button_y_positions = {
-            'new_game': 170,
-            'load_game': 255,
-            'settings': 345,
-            'quit': 430
-        }
+        scale = 0.85 
+        gap = 25
+    
+    button_width = int(BASE_W * scale)
+    button_height = int(BASE_H * scale)
+    main_font = pygame.font.Font('./fonts/Inter_18pt-Medium.ttf', int(BASE_FONT * scale))
+    
+    total_height = button_height * 4 + gap * 3
+    start_y = (h - total_height) // 2
+    button_y_positions = {
+        'new_game': start_y,
+        'load_game': start_y + button_height + gap,
+        'settings': start_y + (button_height + gap) * 2,
+        'quit': start_y + (button_height + gap) * 3
+    }
+
+    button_m = (w // 2) - (button_width // 2)
 
     button_m = (w // 2) - (button_width // 2)
 
