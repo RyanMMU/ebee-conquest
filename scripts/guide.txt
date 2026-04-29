@@ -1,0 +1,186 @@
+EBEE ENGINE SCRIPT GUIDE
+
+Where script go:
+    put script files in the scripts folder.
+    every python file ending in .py is loaded automatically unless its filename starts with an underscore.
+
+
+EXAMPLE:
+scripts/test.py
+scripts/malaysiabonus.py
+scripts/warmessages.py
+
+
+BASIC SCRIPT SHAPE
+
+Use onload(api) as the entry point:
+
+Example:
+        storedapi = None
+
+        def onload(api):
+            global storedapi
+            storedapi = api
+            api.subscribe("nextturn", onturn)
+
+        def onturn(payload):
+            country = payload.get("playerCountry")
+            if country:
+                storedapi.addgold(country, 25)
+
+
+Aboiut API calls:
+
+1. Scripts do not receive the full engine object
+2. Scripts only receive the safe api wrapper
+
+Available calls:
+
+api.addgold(country, amount)
+api.addpopulation(country, amount)
+api.declarewar(attacker, defender)
+api.getcountrydata(country)
+api.subscribe(event, callback)
+api.unsubscribe(event, callback)
+api.emit(event, payload)
+api.log(message)
+
+The special country names "player", "playercountry", and "self" mean the current player country.
+
+Example:
+        api.addgold("player", 50)
+        api.addpopulation("self", 100)
+
+
+EVENTS!
+
+1. Subscribe to events by name.
+2. Event names are not case sensitive.
+
+
+COMMON EVENTS!:
+                nextturn
+                wardeclared
+                troopsrecruited
+                focusstarted
+                focuscompleted
+                worldloaded
+                provincecontrolchanged
+                combatresolved
+                moveordercreated
+                moveorderfinished
+
+eXAMPLE:
+        def onload(api):
+            api.subscribe("wardeclared", onwar)
+
+
+        def onwar(payload):
+            attacker = payload.get("attacker")
+            defender = payload.get("defender")
+            print("war:", attacker, defender)
+
+
+Example of what
+is contained in payload:
+                nextturn:
+
+                {
+                    "turn": 2,
+                    "playerCountry": "Malaysia",
+                    "playerGold": 1250,
+                    "playerPopulation": 2600
+                }
+
+                wardeclared:
+
+                {
+                    "attacker": "Malaysia",
+                    "defender": "Thailand",
+                    "turn": 3
+                }
+
+                troopsrecruited:
+
+                {
+                    "country": "Malaysia",
+                    "provinceId": "Malaya_1",
+                    "amount": 100,
+                    "turn": 4
+                }
+
+                focuscompleted:
+
+                {
+                    "country": "Malaysia",
+                    "focusId": "industrial_plan",
+                    "turn": 5,
+                    "appliedEffects": []
+                }
+
+
+RULES!
+
+1. Scripts run with restricted builtins.
+2. Normal imports are not available.
+3. Scripts should not try to read files, open sockets, start processes, or access the full engine.
+4. If a script throws errors repeatedly, the script manager disables it so the game does not crash.
+5. USE api.log(message) for debugging!
+
+
+GUI AND OVERLAYS
+
+the current script api does not support adding gui overlays or directly changing existing ui.
+
+this is intentional because scripts only talk to the engine through a controlled wrapper.
+right now scripts can change gameplay data and react to engine events.
+
+to support overlays later, add a safe gui wrapper instead of exposing pygame or the runtime ui directly.
+
+recommended future shape:
+
+api.addoverlay(name, callback)
+api.removeoverlay(name)
+api.notify(title, message)
+
+the overlay callback should receive safe drawing data only, not the full pygame screen or full runtime object.
+
+
+naming style
+
+prefer one-word names for api calls and script helper names.
+
+good:
+
+addgold
+onturn
+storedapi
+
+avoid:
+
+add_gold
+addGold
+on_turn
+
+
+reload and unload
+
+the script manager supports load, reload, unload, enable, and disable internally.
+runtime currently loads all scripts from the scripts folder at startup.
+
+if you add developer console commands later, those commands can call:
+
+scriptmanager.load("myscript")
+scriptmanager.reload("myscript")
+scriptmanager.unload("myscript")
+scriptmanager.status()
+
+
+tips
+
+keep scripts small.
+subscribe in onload.
+store the api object if callbacks need it later.
+check payload keys with .get().
+do not assume every event has every field.
+prefer api.getcountrydata(country) for read-only country info.

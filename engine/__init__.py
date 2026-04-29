@@ -8,8 +8,9 @@ if str(_project_root) not in sys.path:
 from engine.api import EbeeEngine
 from engine.events import EngineEventType, EventBus
 from engine.npc import NpcDirector
+from engine.scriptloader import ScriptAPI, ScriptManager
 
-__all__ = ["EbeeEngine", "EngineEventType", "EventBus", "NpcDirector"]
+__all__ = ["EbeeEngine", "EngineEventType", "EventBus", "NpcDirector", "ScriptAPI", "ScriptManager"]
 
 
 

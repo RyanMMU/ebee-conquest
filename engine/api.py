@@ -61,6 +61,10 @@ class EbeeEngine:
         self.countriesatwarset = set()
         self.warpairset = set()
         self.npcdirector = None
+        self.scriptmanager = None
+        self.scriptgetresource = None
+        self.scriptsetresource = None
+        self.scripteconomy = {}
 
 
     def on(self, eventname, callback):
@@ -82,6 +86,33 @@ class EbeeEngine:
     def unsubscribe(self, eventname, callback):
         return self.eventbus.unsubscribe(eventname, callback) # same thing
 
+
+
+    def initscripts(self, folder="scripts", autoload=True, maxcrashes=3):
+        from .scriptloader import ScriptManager
+
+        self.scriptmanager = ScriptManager(self, folder=folder, maxcrashes=maxcrashes)
+        if autoload:
+            self.scriptmanager.loadall()
+        return self.scriptmanager
+
+
+    def bindscripts(self, getresource=None, setresource=None):
+        self.scriptgetresource = getresource
+        self.scriptsetresource = setresource
+
+
+    def syncscripts(self, playercountry=None, turn=None, wars=None, warpairs=None, npcdirector=None):
+        if playercountry is not None:
+            self.playercountry = playercountry
+        if turn is not None:
+            self.currentturnnumber = max(1, int(turn))
+        if wars is not None:
+            self.countriesatwarset = set(country for country in wars if country)
+        if warpairs is not None:
+            self.warpairset = set(pair for pair in warpairs if pair)
+        if npcdirector is not None:
+            self.npcdirector = npcdirector
 
 
 
@@ -218,6 +249,8 @@ class EbeeEngine:
 
 
     def declarewar(self, attackercountry, defendercountry):
+        attackercountry = self.scriptcountry(attackercountry)
+        defendercountry = self.scriptcountry(defendercountry)
         if not attackercountry or not defendercountry or attackercountry == defendercountry:
             return None
 
@@ -238,6 +271,79 @@ class EbeeEngine:
         }
         self.emit(EngineEventType.WARDECLARED, payload)
         return payload
+
+    def addgold(self, countryname, amount):
+        return self.addcountryresource(countryname, "gold", amount)
+
+    def addpopulation(self, countryname, amount):
+        return self.addcountryresource(countryname, "population", amount)
+
+    def getgold(self, countryname):
+        return self.getcountryresource(countryname, "gold")
+
+    def getpopulation(self, countryname):
+        return self.getcountryresource(countryname, "population")
+
+    def setgold(self, countryname, amount):
+        return self.setcountryresource(countryname, "gold", amount)
+
+    def setpopulation(self, countryname, amount):
+        return self.setcountryresource(countryname, "population", amount)
+
+    def addcountryresource(self, countryname, resourcename, amount):
+        currentvalue = self.getcountryresource(countryname, resourcename)
+        return self.setcountryresource(countryname, resourcename, currentvalue + int(amount))
+
+    def getcountryresource(self, countryname, resourcename):
+        country = self.scriptcountry(countryname)
+        if not country:
+            return 0
+
+        key = str(resourcename)
+        if self.scriptgetresource is not None:
+            value = self.scriptgetresource(country, key)
+            if value is not None:
+                return max(0, int(value))
+
+        if self.npcdirector is not None:
+            economystate = getattr(self.npcdirector, "countryeconomy", {}).get(country)
+            if economystate is not None and key in economystate:
+                return max(0, int(economystate.get(key, 0)))
+
+        return max(0, int(self.scripteconomy.get(country, {}).get(key, 0)))
+
+    def setcountryresource(self, countryname, resourcename, amount):
+        country = self.scriptcountry(countryname)
+        if not country:
+            return 0
+
+        key = str(resourcename)
+        value = max(0, int(amount))
+
+        if self.scriptsetresource is not None:
+            handled = self.scriptsetresource(country, key, value)
+            if handled:
+                return value
+
+        if self.npcdirector is not None:
+            economystate = getattr(self.npcdirector, "countryeconomy", {}).get(country)
+            if economystate is not None:
+                economystate[key] = value
+                return value
+
+        self.scripteconomy.setdefault(country, {})[key] = value
+        return value
+
+    def scriptcountry(self, countryname):
+        if countryname is None:
+            return self.playercountry
+
+        countrytext = str(countryname).strip()
+        if not countrytext:
+            return self.playercountry
+        if countrytext.lower() in {"player", "playercountry", "self"}:
+            return self.playercountry
+        return self._canonicalizecountry(countrytext)
 
     def setupnpc(self, playercountry=None, economyconfig=None):
         if economyconfig is None:
@@ -371,6 +477,7 @@ class EbeeEngine:
 
 
     def getcountrydata(self, countryname):
+        countryname = self.scriptcountry(countryname)
         if not countryname or not self.provincemap:
             return {}
 
@@ -398,6 +505,8 @@ class EbeeEngine:
             "ownedProvinceCount": len(ownedprovinces),
             "controlledProvinceCount": len(controlledprovinces),
             "controlledTroops": totaltroopscontrolled,
+            "gold": self.getgold(countryname),
+            "population": self.getpopulation(countryname),
             "ownedProvinceIds": sorted(province["id"] for province in ownedprovinces),
             "controlledProvinceIds": sorted(province["id"] for province in controlledprovinces),
             "ownedStateIds": stateidsowned,
