@@ -1,7 +1,7 @@
 from dataclasses import dataclass
 from typing import Any, Mapping
 
-from .focus_effects import FocusEffectContext, FocusEffectRegistry, createeffectregistry
+from .focuseffects import FocusEffectContext, FocusEffectRegistry, createeffectregistry
 
 
 @dataclass(frozen=True)

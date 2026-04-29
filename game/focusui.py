@@ -197,7 +197,7 @@ class FocusTreeView:
         if self.viewsize != viewrect.size:
             self.viewsize = viewrect.size
             self.layoutready = False
-        pygame.draw.rect(surface, (13, 17, 23), viewrect)
+        pygame.draw.rect(surface, (0, 0, 0), viewrect)
 
 
 

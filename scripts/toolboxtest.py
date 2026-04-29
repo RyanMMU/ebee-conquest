@@ -22,7 +22,7 @@ def register_toggle():
         width=36,
         height=34,
         label="<",
-        anchor="topright",
+        anchor="bottomright",
         on_click=toggle_toolbox,
     )
 
@@ -44,7 +44,7 @@ def open_toolbox():
         y=134,
         width=300,
         height=292,
-        title="Developer toolbox",
+        title="TEST TOOLBOX",
         anchor="topright",
     )
 

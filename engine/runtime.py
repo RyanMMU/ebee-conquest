@@ -12,8 +12,8 @@ ctypes.windll.user32.SetProcessDPIAware()
 #TODO - OPTIMIZATION: consider using numpy for heavy geometry calculations and data handling, especially for large maps with many provinces and complex shapes. This could significantly improve performance for operations like point-in-polygon tests, polygon transformations, and adjacency graph construction.
 #Local module
 from game.ingame_ui import InGameUI
-from game.focus_effects import FocusEffectContext
-from game.focus_loader import loadfocustreeforcountry
+from game.focuseffects import FocusEffectContext
+from game.focusloader import loadfocustreeforcountry
 from engine.console import developmentconsole, loaddevmodeflag 
 from engine.gui import (
     gui_lightencolor,

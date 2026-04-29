@@ -3,7 +3,7 @@ import os
 
 import pygame
 
-from .focus_ui import FocusTreeView
+from .focusui import FocusTreeView
 
 ctypes.windll.user32.SetProcessDPIAware()
 
