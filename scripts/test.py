@@ -21,12 +21,14 @@ def onturn(payload):
 
     newgold = storedapi.addgold(country, 25)
     storedapi.log(f"{country} received 25 gold on turn {turn}, now {newgold}")
+    storedapi.show_script_message(f"{country} received 25 gold on turn {turn}, now {newgold}")
 
 
 def onwar(payload):
     attacker = payload.get("attacker")
     defender = payload.get("defender")
     storedapi.log(f"war declared: {attacker} v {defender}")
+    storedapi.show_script_message(f"war declared: {attacker} v {defender}")
 
 
 def onfocus(payload):
@@ -35,3 +37,4 @@ def onfocus(payload):
     if country:
         storedapi.addpopulation(country, 50)
     storedapi.log(f"focus completed: {focus}")
+    storedapi.show_script_message(f"focus completed: {focus}")
