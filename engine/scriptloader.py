@@ -551,7 +551,7 @@ class ScriptManager:
                 hook(api)
 
             self.failed.pop(name, None)
-            print(f"[script:{name}] loaded", flush=True)
+            print(f"menu/scriptloader@EbeeEngine:~$ {name} loaded", flush=True)
             return name
         except Exception as error:
             self.fail(name, error, "load")
@@ -597,7 +597,7 @@ class ScriptManager:
 
         record["enabled"] = False
         self.clear(record)
-        print(f"[script:{record['name']}] disabled", flush=True)
+        print(f"menu/scriptloader@EbeeEngine:~$ {record['name']} disabled", flush=True)
         return True
 
     def get_loaded_scripts(self):
