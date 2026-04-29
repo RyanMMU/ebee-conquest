@@ -1,186 +1,294 @@
-EBEE ENGINE SCRIPT GUIDE
+EBEE CONQUEST SCRIPT GUIDE
 
-Where script go:
-    put script files in the scripts folder.
-    every python file ending in .py is loaded automatically unless its filename starts with an underscore.
+Scripts live in the scripts folder.
+Every .py file in this folder loads automatically unless the file name starts with an underscore.
 
+Examples:
 
-EXAMPLE:
 scripts/test.py
-scripts/malaysiabonus.py
-scripts/warmessages.py
+scripts/developer_toolbox.py
+scripts/malaysia_bonus.py
 
 
-BASIC SCRIPT SHAPE
+BASIC SCRIPT
 
-Use onload(api) as the entry point:
+Use onload(api) as the script entry point.
+Store api if event callbacks or UI callbacks need it later.
 
 Example:
-        storedapi = None
 
-        def onload(api):
-            global storedapi
-            storedapi = api
-            api.subscribe("nextturn", onturn)
-
-        def onturn(payload):
-            country = payload.get("playerCountry")
-            if country:
-                storedapi.addgold(country, 25)
+stored_api = None
 
 
-Aboiut API calls:
+def onload(api):
+    global stored_api
+    stored_api = api
+    api.subscribe("nextturn", on_turn)
 
-1. Scripts do not receive the full engine object
-2. Scripts only receive the safe api wrapper
 
-Available calls:
+def on_turn(payload):
+    country = payload.get("playerCountry")
+    if country:
+        stored_api.add_gold(country, 25)
+
+
+Normal Python naming is allowed.
+snake_case, camelCase, and short local helper names all work.
+Use the style that makes the script easiest to read.
+
+
+SAFE SCRIPT API
+
+Scripts do not receive the full EbeeEngine object.
+Scripts receive a controlled ScriptAPI wrapper.
+
+Gameplay calls:
+
+api.add_gold(country, amount)
+api.add_population(country, amount)
+api.add_army(province_id, amount)
+api.declare_war(attacker, defender)
+api.set_province_controller(province_id, country)
+api.set_province_owner(province_id, country)
+api.get_country_data(country)
+api.get_province_data(province_id)
+api.get_selected_country()
+api.get_selected_province_id()
+api.show_script_message(text)
+
+Event calls:
+
+api.subscribe(event_name, callback)
+api.unsubscribe(event_name, callback)
+api.emit(event_name, payload)
+api.log(message)
+
+UI calls:
+
+api.register_ui_button(...)
+api.register_ui_panel(...)
+api.unregister_ui(...)
+api.register_ui_draw_callback(...)
+api.register_ui_click_callback(...)
+
+Compatibility aliases still exist for older scripts:
 
 api.addgold(country, amount)
 api.addpopulation(country, amount)
 api.declarewar(attacker, defender)
 api.getcountrydata(country)
-api.subscribe(event, callback)
-api.unsubscribe(event, callback)
-api.emit(event, payload)
-api.log(message)
+
+
+COUNTRIES AND PROVINCES
 
 The special country names "player", "playercountry", and "self" mean the current player country.
 
 Example:
-        api.addgold("player", 50)
-        api.addpopulation("self", 100)
+
+api.add_gold("player", 1000)
+api.add_population("self", 500)
+
+get_selected_country() returns the currently targeted country if the game has one, otherwise the player country.
+get_selected_province_id() returns the currently selected province id from the main game selection.
+
+Assumption:
+The script system reads selected country and selected province from runtime state.
+If no province is selected, get_selected_province_id() returns None.
+If no player or targeted country exists, get_selected_country() returns None.
 
 
-EVENTS!
+EVENTS
 
-1. Subscribe to events by name.
-2. Event names are not case sensitive.
+Subscribe to events by name.
+Event names are not case sensitive.
 
+Common events:
 
-COMMON EVENTS!:
-                nextturn
-                wardeclared
-                troopsrecruited
-                focusstarted
-                focuscompleted
-                worldloaded
-                provincecontrolchanged
-                combatresolved
-                moveordercreated
-                moveorderfinished
+nextturn
+wardeclared
+troopsrecruited
+focusstarted
+focuscompleted
+worldloaded
+provincecontrolchanged
+combatresolved
+moveordercreated
+moveorderfinished
 
-eXAMPLE:
-        def onload(api):
-            api.subscribe("wardeclared", onwar)
+Example:
 
-
-        def onwar(payload):
-            attacker = payload.get("attacker")
-            defender = payload.get("defender")
-            print("war:", attacker, defender)
+def onload(api):
+    api.subscribe("wardeclared", on_war)
 
 
-Example of what
-is contained in payload:
-                nextturn:
-
-                {
-                    "turn": 2,
-                    "playerCountry": "Malaysia",
-                    "playerGold": 1250,
-                    "playerPopulation": 2600
-                }
-
-                wardeclared:
-
-                {
-                    "attacker": "Malaysia",
-                    "defender": "Thailand",
-                    "turn": 3
-                }
-
-                troopsrecruited:
-
-                {
-                    "country": "Malaysia",
-                    "provinceId": "Malaya_1",
-                    "amount": 100,
-                    "turn": 4
-                }
-
-                focuscompleted:
-
-                {
-                    "country": "Malaysia",
-                    "focusId": "industrial_plan",
-                    "turn": 5,
-                    "appliedEffects": []
-                }
+def on_war(payload):
+    attacker = payload.get("attacker")
+    defender = payload.get("defender")
+    print("war:", attacker, defender)
 
 
-RULES!
+Payload examples:
 
-1. Scripts run with restricted builtins.
-2. Normal imports are not available.
-3. Scripts should not try to read files, open sockets, start processes, or access the full engine.
-4. If a script throws errors repeatedly, the script manager disables it so the game does not crash.
-5. USE api.log(message) for debugging!
+nextturn:
 
+{
+    "turn": 2,
+    "playerCountry": "Malaysia",
+    "playerGold": 1250,
+    "playerPopulation": 2600
+}
 
-GUI AND OVERLAYS
+wardeclared:
 
-the current script api does not support adding gui overlays or directly changing existing ui.
+{
+    "attacker": "Malaysia",
+    "defender": "Thailand",
+    "turn": 3
+}
 
-this is intentional because scripts only talk to the engine through a controlled wrapper.
-right now scripts can change gameplay data and react to engine events.
+troopsrecruited:
 
-to support overlays later, add a safe gui wrapper instead of exposing pygame or the runtime ui directly.
+{
+    "country": "Malaysia",
+    "provinceId": "Malaya_1",
+    "amount": 100,
+    "turn": 4
+}
 
-recommended future shape:
+focuscompleted:
 
-api.addoverlay(name, callback)
-api.removeoverlay(name)
-api.notify(title, message)
-
-the overlay callback should receive safe drawing data only, not the full pygame screen or full runtime object.
-
-
-naming style
-
-prefer one-word names for api calls and script helper names.
-
-good:
-
-addgold
-onturn
-storedapi
-
-avoid:
-
-add_gold
-addGold
-on_turn
+{
+    "country": "Malaysia",
+    "focusId": "industrial_plan",
+    "turn": 5,
+    "appliedEffects": []
+}
 
 
-reload and unload
+SCRIPT UI
 
-the script manager supports load, reload, unload, enable, and disable internally.
-runtime currently loads all scripts from the scripts folder at startup.
+Script UI is separate from the main game UI.
+Scripts do not receive the pygame screen, runtime object, or InGameUI object.
+Scripts register simple UI elements through ScriptAPI, and the ScriptUIManager draws them.
 
-if you add developer console commands later, those commands can call:
+Register a panel:
+
+api.register_ui_panel(
+    "my_panel",
+    x=-320,
+    y=120,
+    width=300,
+    height=240,
+    title="My panel",
+    anchor="topright",
+)
+
+Register a button:
+
+api.register_ui_button(
+    "my_button",
+    x=-300,
+    y=166,
+    width=260,
+    height=30,
+    label="+1000 gold",
+    anchor="topright",
+    on_click=on_gold_click,
+    parent="my_panel",
+)
+
+
+def on_gold_click(payload):
+    country = api.get_selected_country()
+    if not country:
+        api.show_script_message("no selected country")
+        return
+    api.add_gold(country, 1000)
+
+
+Anchors:
+
+topleft
+topright
+bottomleft
+bottomright
+center
+
+For topright, negative x values place the element from the right edge.
+Example: x=-44, width=36 leaves an 8 pixel right margin.
+
+Unregister UI:
+
+api.unregister_ui("my_button")
+api.unregister_ui("my_panel")
+
+Unregister every UI element created by the script:
+
+api.unregister_ui()
+
+
+TOOLBOX STYLE SCRIPT
+
+See scripts/developer_toolbox.py.
+
+It creates:
+
+a small "<" button on the right side of the screen
+a developer toolbox panel
++1000 gold and -1000 gold buttons
++1000 army and -1000 army buttons
+annex province and cede province buttons
+
+Gold buttons use api.get_selected_country().
+Army buttons use api.get_selected_province_id().
+Annex and cede use the selected province and safe province ownership/controller API calls.
+
+If a country or province is missing, the script calls api.show_script_message(text) instead of crashing.
+
+
+SAFETY RULES
+
+Scripts run with restricted builtins.
+Normal imports are not available.
+Scripts should not read files, open sockets, start processes, or access full engine/runtime objects.
+If a script throws errors repeatedly, ScriptManager disables it so the game does not crash.
+Script UI callbacks are also protected. A broken button callback will not crash the game.
+
+Use api.log(message) and api.show_script_message(text) for debugging.
+
+
+RELOAD AND UNLOAD
+
+ScriptManager supports:
 
 scriptmanager.load("myscript")
 scriptmanager.reload("myscript")
 scriptmanager.unload("myscript")
 scriptmanager.status()
 
+Runtime currently loads all scripts from scripts at startup.
 
-tips
 
-keep scripts small.
-subscribe in onload.
-store the api object if callbacks need it later.
-check payload keys with .get().
-do not assume every event has every field.
-prefer api.getcountrydata(country) for read-only country info.
+ENGINE INTEGRATION POINTS
+
+ScriptManager is created in engine/runtime.py:
+
+scriptmanager = scriptengine.initscripts("scripts", autoload=True)
+
+ScriptUIManager is created inside ScriptManager:
+
+self.ui = ScriptUIManager(self)
+
+Script UI is drawn in the UI render pass in engine/runtime.py:
+
+runtimeui.draw(screen)
+scriptengine.draw_script_ui(screen)
+
+Script UI receives events in the pygame event loop in engine/runtime.py:
+
+for event in pygame.event.get():
+    if scriptengine.handle_script_ui_event(event):
+        continue
+    uiaction = runtimeui.process_event(event)
+
+This lets script UI consume clicks before the map or normal UI handles them.

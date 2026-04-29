@@ -1369,14 +1369,42 @@ def main(eventbus=None, is_fullscreen=False):
             return True
         return False
 
+    def scriptgetselectedcountry():
+        return countrymenutarget or playercountry
+
+    def scriptgetselectedprovince():
+        return selectedprovinceid
+
+    def scriptshowmessage(text):
+        message = str(text or "")
+        print(f"scriptloader@EbeeEngine:~$ {message}", flush=True)
+        #eventbus.emit(
+        #    "newspopup",
+        #    {
+        #        "title": "Script",
+        #        "description": message,
+        #        "imagekey": "placeholder",
+        #        "priority": 1,
+        #    },
+        #)
+        return message
+
     def updatescriptengine():
         scriptengine.playercountry = playercountry
         scriptengine.currentturnnumber = currentturnnumber
         scriptengine.countriesatwarset = set(countriesatwarset)
         scriptengine.warpairset = set(warpairset)
         scriptengine.npcdirector = npcdirector
+        scriptengine.selectedcountry = countrymenutarget or playercountry
+        scriptengine.selectedprovinceid = selectedprovinceid
 
-    scriptengine.bindscripts(scriptgetresource, scriptsetresource)
+    scriptengine.bindscripts(
+        scriptgetresource,
+        scriptsetresource,
+        getselectedcountry=scriptgetselectedcountry,
+        getselectedprovince=scriptgetselectedprovince,
+        showmessage=scriptshowmessage,
+    )
     updatescriptengine()
     # SCRIPT LOADING END!!! (p1)
 
@@ -2003,6 +2031,7 @@ def main(eventbus=None, is_fullscreen=False):
         )
         runtimeui.update(elapsedseconds)
         runtimeui.draw(screen)
+        scriptengine.draw_script_ui(screen)
         if developmentmode and gamephase == "play":
             drawdevfpsgraph(screen, smallfont, fpshistory)
 
@@ -2032,6 +2061,9 @@ def main(eventbus=None, is_fullscreen=False):
 
 
         for event in pygame.event.get():
+            if scriptengine.handle_script_ui_event(event):
+                continue
+
             uiaction = runtimeui.process_event(event)
 
             eventmappos = None

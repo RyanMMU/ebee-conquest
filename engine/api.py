@@ -64,7 +64,12 @@ class EbeeEngine:
         self.scriptmanager = None
         self.scriptgetresource = None
         self.scriptsetresource = None
+        self.scriptgetselectedcountry = None
+        self.scriptgetselectedprovince = None
+        self.scriptmessagehandler = None
         self.scripteconomy = {}
+        self.selectedcountry = None
+        self.selectedprovinceid = None
 
 
     def on(self, eventname, callback):
@@ -97,12 +102,31 @@ class EbeeEngine:
         return self.scriptmanager
 
 
-    def bindscripts(self, getresource=None, setresource=None):
+    def bindscripts(
+        self,
+        getresource=None,
+        setresource=None,
+        getselectedcountry=None,
+        getselectedprovince=None,
+        showmessage=None,
+    ):
         self.scriptgetresource = getresource
         self.scriptsetresource = setresource
+        self.scriptgetselectedcountry = getselectedcountry
+        self.scriptgetselectedprovince = getselectedprovince
+        self.scriptmessagehandler = showmessage
 
 
-    def syncscripts(self, playercountry=None, turn=None, wars=None, warpairs=None, npcdirector=None):
+    def syncscripts(
+        self,
+        playercountry=None,
+        turn=None,
+        wars=None,
+        warpairs=None,
+        npcdirector=None,
+        selectedcountry=None,
+        selectedprovinceid=None,
+    ):
         if playercountry is not None:
             self.playercountry = playercountry
         if turn is not None:
@@ -113,6 +137,21 @@ class EbeeEngine:
             self.warpairset = set(pair for pair in warpairs if pair)
         if npcdirector is not None:
             self.npcdirector = npcdirector
+        if selectedcountry is not None:
+            self.selectedcountry = selectedcountry
+        if selectedprovinceid is not None:
+            self.selectedprovinceid = selectedprovinceid
+
+
+    def draw_script_ui(self, surface):
+        if self.scriptmanager is not None:
+            self.scriptmanager.drawui(surface)
+
+
+    def handle_script_ui_event(self, event):
+        if self.scriptmanager is None:
+            return False
+        return self.scriptmanager.handleuievent(event)
 
 
 
@@ -275,8 +314,14 @@ class EbeeEngine:
     def addgold(self, countryname, amount):
         return self.addcountryresource(countryname, "gold", amount)
 
+    def add_gold(self, countryname, amount):
+        return self.addgold(countryname, amount)
+
     def addpopulation(self, countryname, amount):
         return self.addcountryresource(countryname, "population", amount)
+
+    def add_population(self, countryname, amount):
+        return self.addpopulation(countryname, amount)
 
     def getgold(self, countryname):
         return self.getcountryresource(countryname, "gold")
@@ -289,6 +334,65 @@ class EbeeEngine:
 
     def setpopulation(self, countryname, amount):
         return self.setcountryresource(countryname, "population", amount)
+
+    def addarmy(self, provinceid, amount):
+        return self.add_army(provinceid, amount)
+
+    def add_army(self, province_id, amount):
+        province = self.provincemap.get(str(province_id or ""))
+        if province is None:
+            return None
+
+        troopcount = max(0, int(province.get("troops", 0)) + int(amount))
+        province["troops"] = troopcount
+        if hasattr(movement, "markprovincetroopactivity"):
+            movement.markprovincetroopactivity(province, self.currentturnnumber)
+        return troopcount
+
+    def set_province_controller(self, province_id, countryname):
+        province = self.provincemap.get(str(province_id or ""))
+        country = self.scriptcountry(countryname)
+        if province is None or not country:
+            return None
+
+        countrycolor = self.countrytocolorlookup.get(country, province.get("countrycolor", (85, 85, 85)))
+        movement.setprovincecontroller(province, country, countrycolor)
+        return self.getprovincedetails(province.get("id"))
+
+    def set_province_owner(self, province_id, countryname):
+        province = self.provincemap.get(str(province_id or ""))
+        country = self.scriptcountry(countryname)
+        if province is None or not country:
+            return None
+
+        province["ownercountry"] = country
+        province["ownerCountry"] = country
+        return self.getprovincedetails(province.get("id"))
+
+    def get_selected_country(self):
+        if self.scriptgetselectedcountry is not None:
+            country = self.scriptgetselectedcountry()
+            if country:
+                return self.scriptcountry(country)
+        if self.selectedcountry:
+            return self.scriptcountry(self.selectedcountry)
+        return self.playercountry
+
+    def get_selected_province_id(self):
+        if self.scriptgetselectedprovince is not None:
+            provinceid = self.scriptgetselectedprovince()
+            if provinceid:
+                return str(provinceid)
+        if self.selectedprovinceid:
+            return str(self.selectedprovinceid)
+        return None
+
+    def show_script_message(self, text):
+        message = str(text or "")
+        if self.scriptmessagehandler is not None:
+            return self.scriptmessagehandler(message)
+        print(f"scriptloader@EbeeEngine:~$ {message}", flush=True)
+        return message
 
     def addcountryresource(self, countryname, resourcename, amount):
         currentvalue = self.getcountryresource(countryname, resourcename)
