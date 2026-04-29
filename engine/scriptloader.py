@@ -479,6 +479,8 @@ class ScriptAPI:
 
 
 class ScriptManager:
+    disabledscripts = set()
+
     def __init__(self, engine, folder="scripts", maxcrashes=3):
         self.engine = engine
         self.folder = Path(folder).resolve()
@@ -492,6 +494,8 @@ class ScriptManager:
         loaded = []
         for path in sorted(self.folder.glob("*.py")):
             if path.name.startswith("_"):
+                continue
+            if path.stem in self.disabledscripts:
                 continue
             result = self.load(path)
             if result:
@@ -515,6 +519,9 @@ class ScriptManager:
             return None
 
         name = path.stem
+        if name in self.disabledscripts:
+            return None
+
         if name in self.scripts:
             self.unload(name)
 
@@ -581,7 +588,7 @@ class ScriptManager:
         return self.load(path)
 
     def enable(self, name):
-        return self.reload(name)
+        return self.enable_script(name)
 
     def disable(self, name):
         record = self.scripts.get(str(name))
@@ -591,6 +598,56 @@ class ScriptManager:
         record["enabled"] = False
         self.clear(record)
         print(f"[script:{record['name']}] disabled", flush=True)
+        return True
+
+    def get_loaded_scripts(self):
+        self.folder.mkdir(parents=True, exist_ok=True)
+        names = {path.stem for path in self.folder.glob("*.py") if not path.name.startswith("_")}
+        names.update(self.scripts.keys())
+
+        scriptlist = []
+        for name in sorted(names):
+            record = self.scripts.get(name)
+            path = record["path"] if record is not None else self.scriptpath(name)
+            scriptlist.append(
+                {
+                    "name": name,
+                    "path": "" if path is None else str(path),
+                    "enabled": self.is_enabled(name),
+                    "loaded": record is not None and record.get("module") is not None and record.get("enabled", False),
+                    "crashes": 0 if record is None else record.get("crashes", 0),
+                    "errors": [] if record is None else list(record.get("errors", ())[-3:]),
+                }
+            )
+        return scriptlist
+
+    def is_enabled(self, script_name):
+        name = Path(str(script_name)).stem
+        if name in self.disabledscripts:
+            return False
+        record = self.scripts.get(name)
+        return record is None or record.get("enabled", False)
+
+    def enable_script(self, script_name):
+        name = Path(str(script_name)).stem
+        self.disabledscripts.discard(name)
+
+        record = self.scripts.get(name)
+        if record is None:
+            return self.scriptpath(name) is not None
+        if record.get("enabled", False) and record.get("module") is not None:
+            return True
+
+        return self.reload(name) is not None
+
+    def disable_script(self, script_name):
+        name = Path(str(script_name)).stem
+        if self.scriptpath(name) is None and name not in self.scripts:
+            return False
+
+        self.disabledscripts.add(name)
+        if name in self.scripts:
+            self.disable(name)
         return True
 
     def subscribe(self, scriptname, event, callback):

@@ -3,6 +3,7 @@ import sys
 import os
 
 from engine.runtime import main
+from game.scripts import ScriptMenuController
 
 pygame.init()
 
@@ -25,6 +26,7 @@ ease = 1
 ease2= 1
 ease3= 1
 ease4 = 1
+ease_scripts = 1
 ease_backbutton = 1
 
 
@@ -59,13 +61,14 @@ def scale_button():
     button_height = int(BASE_H * scale)
     main_font = pygame.font.Font(os.path.join(_FONTS, "Inter_18pt-Medium.ttf"), int(BASE_FONT * scale))
     
-    total_height = button_height * 4 + gap * 3
+    total_height = button_height * 5 + gap * 4
     start_y = (h - total_height) // 2
     button_y_positions = {
         'new_game': start_y,
         'load_game': start_y + button_height + gap,
-        'settings': start_y + (button_height + gap) * 2,
-        'quit': start_y + (button_height + gap) * 3
+        'scripts': start_y + (button_height + gap) * 2,
+        'settings': start_y + (button_height + gap) * 3,
+        'quit': start_y + (button_height + gap) * 4
     }
 
     button_m = (w // 2) - (button_width // 2)
@@ -99,6 +102,7 @@ def button(screen,x,y,w,h):
 
 
 clock = pygame.time.Clock()
+script_menu = ScriptMenuController()
 
 
 scale_button()
@@ -114,6 +118,12 @@ while run:
 
 
         if event.type == pygame.MOUSEBUTTONDOWN:
+            if menu == 'scripts':
+                action = script_menu.handle_event(event, mouse, screen.get_size())
+                if action == "back":
+                    menu = 'main'
+                continue
+
             if menu == 'settings':
                 vol_bar_rect = pygame.Rect(button_m, 280, button_width, 30)
                 if vol_bar_rect.collidepoint(mouse):
@@ -152,6 +162,9 @@ while run:
                     
                 elif button_m < mouse[0] < button_m+button_width and button_y_positions['settings'] < mouse[1] < button_y_positions['settings'] + button_height:
                     menu = 'settings'
+
+                elif button_m < mouse[0] < button_m + button_width and button_y_positions['scripts'] < mouse[1] < button_y_positions['scripts'] + button_height:
+                    menu = 'scripts'
 
                 elif button_m < mouse[0] < button_m + button_width and button_y_positions['quit'] < mouse[1] < button_y_positions['quit'] + button_height:
                     run = False
@@ -305,6 +318,31 @@ while run:
         screen.blit(txt5, txt5_rect)
 
 
+        y_pos = button_y_positions['scripts']
+        hover = button_m < mouse[0] < button_m + button_width and y_pos < mouse[1] < y_pos + button_height
+        new_w = int(button_width * ease_scripts)
+        new_x = button_m - (new_w - button_width) // 2
+
+        new_h = int(button_height * ease_scripts)
+
+        new_y = y_pos - (new_h - button_height) // 2
+
+        if hover:
+            expand = 1.15
+        else:
+            expand = 1
+
+        ease_scripts = lerp(ease_scripts, expand, 0.15)
+
+        if ease_scripts > 1.01:
+            glow(screen, new_x, new_y, new_w, new_h)
+        button(screen, new_x, new_y, new_w, new_h)
+
+        scripts_text = main_font.render('SCRIPTS', True, text)
+        scripts_rect = scripts_text.get_rect(center=(new_x + new_w // 2, new_y + new_h // 2))
+        screen.blit(scripts_text, scripts_rect)
+
+
 
 
 
@@ -372,6 +410,9 @@ while run:
         back_text = main_font.render('BACK', True, text)
         back_rect = back_text.get_rect(center=(new_x + new_w // 2, new_y + new_h // 2))
         screen.blit(back_text, back_rect)
+
+    if menu == 'scripts':
+        script_menu.draw(screen)
 
     pygame.display.flip()
 
