@@ -1,5 +1,5 @@
-from .events import EngineEventType
-from .movement import markprovincetroopactivity
+from ..events import EngineEventType
+from ..movement import markprovincetroopactivity
 
 
 # NPC ACTIONS

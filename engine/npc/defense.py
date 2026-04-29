@@ -1,4 +1,4 @@
-from .movement import findprovincepath, getprovincecontroller
+from ..movement import findprovincepath, getprovincecontroller
 
 # NPC DEFENSE PLANNER
 # defensive troop movement and garrison management for npc countries
