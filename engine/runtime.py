@@ -2065,6 +2065,17 @@ def main(eventbus=None, is_fullscreen=False):
                 continue
 
             uiaction = runtimeui.process_event(event)
+            if uiaction == InGameUI.actionquitgame:
+                isrunning = False
+                continue
+
+            if uiaction == InGameUI.actionpausemenu:
+                continue
+
+            if runtimeui.pausemenuopen:
+                if event.type == pygame.QUIT:
+                    isrunning = False
+                continue
 
             eventmappos = None
             if hasattr(event, "pos"):

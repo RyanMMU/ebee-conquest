@@ -108,6 +108,8 @@ class InGameUI:
     actionfrontline = "frontline"
     actiontogglefocuspanel = "togglefocuspanel"
     actionstartfocus = "startfocus"
+    actionpausemenu = "pausemenu"
+    actionquitgame = "quitgame"
 
     def __init__(self, window_size):
         self.window_size = window_size
@@ -139,6 +141,7 @@ class InGameUI:
         self._hovertext = None
         self._hovermousepos = (0, 0)
         self.focusview = FocusTreeView()
+        self.pausemenuopen = False
 
         self._flags = self._load_flags()
 
@@ -181,7 +184,8 @@ class InGameUI:
         self.topbar = Panel(pygame.Rect(0, 0, 10, 10), (0, 0, 0))
         self.rightbar = Panel(pygame.Rect(0, 0, 10, 10), (0, 0, 0))
         self.bottombar = Panel(pygame.Rect(0, 0, 10, 10), (29, 29, 29))
-
+        self.pause_menu = pygame.Rect(0,0,10,10)
+        self.quit_menu = pygame.Rect(0,0,10,10)
         self.map_rect = pygame.Rect(0, 0, 10, 10)
         self.applylayout()
 
@@ -277,6 +281,12 @@ class InGameUI:
         self._split_rect = pygame.Rect(content_x, btn_y, btn_w, btn_h)
         self._merge_rect = pygame.Rect(content_x + btn_w + 10, btn_y, btn_w, btn_h)
         self._frontline_rect = pygame.Rect(content_x + (btn_w + 10) * 2, btn_y, btn_w, btn_h)
+        menu_w = min(320, max(220, window_width - 80))
+        menu_h = 170
+        menu_x = max(0, (window_width - menu_w) // 2)
+        menu_y = max(0, (window_height - menu_h) // 2)
+        self._pausemenu_rect = pygame.Rect(menu_x, menu_y, menu_w, menu_h)
+        self._pausequit_rect = pygame.Rect(menu_x + (menu_w - 150) // 2, menu_y + menu_h - 52, 150, 40)
 
     def setwindowsize(self, window_size):
         self.window_size = window_size
@@ -344,7 +354,20 @@ class InGameUI:
         # retained for runtime compatibility
         return
 
+
+
     def process_event(self, event):
+
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            self.pausemenuopen = not self.pausemenuopen
+            return self.actionpausemenu
+
+        if self.pausemenuopen:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if self._pausequit_rect.collidepoint(event.pos):
+                    return self.actionquitgame
+            return None
+        
         if self.focusview.isopen:
             return self.focusview.handleevent(event)
 
@@ -455,7 +478,11 @@ class InGameUI:
             if self.pendingcountry:
                 selected = self.font.render(f"Selected: {self.pendingcountry}", True, (230, 230, 230))
                 surface.blit(selected, (self._choose_rect.x, self._choose_rect.y - 22))
+
+            if self.pausemenuopen:
+                self._draw_pausemenu(surface)
             return
+            
 
         # full UI chrome (play)
         if self.leftbar.rect.width:
@@ -573,12 +600,18 @@ class InGameUI:
 
         if self.focusview.isopen:
             self.focusview.draw(surface, self.title_font, self.font, mouse)
+            if self.pausemenuopen:
+                self._draw_pausemenu(surface)
             return
 
-        # Right panel content (seamless integration)
+
         selected_tab = self.bottom_buttons.selected
         if not self.rightbar.rect.width:
+            if self.pausemenuopen:
+                self._draw_pausemenu(surface)
             return
+                
+       
 
         content_rect = self.rightbar.rect.inflate(-24, -24)
         content_rect.topleft = (self.rightbar.rect.x + 12, self.rightbar.rect.y + 12)
@@ -670,3 +703,30 @@ class InGameUI:
                 draw_btn(self._split_rect, split_enabled, "split")
                 draw_btn(self._merge_rect, merge_enabled, "merge")
                 draw_btn(self._frontline_rect, True, "CANCEL" if self._frontlineplacementmode else "frontline")
+
+           
+            if self.pausemenuopen:
+                self._draw_pausemenu(surface)
+    
+        elif self.pausemenuopen:
+            self._draw_pausemenu(surface)
+
+
+    def _draw_pausemenu(self, surface: pygame.Surface):
+        overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 150))
+        surface.blit(overlay, (0, 0))
+
+        pygame.draw.rect(surface, (28, 28, 28), self._pausemenu_rect, border_radius=4)
+        pygame.draw.rect(surface, (25, 25, 25), self._pausemenu_rect, 1, border_radius=4)
+
+        title = self.title_font.render("PAUSED", True, (230, 230, 230))
+        surface.blit(title, title.get_rect(center=(self._pausemenu_rect.centerx, self._pausemenu_rect.y + 34)))
+
+        info = self.font.render("Press ESC to resume", True, (200, 200, 200))
+        surface.blit(info, info.get_rect(center=(self._pausemenu_rect.centerx, self._pausemenu_rect.y + 72)))
+
+        pygame.draw.rect(surface, (180, 60, 60), self._pausequit_rect)
+        pygame.draw.rect(surface, (25, 25, 25), self._pausequit_rect, 1)
+        quit_label = self.font.render("QUIT GAME", True, (255, 255, 255))
+        surface.blit(quit_label, quit_label.get_rect(center=self._pausequit_rect.center))

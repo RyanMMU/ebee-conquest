@@ -7,14 +7,34 @@ from game.scripts import ScriptMenuController
 
 pygame.init()
 
+
+
+
+import shutil
+
+def remove_cache():
+    targets = [
+        os.path.join(_ROOT, '.ebee_super_optimization'),
+        os.path.join(_ROOT, 'map', '.ebee_super_optimization')
+    ]
+    for path in targets:
+        try:
+            if os.path.exists(path):
+                shutil.rmtree(path)
+                print(f'Deleted {path}')
+        except Exception as e:
+            print(f'Error deleting {path}: {e}')
+
+    
+
 def lerp(start, end, t):
     return start + (end - start) * t
 
 WIDTH,HEIGHT = 1280,720
 
 _ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
-_FONTS = os.path.join(_ROOT, "fonts")
-_IMAGES = os.path.join(_ROOT, "images")
+_FONTS = os.path.join(_ROOT, 'fonts')
+_IMAGES = os.path.join(_ROOT, 'images')
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
@@ -28,6 +48,7 @@ ease3= 1
 ease4 = 1
 ease_scripts = 1
 ease_backbutton = 1
+ease_removecache = 1
 
 
 
@@ -132,6 +153,8 @@ while run:
                     volume = max(0, min(100, volume))
                     pygame.mixer.music.set_volume(volume / 100)
 
+                if button_m < mouse[0] < button_m + button_width and 530 < mouse[1] < 583:
+                    remove_cache() 
 
 
 
@@ -410,6 +433,26 @@ while run:
         back_text = main_font.render('BACK', True, text)
         back_rect = back_text.get_rect(center=(new_x + new_w // 2, new_y + new_h // 2))
         screen.blit(back_text, back_rect)
+
+        hover_cache = button_m < mouse[0] < button_m + button_width and 530 < mouse[1] < 583
+        new_w = int(button_width * ease_removecache)
+        new_x = button_m - (new_w - button_width) // 2
+        new_h = int(button_height * ease_removecache)
+        new_y = 530 - (new_h - button_height) // 2
+
+        if hover_cache:
+            expand = 1.15
+        else:
+            expand = 1
+        ease_removecache = lerp(ease_removecache, expand, 0.15)
+
+        if ease_removecache > 1.01:
+            glow(screen, new_x, new_y, new_w, new_h)
+        button(screen, new_x, new_y, new_w, new_h)
+
+        cache_text = main_font.render('REMOVE CACHE', True, text)
+        cache_rect = cache_text.get_rect(center=(new_x + new_w // 2, new_y + new_h // 2))
+        screen.blit(cache_text, cache_rect)
 
     if menu == 'scripts':
         script_menu.draw(screen)
