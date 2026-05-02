@@ -73,6 +73,11 @@ def load_flags():
     # step 5: give back all loaded flags
     return flags
 
+def get_text_color(bg):
+    r, g, b = bg
+    brightness = (r*0.299 + g*0.587 + b*0.114)
+    return (0,0,0) if brightness > 186 else (255,255,255)
+
 
 def gui_gettroopbadgerect(centerposition, troopcount, fontobject):
     layoutkey = (id(fontobject), str(troopcount))
