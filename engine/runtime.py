@@ -1721,6 +1721,7 @@ def main(eventbus=None, is_fullscreen=False):
         # badge pass now runs only when needed and only on playable provinces
         
         if gamephase == "play" and showtroopbadges:
+            troopbadgelist_raw = ()
             for copyshift in copyshiftlist:
                 drawcamerax = camerax + copyshift
                 for provinceid, province in playableprovincemap.items():
