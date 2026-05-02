@@ -552,7 +552,9 @@ class InGameUI:
             country_key = str(country_name or "").strip().lower().replace(" ", "_").replace("-", "_")
             flag_img = self._flags.get(country_key) if country_key else None
 
-            label = self.font.render(str(troops), True, (255, 255, 255))
+            background = entry.get("backgroundcolor", (0, 0, 0))
+            text_color = _badge_text_color(background)
+            label = self.font.render(str(troops), True, text_color)
             pad_x, pad_y = 6, 4
             spacing = 4
             content_w = label.get_width() + (flag_img.get_width() + spacing if flag_img else 0)
