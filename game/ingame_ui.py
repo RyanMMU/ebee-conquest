@@ -7,6 +7,19 @@ from .focus_ui import FocusTreeView
 
 ctypes.windll.user32.SetProcessDPIAware()
 
+def _badge_text_color(backgroundcolor):
+    r, g, b = (backgroundcolor + (0, 0, 0))[:3] if isinstance(backgroundcolor, tuple) else (0, 0, 0)
+
+    yellowish = r >= 200 and g >= 180 and b <= 90
+    orangish = r >= 200 and 100 <= g <= 190 and b <= 90
+
+    if yellowish or orangish:
+        return (0, 0, 0)
+
+    brightness = (r * 0.299 + g * 0.587 + b * 0.114)
+    return (0, 0, 0) if brightness > 186 else (255, 255, 255)
+
+
 
 class Panel:
     def __init__(self, rect: pygame.Rect, color=(40, 40, 40)):
