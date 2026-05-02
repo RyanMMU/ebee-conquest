@@ -1742,7 +1742,7 @@ def main(eventbus=None, is_fullscreen=False):
                         badgebackground = (214, 194, 64)
                         badgeborder = (255, 238, 132)
 
-                    troopbadgelist.append(
+                    troopbadgelist_raw.append(
                         {
                             "center": provincerectanglescreen.center,
                             "troops": province["troops"],
