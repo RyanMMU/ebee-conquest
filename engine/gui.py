@@ -923,9 +923,15 @@ def gui_drawtroopcountbadge(
     country_key = str(country_name or "").strip().lower().replace(" ", "_").replace("-", "_")
 
     # step 3: render troop number text
-    text_color = get_text_color(backgroundcolor)
-    text_surf = fontobject.render(str(troopcount), True, text_color)
+    if backgroundcolor in [(214, 194, 64), (214, 122, 36)]:
+        text_color = (0, 0, 0)
+    else:
+        r, g, b = backgroundcolor
+        brightness = (r * 0.299 + g * 0.587 + b * 0.114)
+        text_color = (0, 0, 0) if brightness > 186 else (255, 255, 255)
 
+    text_surf = fontobject.render(str(troopcount), True, text_color)
+    
     # step 4: get matching mini flag if it exists
     flag_img = flags.get(country_key) if flags and country_key else None
 
