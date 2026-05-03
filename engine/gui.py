@@ -129,6 +129,8 @@ def gui_gethoverlabelsurface(fontobject, state):
     country = state.get("country", "unknown")
     terrain = state.get("terrain", "unknown")
     province_count = state.get("province_count", "unknown")
+    
+    vp = state.get("victory_points", 0)
 
     lines = (
         f"State: {name}",
@@ -138,6 +140,9 @@ def gui_gethoverlabelsurface(fontobject, state):
         f"Terrain Type: {terrain}",
         f"Number of states: {province_count}",
     )
+    
+    if vp > 0:
+    label_lines.append(f"Victory Points: {vp}")
     cachekey = (id(fontobject), lines)
     cachedsurface = hoverlabelcache.get(cachekey)
     if cachedsurface is not None:
