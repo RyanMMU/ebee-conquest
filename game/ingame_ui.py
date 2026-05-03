@@ -583,6 +583,8 @@ class InGameUI:
                 country = self._hovertext.get("country", "unknown")
                 terrain = self._hovertext.get("terrain", "unknown")
                 province_count = self._hovertext.get("province_count", "unknown")
+                vp = self._hovertext.get("victory_points", 0)
+                
                 tooltip_lines = [
                     f"State: {name}",
                     f"Province: {provinceid}",
@@ -591,6 +593,10 @@ class InGameUI:
                     f"Terrain Type: {terrain}",
                     f"Number of states: {province_count}",
                 ]
+                
+                if vp > 0:
+                    tooltip_lines.append(f"Victory Points: {vp}")
+                
             else:
                 tooltip_lines = [str(self._hovertext)]
 
