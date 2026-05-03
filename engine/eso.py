@@ -256,6 +256,7 @@ def buildstatedatalookup(countriesfull):
                 "capital": statedata.get("capital"),
                 "population": statedata.get("population"),
                 "terrain": statedata.get("terrain"),
+                "victory_points": statedata.get("victory_points", 0),
                 "province_count": len(states),
             }
     return lookup

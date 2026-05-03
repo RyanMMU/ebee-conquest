@@ -73,6 +73,11 @@ def load_flags():
     # step 5: give back all loaded flags
     return flags
 
+def get_text_color(bg):
+    r, g, b = bg
+    brightness = (r*0.299 + g*0.587 + b*0.114)
+    return (0,0,0) if brightness > 186 else (255,255,255)
+
 
 def gui_gettroopbadgerect(centerposition, troopcount, fontobject):
     layoutkey = (id(fontobject), str(troopcount))
@@ -124,16 +129,21 @@ def gui_gethoverlabelsurface(fontobject, state):
     country = state.get("country", "unknown")
     terrain = state.get("terrain", "unknown")
     province_count = state.get("province_count", "unknown")
+    vp = state.get("victory_points", 0)
 
-    lines = (
+    lines = [
         f"State: {name}",
         f"Province: {provinceid}",
         f"Population: {population}",
         f"Country: {country}",
         f"Terrain Type: {terrain}",
         f"Number of states: {province_count}",
-    )
-    cachekey = (id(fontobject), lines)
+    ]
+
+    if vp > 0:
+        lines.append(f"Victory Points: {vp}")
+
+    cachekey = (id(fontobject), tuple(lines))
     cachedsurface = hoverlabelcache.get(cachekey)
     if cachedsurface is not None:
         return cachedsurface
@@ -142,6 +152,7 @@ def gui_gethoverlabelsurface(fontobject, state):
     textsurfaces = [fontobject.render(line, True, (255, 255, 255)) for line in lines]
     width = max(text.get_width() for text in textsurfaces) + padding * 2
     height = sum(text.get_height() for text in textsurfaces) + padding * 2
+
     renderedsurface = pygame.Surface((width, height), pygame.SRCALPHA)
     pygame.draw.rect(renderedsurface, (20, 20, 20), renderedsurface.get_rect())
     pygame.draw.rect(renderedsurface, (255, 200, 0), renderedsurface.get_rect(), 2)
@@ -153,7 +164,6 @@ def gui_gethoverlabelsurface(fontobject, state):
 
     hoverlabelcache[cachekey] = renderedsurface
     return renderedsurface
-
 
 def gui_buildcountrylabelanchors(stateshapelist, gamephase):
     countryanchorlookup = {}
@@ -918,8 +928,15 @@ def gui_drawtroopcountbadge(
     country_key = str(country_name or "").strip().lower().replace(" ", "_").replace("-", "_")
 
     # step 3: render troop number text
-    text_surf = fontobject.render(str(troopcount), True, (255, 255, 255))
+    if backgroundcolor in [(214, 194, 64), (214, 122, 36)]:
+        text_color = (0, 0, 0)
+    else:
+        r, g, b = backgroundcolor
+        brightness = (r * 0.299 + g * 0.587 + b * 0.114)
+        text_color = (0, 0, 0) if brightness > 186 else (255, 255, 255)
 
+    text_surf = fontobject.render(str(troopcount), True, text_color)
+    
     # step 4: get matching mini flag if it exists
     flag_img = flags.get(country_key) if flags and country_key else None
 

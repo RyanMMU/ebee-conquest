@@ -627,6 +627,7 @@ def groupsubdivisionsbystate(provincelist, statelist):
         if parentstateid not in stateidset:
             continue
         province["parentid"] = parentstateid
+        province["victory_points"] = state.get("victory_points", 0)
         groupedlookup[parentstateid].append(province)
         #print(province["id"], "parent", parentstateid)
     #print(groupedlookup)
@@ -1721,45 +1722,84 @@ def main(eventbus=None, is_fullscreen=False):
         # badge pass now runs only when needed and only on playable provinces
         
         if gamephase == "play" and showtroopbadges:
-            for copyshift in copyshiftlist:
-                drawcamerax = camerax + copyshift
-                for provinceid, province in playableprovincemap.items():
-                    if int(province.get("troops", 0)) <= 0:
-                        continue
 
-                    provincerectanglescreen = getscreenrectangle(province["rectangle"], zoomvalue, drawcamerax, cameray)
-                    if not provincerectanglescreen.colliderect(screenrectangle):
-                        continue
+           troopbadgelist_raw = []
+           troopbadgehitlist = []
 
-                    iscombatprovince = provinceid in combatprovinceidset
-                    ismovingprovince = provinceid in movingprovinceidset
-                    badgebackground = (0, 0, 0)
-                    badgeborder = (165, 165, 165)
-                    if iscombatprovince:
-                        badgebackground = (214, 122, 36)
-                        badgeborder = (255, 188, 92)
-                    elif ismovingprovince:
-                        badgebackground = (214, 194, 64)
-                        badgeborder = (255, 238, 132)
+           for copyshift in copyshiftlist:
+               drawcamerax = camerax + copyshift
 
-                    troopbadgelist.append(
-                        {
-                            "center": provincerectanglescreen.center,
-                            "troops": province["troops"],
-                            "country": getprovincecontroller(province), # this is for country flags
-                            "backgroundcolor": badgebackground,
-                            "bordercolor": badgeborder,
-                        }
-                    )
+               for provinceid, province in playableprovincemap.items():
+                   if int(province.get("troops", 0)) <= 0:
+                       continue
 
-                    # for quick search: "troop badge hitbox"
-                    troopbadgerect = gui_gettroopbadgerect(provincerectanglescreen.center, province["troops"], troopbadgefont)
-                    troopbadgehitlist.append(
-                        {
-                            "provinceid": provinceid,
-                            "rect": troopbadgerect,
-                        }
-                    )
+                   provincerectanglescreen = getscreenrectangle(
+                       province["rectangle"],
+                       zoomvalue,
+                       drawcamerax,
+                       cameray
+                   )
+
+                   if not provincerectanglescreen.colliderect(screenrectangle):
+                       continue
+
+                   iscombatprovince = provinceid in combatprovinceidset
+                   ismovingprovince = provinceid in movingprovinceidset
+
+                   badgebackground = (0, 0, 0)
+                   badgeborder = (165, 165, 165)
+
+                   if iscombatprovince:
+                       badgebackground = (214, 122, 36)
+                       badgeborder = (255, 188, 92)
+                   elif ismovingprovince:
+                       badgebackground = (214, 194, 64)
+                       badgeborder = (255, 238, 132)
+
+                   troopbadgelist_raw.append({
+                       "center": provincerectanglescreen.center,
+                       "troops": province["troops"],
+                       "country": getprovincecontroller(province),
+                       "backgroundcolor": badgebackground,
+                       "bordercolor": badgeborder,
+                   })
+
+                   troopbadgerect = gui_gettroopbadgerect(
+                       provincerectanglescreen.center,
+                       province["troops"],
+                       troopbadgefont
+                   )
+
+                   troopbadgehitlist.append({
+                       "provinceid": provinceid,
+                       "rect": troopbadgerect,
+                   })
+
+
+           merged = []
+           MERGE_DISTANCE = 60 / zoomvalue
+
+           for entry in troopbadgelist_raw:
+              ex, ey = entry["center"]
+              added = False
+
+              for group in merged:
+                  gx, gy = group["center"]
+
+                  dx = ex - gx
+                  dy = ey - gy
+                  dist = (dx * dx + dy * dy) ** 0.5
+
+                  if dist < MERGE_DISTANCE:
+                      group["troops"] += entry["troops"]
+                      added = True
+                      break
+
+              if not added:
+                  merged.append(entry)
+
+           troopbadgelist = merged
+           
 
         if gamephase == "play" and movementorderlist:
             gui_drawmovementorderpaths(

@@ -7,6 +7,19 @@ from .focus_ui import FocusTreeView
 
 ctypes.windll.user32.SetProcessDPIAware()
 
+def _badge_text_color(backgroundcolor):
+    r, g, b = (backgroundcolor + (0, 0, 0))[:3] if isinstance(backgroundcolor, tuple) else (0, 0, 0)
+
+    yellowish = r >= 200 and g >= 180 and b <= 90
+    orangish = r >= 200 and 100 <= g <= 190 and b <= 90
+
+    if yellowish or orangish:
+        return (0, 0, 0)
+
+    brightness = (r * 0.299 + g * 0.587 + b * 0.114)
+    return (0, 0, 0) if brightness > 186 else (255, 255, 255)
+
+
 
 class Panel:
     def __init__(self, rect: pygame.Rect, color=(40, 40, 40)):
@@ -539,7 +552,9 @@ class InGameUI:
             country_key = str(country_name or "").strip().lower().replace(" ", "_").replace("-", "_")
             flag_img = self._flags.get(country_key) if country_key else None
 
-            label = self.font.render(str(troops), True, (255, 255, 255))
+            background = entry.get("backgroundcolor", (0, 0, 0))
+            text_color = _badge_text_color(background)
+            label = self.font.render(str(troops), True, text_color)
             pad_x, pad_y = 6, 4
             spacing = 4
             content_w = label.get_width() + (flag_img.get_width() + spacing if flag_img else 0)
@@ -568,6 +583,8 @@ class InGameUI:
                 country = self._hovertext.get("country", "unknown")
                 terrain = self._hovertext.get("terrain", "unknown")
                 province_count = self._hovertext.get("province_count", "unknown")
+                vp = self._hovertext.get("victory_points", 0)
+                
                 tooltip_lines = [
                     f"State: {name}",
                     f"Province: {provinceid}",
@@ -576,6 +593,10 @@ class InGameUI:
                     f"Terrain Type: {terrain}",
                     f"Number of states: {province_count}",
                 ]
+                
+                if vp > 0:
+                    tooltip_lines.append(f"Victory Points: {vp}")
+                
             else:
                 tooltip_lines = [str(self._hovertext)]
 
