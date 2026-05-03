@@ -2351,7 +2351,7 @@ def main(eventbus=None, is_fullscreen=False):
                                     "provinceId": selectedprovinceid,
                                     "stateId": selectedprovince.get("parentid"),
                                     "country": getprovincecontroller(selectedprovince),
-                                    "victory_points": province.get("victory_points", 0),
+                                    "victory_points": province.get("victory_points", 0)
                                 },
                             )
                     else:
@@ -2378,7 +2378,7 @@ def main(eventbus=None, is_fullscreen=False):
                                 "provinceId": selectedprovinceid,
                                 "stateId": selectedprovince.get("parentid"),
                                 "country": getprovincecontroller(selectedprovince),
-                                "victory_points": province.get("victory_points", 0),
+                                "victory_points": province.get("victory_points", 0)
                             },
                         )
                         dragselectstart = None
@@ -2399,7 +2399,7 @@ def main(eventbus=None, is_fullscreen=False):
                                 "provinceId": selectedprovinceid,
                                 "stateId": selectedprovince.get("parentid"),
                                 "country": getprovincecontroller(selectedprovince),
-                                "victory_points": province.get("victory_points", 0),
+                                "victory_points": province.get("victory_points", 0)
                             },
                         )
                         dragselectstart = None
@@ -2431,7 +2431,7 @@ def main(eventbus=None, is_fullscreen=False):
                                 "provinceId": selectedprovinceid,
                                 "stateId": hoveredstateprovince.get("parentid"),
                                 "country": getprovincecontroller(hoveredstateprovince),
-                                "victory_points": province.get("victory_points", 0),
+                                "victory_points": province.get("victory_points", 0)
                             },
                         )
 
