@@ -142,9 +142,10 @@ def gui_gethoverlabelsurface(fontobject, state):
     )
     
     if vp > 0:
-    label_lines.append(f"Victory Points: {vp}")
-    cachekey = (id(fontobject), lines)
-    cachedsurface = hoverlabelcache.get(cachekey)
+        label_lines.append(f"Victory Points: {vp}") 
+        
+        cachekey = (id(fontobject), lines)
+        cachedsurface = hoverlabelcache.get(cachekey)
     if cachedsurface is not None:
         return cachedsurface
 

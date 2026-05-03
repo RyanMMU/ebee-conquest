@@ -2428,6 +2428,7 @@ def main(eventbus=None, is_fullscreen=False):
                                 "provinceId": selectedprovinceid,
                                 "stateId": hoveredstateprovince.get("parentid"),
                                 "country": getprovincecontroller(hoveredstateprovince),
+                                "victory_points": province.get("victory_points", 0),
                             },
                         )
 
