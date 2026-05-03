@@ -6,17 +6,20 @@
             "Malaya": {
                 "capital": "Kuala_Lumpur",
                 "population": 25000000,
-                "terrain": "Urban"
+                "terrain": "Urban",
+                "victory_points": 10
             },
             "Sabah": {
                 "capital": "Kota_Kinabalu",
                 "population": 4000000,
-                "terrain": "Forest"
+                "terrain": "Forest",
+                "victory_points": 5
             },
             "Sarawak": {
                 "capital": "Kuching",
                 "population": 3000000,
-                "terrain": "Forest"
+                "terrain": "Forest",
+                "victory_points": 5
             }
         }
     },
@@ -26,7 +29,8 @@
             "Singapore": {
                 "capital": "Singapore",
                 "population": 6000000,
-                "terrain": "Urban"
+                "terrain": "Urban",
+                "victory_points": 15
             }
         }
     },
@@ -36,22 +40,26 @@
             "Lanna": {
                 "capital": "Chiang_Mai",
                 "population": 6000000,
-                "terrain": "Mountain"
+                "terrain": "Mountain",
+                "victory_points": 5
             },
             "Siam": {
                 "capital": "Bangkok",
                 "population": 10000000,
-                "terrain": "Urban"
+                "terrain": "Urban",
+                "victory_points": 15
             },
             "Isan": {
                 "capital": "Isan",
                 "population": 8000000,
-                "terrain": "Plains"
+                "terrain": "Plains",
+                "victory_points": 5
             },
             "Northern_Malay": {
                 "capital": "Koh_Samui",
                 "population": 2000000,
-                "terrain": "Coastal"
+                "terrain": "Coastal",
+                "victory_points": 3
             }
         }
     },
@@ -61,42 +69,50 @@
             "Java": {
                 "capital": "Jakarta",
                 "population": 150000000,
-                "terrain": "Urban"
+                "terrain": "Urban",
+                "victory_points": 20
             },
             "Sumatra": {
                 "capital": "Medan",
                 "population": 50000000,
-                "terrain": "Forest"
+                "terrain": "Forest",
+                "victory_points": 8
             },
             "Interior_Borneo": {
                 "capital": "Borneo",
                 "population": 10000000,
-                "terrain": "Forest"
+                "terrain": "Forest",
+                "victory_points": 5
             },
             "Sulawesi": {
                 "capital": "Makassar",
                 "population": 20000000,
-                "terrain": "Mountain"
+                "terrain": "Mountain",
+                "victory_points": 6
             },
             "Kalimantan": {
                 "capital": "Kalimantan",
                 "population": 15000000,
-                "terrain": "Forest"
+                "terrain": "Forest",
+                "victory_points": 6
             },
             "West_Papua": {
                 "capital": "Jayapura",
                 "population": 5000000,
-                "terrain": "Forest"
+                "terrain": "Forest",
+                "victory_points": 4
             },
             "Lesser_Sunda_Islands": {
                 "capital": "Kupang",
                 "population": 8000000,
-                "terrain": "Island"
+                "terrain": "Island",
+                "victory_points": 4
             },
             "The_Moluccas": {
                 "capital": "Telok_Ambon",
                 "population": 3000000,
-                "terrain": "Island"
+                "terrain": "Island",
+                "victory_points": 3
             }
         }
     },
@@ -106,7 +122,8 @@
             "Brunei": {
                 "capital": "Bandar_Seri_Begawan",
                 "population": 500000,
-                "terrain": "Forest"
+                "terrain": "Forest",
+                "victory_points": 8
             }
         }
     },
@@ -116,52 +133,62 @@
             "Luzon": {
                 "capital": "Luzon",
                 "population": 50000000,
-                "terrain": "Mountain"
+                "terrain": "Mountain",
+                "victory_points": 10
             },
             "Manila": {
                 "capital": "Angeles",
                 "population": 12000000,
-                "terrain": "Urban"
+                "terrain": "Urban",
+                "victory_points": 15
             },
             "Bataan": {
                 "capital": "Baguio",
                 "population": 3000000,
-                "terrain": "Mountain"
+                "terrain": "Mountain",
+                "victory_points": 5
             },
             "Palawan": {
                 "capital": "Puerto_Princesa",
                 "population": 2000000,
-                "terrain": "Island"
+                "terrain": "Island",
+                "victory_points": 3
             },
             "Western_Visayas": {
                 "capital": "Bacolod",
                 "population": 7000000,
-                "terrain": "Island"
+                "terrain": "Island",
+                "victory_points": 5
             },
             "Northern_Mindanao": {
                 "capital": "Cagayan_de_Oro",
                 "population": 6000000,
-                "terrain": "Mountain"
+                "terrain": "Mountain",
+                "victory_points": 5
             },
             "Zamboanga": {
                 "capital": "Pagadian",
                 "population": 4000000,
-                "terrain": "Coastal"
+                "terrain": "Coastal",
+                "victory_points": 4
             },
             "Davao": {
                 "capital": "Davao",
                 "population": 7000000,
-                "terrain": "Mountain"
+                "terrain": "Mountain",
+                "victory_points": 6
             },
             "Central_Islands": {
                 "capital": "Legazpi",
                 "population": 5000000,
-                "terrain": "Island"
+                "terrain": "Island",
+                "victory_points": 4
             },
             "Eastern_Visayas": {
                 "capital": "Calbayog",
                 "population": 4000000,
-                "terrain": "Island"
+                "terrain": "Island",
+                "victory_points": 4
             }
         }
     },
@@ -171,17 +198,20 @@
             "Tonkin": {
                 "capital": "Hanoi",
                 "population": 20000000,
-                "terrain": "Plains"
+                "terrain": "Plains",
+                "victory_points": 10
             },
             "Trong_Bo": {
                 "capital": "Da_Nang",
                 "population": 15000000,
-                "terrain": "Coastal"
+                "terrain": "Coastal",
+                "victory_points": 6
             },
             "Southern_Indochina": {
                 "capital": "Ho_Chi_Minh_City",
                 "population": 25000000,
-                "terrain": "Urban"
+                "terrain": "Urban",
+                "victory_points": 15
             }
         }
     },
@@ -191,7 +221,8 @@
             "Portuguese_Timor": {
                 "capital": "Dili",
                 "population": 1000000,
-                "terrain": "Mountain"
+                "terrain": "Mountain",
+                "victory_points": 3
             }
         }
     },
@@ -201,7 +232,8 @@
             "Cambodia": {
                 "capital": "Phnom_Penh",
                 "population": 16000000,
-                "terrain": "Plains"
+                "terrain": "Plains",
+                "victory_points": 10
             }
         }
     },
@@ -211,7 +243,8 @@
             "Laos": {
                 "capital": "Vientiane",
                 "population": 7000000,
-                "terrain": "Mountain"
+                "terrain": "Mountain",
+                "victory_points": 6
             }
         }
     },
@@ -221,47 +254,56 @@
             "Tenasserim": {
                 "capital": "Naypyidaw",
                 "population": 5000000,
-                "terrain": "Coastal"
+                "terrain": "Coastal",
+                "victory_points": 6
             },
             "Pegu": {
                 "capital": "Yangon",
                 "population": 8000000,
-                "terrain": "Plains"
+                "terrain": "Plains",
+                "victory_points": 12
             },
             "Irrawaddy": {
                 "capital": "Pathein",
                 "population": 6000000,
-                "terrain": "River"
+                "terrain": "River",
+                "victory_points": 6
             },
             "Arakan": {
                 "capital": "Pyay",
                 "population": 4000000,
-                "terrain": "Coastal"
+                "terrain": "Coastal",
+                "victory_points": 5
             },
             "Magwe": {
                 "capital": "Monywa",
                 "population": 5000000,
-                "terrain": "Plains"
+                "terrain": "Plains",
+                "victory_points": 5
             },
             "Mandalay": {
                 "capital": "Mandalay",
                 "population": 7000000,
-                "terrain": "Urban"
+                "terrain": "Urban",
+                "victory_points": 10
             },
             "Federated_Shan_States": {
                 "capital": "Lashio",
                 "population": 6000000,
-                "terrain": "Mountain"
+                "terrain": "Mountain",
+                "victory_points": 6
             },
             "Kentung_and_Yawnghwe": {
                 "capital": "Kyaing_Tong",
                 "population": 3000000,
-                "terrain": "Mountain"
+                "terrain": "Mountain",
+                "victory_points": 4
             },
             "Sagaing": {
                 "capital": "Myitkyina",
                 "population": 4000000,
-                "terrain": "Forest"
+                "terrain": "Forest",
+                "victory_points": 5
             }
         }
     }
