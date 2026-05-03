@@ -12,8 +12,8 @@ ctypes.windll.user32.SetProcessDPIAware()
 #TODO - OPTIMIZATION: consider using numpy for heavy geometry calculations and data handling, especially for large maps with many provinces and complex shapes. This could significantly improve performance for operations like point-in-polygon tests, polygon transformations, and adjacency graph construction.
 #Local module
 from game.ingame_ui import InGameUI
-from game.focus_effects import FocusEffectContext
-from game.focus_loader import loadfocustreeforcountry
+from game.focuseffects import FocusEffectContext
+from game.focusloader import loadfocustreeforcountry
 from engine.console import developmentconsole, loaddevmodeflag 
 from engine.gui import (
     gui_lightencolor,
@@ -1319,7 +1319,97 @@ def main(eventbus=None, is_fullscreen=False):
 
             npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
 
+
+
+    #SCRIPT LOADING
+        updatescriptengine()
+
     eventbus.subscribe(EngineEventType.WARDECLARED, handlewardeclared)
+
+    scriptengine = apimodule.EbeeEngine(
+        statefilepath=statefilepath,
+        provincefilepath=provincefilepath,
+        countrydatafilepath=countrydatafilepath,
+    )
+    scriptengine.eventbus = eventbus
+    scriptengine.stateshapelist = stateshapelist
+    scriptengine.provinceenrichedlist = provinceenrichedlist
+    scriptengine.provincemap = provincemap
+    scriptengine.provincegraph = provincegraph
+    scriptengine.statetocountrylookup = statetocountrylookup
+    scriptengine.countrytocolorlookup = countrytocolorlookup
+
+    def scriptgetresource(country, resource):
+        if playercountry and country == playercountry:
+            if resource == "gold":
+                return playergold
+            if resource == "population":
+                return playerpopulation
+
+        economystate = npcdirector.countryeconomy.get(country)
+        if economystate is not None:
+            return economystate.get(resource)
+        return None
+
+    def scriptsetresource(country, resource, value):
+        nonlocal playergold
+        nonlocal playerpopulation
+
+        value = max(0, int(value))
+        if playercountry and country == playercountry:
+            if resource == "gold":
+                playergold = value
+                return True
+            if resource == "population":
+                playerpopulation = value
+                return True
+
+        economystate = npcdirector.countryeconomy.get(country)
+        if economystate is not None:
+            economystate[resource] = value
+            return True
+        return False
+
+    def scriptgetselectedcountry():
+        return countrymenutarget or playercountry
+
+    def scriptgetselectedprovince():
+        return selectedprovinceid
+
+    def scriptshowmessage(text):
+        message = str(text or "")
+        print(f"scriptloader@EbeeEngine:~$ {message}", flush=True)
+        #eventbus.emit(
+        #    "newspopup",
+        #    {
+        #        "title": "Script",
+        #        "description": message,
+        #        "imagekey": "placeholder",
+        #        "priority": 1,
+        #    },
+        #)
+        return message
+
+    def updatescriptengine():
+        scriptengine.playercountry = playercountry
+        scriptengine.currentturnnumber = currentturnnumber
+        scriptengine.countriesatwarset = set(countriesatwarset)
+        scriptengine.warpairset = set(warpairset)
+        scriptengine.npcdirector = npcdirector
+        scriptengine.selectedcountry = countrymenutarget or playercountry
+        scriptengine.selectedprovinceid = selectedprovinceid
+
+    scriptengine.bindscripts(
+        scriptgetresource,
+        scriptsetresource,
+        getselectedcountry=scriptgetselectedcountry,
+        getselectedprovince=scriptgetselectedprovince,
+        showmessage=scriptshowmessage,
+    )
+    updatescriptengine()
+    # SCRIPT LOADING END!!! (p1)
+
+
 
     def applyconsolecommandstate(commandstate):
         nonlocal playercountry
@@ -1392,6 +1482,7 @@ def main(eventbus=None, is_fullscreen=False):
 
             if playercountry:
                 gamephase = "play"
+                updatescriptengine()
                 eventbus.emit(
                     EngineEventType.PLAYERCOUNTRYSELECTED,
                     {
@@ -1409,6 +1500,7 @@ def main(eventbus=None, is_fullscreen=False):
     newssystem = NewsSystem(eventbus)
     newssystem.start()
     newspopup = NewsPopup()
+    scriptmanager = scriptengine.initscripts("scripts", autoload=True)
     # UI chrome + map viewport
     # runtime-owned font/caches (previously stored on EngineUI)
     troopbadgefont = pygame.font.SysFont("Arial", 16)
@@ -1431,6 +1523,7 @@ def main(eventbus=None, is_fullscreen=False):
     choosecountry_fit_state = {"done": False, "w": None, "h": None}
     while isrunning:
         elapsedseconds = clock.tick(60) / 1000.0
+        updatescriptengine()
         esomodule.updaterollingfpshistory(fpshistory, clock.get_fps(), fpshistorymaxsamples)
         mouseposition_full = pygame.mouse.get_pos()
         #this gives x and y (0 and 1)
@@ -1978,6 +2071,7 @@ def main(eventbus=None, is_fullscreen=False):
         )
         runtimeui.update(elapsedseconds)
         runtimeui.draw(screen)
+        scriptengine.draw_script_ui(screen)
         if developmentmode and gamephase == "play":
             drawdevfpsgraph(screen, smallfont, fpshistory)
 
@@ -2007,6 +2101,9 @@ def main(eventbus=None, is_fullscreen=False):
 
 
         for event in pygame.event.get():
+            if scriptengine.handle_script_ui_event(event):
+                continue
+
             uiaction = runtimeui.process_event(event)
             if uiaction == InGameUI.actionquitgame:
                 isrunning = False
@@ -2043,6 +2140,7 @@ def main(eventbus=None, is_fullscreen=False):
                     npcdirector.setplayercountry(playercountry)
                     npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
                     focustree = loadfocustreeforcountry(playercountry)
+                    updatescriptengine()
                     eventbus.emit(
                         EngineEventType.PLAYERCOUNTRYSELECTED,
                         {
@@ -2088,6 +2186,7 @@ def main(eventbus=None, is_fullscreen=False):
                             if not developmentmode:
                                 playergold -= requiredgold
                                 playerpopulation -= requiredpopulation
+                            updatescriptengine()
                             eventbus.emit(
                                 EngineEventType.TROOPSRECRUITED,
                                 {
@@ -2143,6 +2242,7 @@ def main(eventbus=None, is_fullscreen=False):
                 playergold = max(0, int(focuseffectcontext.gold))
                 playerpopulation = max(0, int(focuseffectcontext.population))
                 if focusturnresult.completedfocusid:
+                    updatescriptengine()
                     eventbus.emit(
                         EngineEventType.FOCUSCOMPLETED,
                         {
@@ -2166,6 +2266,7 @@ def main(eventbus=None, is_fullscreen=False):
                 frontlineupdates = refreshfrontlines()
                 currentturnnumber += 1
                 routepreviewset = frontlineupdates
+                updatescriptengine()
                 eventbus.emit(
                     EngineEventType.NEXTTURN,
                     {
@@ -2613,6 +2714,7 @@ def main(eventbus=None, is_fullscreen=False):
                     playergold = max(0, int(focuseffectcontext.gold))
                     playerpopulation = max(0, int(focuseffectcontext.population))
                     if focusturnresult.completedfocusid:
+                        updatescriptengine()
                         eventbus.emit(
                             EngineEventType.FOCUSCOMPLETED,
                             {
@@ -2636,6 +2738,7 @@ def main(eventbus=None, is_fullscreen=False):
                     frontlineupdates = refreshfrontlines()
                     currentturnnumber += 1
                     routepreviewset = frontlineupdates
+                    updatescriptengine()
                     eventbus.emit(
                         EngineEventType.NEXTTURN,
                         {

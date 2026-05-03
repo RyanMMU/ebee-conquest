@@ -1,13 +1,13 @@
 from collections import defaultdict
 
-from .economy import getdefaulteconomyconfig
-from .npcactions import NpcTurnActions
-from .npcdefense import NpcDefensePlanner
-from .npceconomy import NpcEconomyPlanner
-from .npcindex import NpcCountryIndex, NpcWorldIndex
-from .npcinvasion import NpcInvasionPlanner
-from .npcpersonality import NpcPersonality
-from .npcstrength import NpcStrengthEvaluator
+from ..economy import getdefaulteconomyconfig
+from .actions import NpcTurnActions
+from .defense import NpcDefensePlanner
+from .economy import NpcEconomyPlanner
+from .index import NpcCountryIndex, NpcWorldIndex
+from .invasion import NpcInvasionPlanner
+from .personality import NpcPersonality
+from .strength import NpcStrengthEvaluator
 
 
 class NpcDirector:

@@ -1,4 +1,4 @@
-from .movement import findprovincepath, getprovincecontroller
+from ..movement import findprovincepath, getprovincecontroller
 # INVASION PLANNER 
 
 

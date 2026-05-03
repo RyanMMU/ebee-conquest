@@ -1,4 +1,4 @@
-from .economy import canrecruittroops, getendturneconomydelta, getrecruitcosts
+from ..economy import canrecruittroops, getendturneconomydelta, getrecruitcosts
 
 # NPC ECONOMY PLANNER 
 # economy aspects of npc behavior, such as recruiting troops and managing gold and population

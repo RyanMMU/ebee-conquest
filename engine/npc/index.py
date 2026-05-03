@@ -1,6 +1,6 @@
 from collections import defaultdict
 
-from .movement import getprovincecontroller, getprovinceowner
+from ..movement import getprovincecontroller, getprovinceowner
 
 # NPC INDEX
 

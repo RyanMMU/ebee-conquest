@@ -1,6 +1,6 @@
 import math
 
-from .movement import entrenchmentdefensemultiplier, entrenchmentturnrequired
+from ..movement import entrenchmentdefensemultiplier, entrenchmentturnrequired
 
 
 class NpcStrengthEvaluator:

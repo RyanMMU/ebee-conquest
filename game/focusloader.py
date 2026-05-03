@@ -3,7 +3,7 @@ import os
 import re
 from typing import Mapping
 
-from .focus_tree import Focus, FocusTree
+from .focustree import Focus, FocusTree
 # PLEASE DO NOT IMPORT ANYTHINGFROM FOCUS UI
 # CIRCULAR IMPORT !!!
 # actually just dont mess with this file at all! iTS FOCUS TREE LOADER, NOT UI, DONT MESS WITH IT UNLESS YOU KNOW WHAT YOU ARE DOING!!
