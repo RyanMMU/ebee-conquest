@@ -1720,7 +1720,7 @@ def main(eventbus=None, is_fullscreen=False):
         # O(cp*k) --> O(p*k)
         # badge pass now runs only when needed and only on playable provinces
         
-       if gamephase == "play" and showtroopbadges:
+        if gamephase == "play" and showtroopbadges:
 
            troopbadgelist_raw = []
            troopbadgehitlist = []
@@ -1775,29 +1775,29 @@ def main(eventbus=None, is_fullscreen=False):
                    })
 
 
-             merged = []
-             MERGE_DISTANCE = 60 / zoomvalue
+           merged = []
+           MERGE_DISTANCE = 60 / zoomvalue
 
-            for entry in troopbadgelist_raw:
-                ex, ey = entry["center"]
-                added = False
+           for entry in troopbadgelist_raw:
+              ex, ey = entry["center"]
+              added = False
 
-                for group in merged:
-                    gx, gy = group["center"]
+              for group in merged:
+                  gx, gy = group["center"]
 
-                    dx = ex - gx
-                    dy = ey - gy
-                    dist = (dx * dx + dy * dy) ** 0.5
+                  dx = ex - gx
+                  dy = ey - gy
+                  dist = (dx * dx + dy * dy) ** 0.5
 
-                    if dist < MERGE_DISTANCE:
-                        group["troops"] += entry["troops"]
-                        added = True
-                        break
+                  if dist < MERGE_DISTANCE:
+                      group["troops"] += entry["troops"]
+                      added = True
+                      break
 
-                if not added:
-                    merged.append(entry)
+              if not added:
+                  merged.append(entry)
 
-            troopbadgelist = merged
+           troopbadgelist = merged
            
 
         if gamephase == "play" and movementorderlist:
