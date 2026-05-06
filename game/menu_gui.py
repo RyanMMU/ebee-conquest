@@ -454,6 +454,10 @@ while run:
         cache_rect = cache_text.get_rect(center=(new_x + new_w // 2, new_y + new_h // 2))
         screen.blit(cache_text, cache_rect)
 
+        warning_text = main_font.render('WARNING: GAME WILL RUN SLOWER THE NEXT TIME IF YOU PRESS REMOVE CACHE !!', True, (255, 100,100)) 
+        warning_rect = warning_text.get_rect(center=(button_m + button_width // 2, new_y + new_h + 20))
+        screen.blit(warning_text, warning_rect)
+
     if menu == 'scripts':
         script_menu.draw(screen)
 
