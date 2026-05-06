@@ -618,7 +618,7 @@ def loadcountrydata(filepath):
 
 def groupsubdivisionsbystate(provincelist, statelist):
 
-    stateidset = {state["id"] for state in statelist}
+    stateidset = {stateid["id"] for stateid in statelist}
     groupedlookup = {stateid: [] for stateid in stateidset}
 
 
