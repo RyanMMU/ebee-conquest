@@ -19,8 +19,8 @@ class PeaceTreatyScreen:
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         self.clock = pygame.time.Clock()
-        self.title_font = pygame.font.SysFont("bahnschrift", 22, bold=True)  
-        self.small_font = pygame.font.SysFont("bahnschrift", 18)
+        self.title_font = pygame.font.SysFont("bahnschrift", 20, bold=True)  
+        self.small_font = pygame.font.SysFont("bahnschrift", 15)
         self.running = True
         
         self.exit_btn_rect = pygame.Rect(20, HEIGHT - BOTTOMBAR_HEIGHT + 15, 180, 40)
@@ -134,7 +134,7 @@ class PeaceTreatyScreen:
         pygame.draw.rect(self.screen, clear_btn_color, self.clear_btn_rect)
         pygame.draw.rect(self.screen, clear_text_color, self.clear_btn_rect, 1)
         
-        clear_font = pygame.font.SysFont("bahnschrift", 14, bold=True)
+        clear_font = pygame.font.SysFont("bahnschrift", 10, bold=True)
         clear_surf = clear_font.render("CLEAR ALL", True, clear_text_color)
         clear_rect = clear_surf.get_rect(center=self.clear_btn_rect.center)
         self.screen.blit(clear_surf, clear_rect)
