@@ -100,6 +100,7 @@ def tacticalmapfill(colorvalue):
 
 
 
+
 from game.ingame_ui import InGameUI
 from game.animation.motion import PulseLayer, draw_light_sweep, draw_scanlines, draw_soft_glow, ease_out_cubic, exp_lerp, mix_color, pulse
 from game.focuseffects import FocusEffectContext
@@ -1081,7 +1082,7 @@ def drawloadingscreen(
 
 
 
-def main(eventbus=None, is_fullscreen=False):
+def main(eventbus=None, is_fullscreen=False, volume=1.0):
     global select_sound
     
     if eventbus is None:
@@ -1091,13 +1092,13 @@ def main(eventbus=None, is_fullscreen=False):
     pygame.mixer.init()
     
     select_sound = pygame.mixer.Sound("game/sounds/troop_select.wav")
-    select_sound.set_volume(0.5)
-    
+    select_sound.set_volume(volume * 0.5)
+
     move_sound = pygame.mixer.Sound("game/sounds/troop_move.wav")
-    move_sound.set_volume(0.5)
-    
+    move_sound.set_volume(volume * 0.5)
+
     mahathir_speech = pygame.mixer.Sound("game/speeches/mahathir_speech.wav")
-    mahathir_speech.set_volume(0.7)
+    mahathir_speech.set_volume(volume * 0.7)
     
     logstartupdiagnostics(startupbegintimestamp, "pygame init", f"python={platform.python_version()} pygame={pygame.version.ver}")
 
@@ -1507,6 +1508,7 @@ def main(eventbus=None, is_fullscreen=False):
     
     windowwidth, windowheight = screen.get_size()
     runtimeui = InGameUI((windowwidth, windowheight))
+    runtimeui.ui_click_sound.set_volume(volume * 0.4)
     maprect = runtimeui.map_rect
     camerastate = cameramodule.createcamerastate(maprect.width, maprect.height, mapbox)
 

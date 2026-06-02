@@ -93,7 +93,12 @@ class AnimatedMainMenu:
         self.running = True
         self.menu = "main"
         self.menu_transition = 1.0
-        self.volume = 50
+        try:
+            import json
+            with open("settings.json") as f:
+                self.volume = json.load(f).get("volume", 50)
+        except (FileNotFoundError, ValueError):
+            self.volume = 50
         self.volume_dragging = False
         self.mouse = (0, 0)
         self.notice = None
@@ -253,7 +258,7 @@ class AnimatedMainMenu:
             self._button_click(key, rect)
             if key == "new_game":
                 self._launch_transition(rect)
-                run_game(is_fullscreen=self.is_fullscreen)
+                run_game(is_fullscreen=self.is_fullscreen, volume=self.volume / 100.0)
                 pygame.quit()
                 sys.exit()
             if key == "settings":
@@ -265,7 +270,10 @@ class AnimatedMainMenu:
             elif key == "load_game":
                 self.notice = "Save loading is not implemented yet."
                 self.notice_time = 2.4
+
             return
+        
+          
 
     def _launch_transition(self, origin_rect):
         start_time = pygame.time.get_ticks() / 1000.0
@@ -389,11 +397,20 @@ class AnimatedMainMenu:
         if slider is None:
             _panel, slider, _fullscreen, _back, _cache = self._settings_controls()
         self.volume = int(clamp((self.mouse[0] - slider.x) / max(1, slider.width)) * 100)
+        vol = self.volume / 100.0
         try:
-            pygame.mixer.music.set_volume(self.volume / 100.0)
+            pygame.mixer.music.set_volume(vol)
         except pygame.error:
             pass
+        if self.click_sound is not None:
+            self.click_sound.set_volume(vol * 0.4)
 
+        try:
+            import json
+            with open("settings.json", "w") as f:
+                json.dump({"volume": self.volume}, f)
+        except Exception:
+            pass
     def _draw_scripts(self):
         self.script_menu.draw(self.screen)
 
