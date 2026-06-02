@@ -14,13 +14,13 @@ ctypes.windll.user32.SetProcessDPIAware()
 
 
 class PeaceTreatyScreen:
+    
     def __init__(self):
         pygame.init()
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
-        
         self.clock = pygame.time.Clock()
         self.title_font = pygame.font.SysFont("bahnschrift", 22, bold=True)  
-        self.small_font = pygame.font.SysFont("arial narrow", 20)
+        self.small_font = pygame.font.SysFont("bahnschrift", 18)
         self.running = True
         
         self.exit_btn_rect = pygame.Rect(20, HEIGHT - BOTTOMBAR_HEIGHT + 15, 180, 40)
@@ -29,17 +29,16 @@ class PeaceTreatyScreen:
         self.history_btn_rect = pygame.Rect((WIDTH // 2) + 10, HEIGHT - BOTTOMBAR_HEIGHT + 15, 200, 40)
         self.submit_btn_rect = pygame.Rect(WIDTH - 200, HEIGHT - BOTTOMBAR_HEIGHT + 15, 180, 40)
 
-        self.ceasefire_btn_rect = pygame.Rect(WIDTH - RIGHTBAR_WIDTH + 20, STATUS_BAR_HEIGHT + 60, RIGHTBAR_WIDTH - 40, 40)
-        self.state_transfer_btn_rect = pygame.Rect(WIDTH - RIGHTBAR_WIDTH + 20, STATUS_BAR_HEIGHT + 110, RIGHTBAR_WIDTH - 40, 40)
-        self.puppet_state_btn_rect = pygame.Rect(WIDTH - RIGHTBAR_WIDTH + 20, STATUS_BAR_HEIGHT + 160, RIGHTBAR_WIDTH - 40, 40)
-        self.military_access_btn_rect = pygame.Rect(WIDTH - RIGHTBAR_WIDTH + 20, STATUS_BAR_HEIGHT + 210, RIGHTBAR_WIDTH - 40, 40)
-        self.regime_change_btn_rect = pygame.Rect(WIDTH - RIGHTBAR_WIDTH + 20, STATUS_BAR_HEIGHT + 260, RIGHTBAR_WIDTH - 40, 40)
+        self.demands = ["CEASEFIRE", "STATE TRANSFER", "PUPPET STATE", "MILITARY ACCESS", "REGIME CHANGE"]
+        self.demand_rects = []
+        for i in range(len(self.demands)):
+            rect = pygame.Rect(WIDTH - RIGHTBAR_WIDTH + 14, STATUS_BAR_HEIGHT + 60 + (i * 66), RIGHTBAR_WIDTH - 28, 52)
+            self.demand_rects.append(rect)
         
         self.countries = ["Malaysia", "Thailand", "Vietnam", "Indonesia", "Philippines", "Laos"]
         self.country_rects = []
-        start_y = STATUS_BAR_HEIGHT + 60
         for i in range(len(self.countries)):
-            rect = pygame.Rect(15, start_y + (i * 50), LEFTBAR_WIDTH - 30, 40)
+            rect = pygame.Rect(14, STATUS_BAR_HEIGHT + 60 + (i * 66), LEFTBAR_WIDTH - 28, 52)
             self.country_rects.append(rect)
 
         self.chat_open = False
@@ -54,14 +53,15 @@ class PeaceTreatyScreen:
         self.chat_input_rect = pygame.Rect(self.chat_panel_rect.x + 20, self.chat_panel_rect.bottom - 60, 
                                            self.chat_panel_rect.width - 40, 40)
         
-        
         self.selected_demand = ""
         self.popup_rect = pygame.Rect((WIDTH // 2) - 200, (HEIGHT // 2) - 100, 400, 200)
         self.popup_close_btn = pygame.Rect(self.popup_rect.centerx - 50, self.popup_rect.bottom - 50, 100, 35)
         self.selected_demands_set = set()
+        self.selected_country = None
         self.active_popup = None
         self.popup_confirm_btn = pygame.Rect(self.popup_rect.centerx - 120, self.popup_rect.bottom - 50, 100, 35)
         self.popup_cancel_btn = pygame.Rect(self.popup_rect.centerx + 20, self.popup_rect.bottom - 50, 100, 35)
+        self._hover_glow = {}
 
     def draw_status_bar(self):
         status_rect = pygame.Rect(0, 0, WIDTH, STATUS_BAR_HEIGHT)
@@ -83,36 +83,47 @@ class PeaceTreatyScreen:
         pygame.draw.rect(self.screen, (28, 38, 52), leftbar_rect, 1)
         pygame.draw.line(self.screen, (76, 64, 38), leftbar_rect.topright, leftbar_rect.bottomright, 1)
         
-        left_title = self.small_font.render("PARTICIPANTS", True, (240, 198, 116))
+        left_title = self.title_font.render("PARTICIPANTS", True, (240, 198, 116))
         left_rect = left_title.get_rect(centerx=leftbar_rect.centerx, y=leftbar_rect.y + 16)
         self.screen.blit(left_title, left_rect)
 
         mouse_pos = pygame.mouse.get_pos()
+        motion_time = pygame.time.get_ticks() / 1000.0
+
         for i, rect in enumerate(self.country_rects):
-            if rect.collidepoint(mouse_pos):
-                btn_color = (40, 52, 72)
-                text_color = (255, 220, 150)
+            country_name = self.countries[i]
+            hovered = rect.collidepoint(mouse_pos)
+            is_selected = (self.selected_country == country_name)
+
+            glow = self._hover_glow.get(f"c_{country_name}", 0.0)
+            if hovered:
+                glow = min(1.0, glow + 0.16)
             else:
-                btn_color = (24, 33, 46)
-                text_color = (240, 198, 116)
-                
-            pygame.draw.rect(self.screen, btn_color, rect)
-            pygame.draw.rect(self.screen, text_color, rect, 1)
+                glow = max(0.0, glow - 0.10)
+            self._hover_glow[f"c_{country_name}"] = glow
+
+            self.draw_interactive_panel(self.screen, rect, hovered, is_selected, glow, motion_time)
+
+            text_x = rect.x + 18 + int(glow * 4)
+            text_color = (239, 224, 185) if is_selected else ((224, 228, 231) if hovered else (202, 207, 211))
             
-            country_text = self.small_font.render(self.countries[i].upper(), True, (255,255,255))
-            country_rect = country_text.get_rect(center=rect.center)
-            self.screen.blit(country_text, country_rect)
+            country_text = self.small_font.render(country_name.upper(), True, text_color)
+            self.screen.blit(country_text, (text_x, rect.y + (rect.height - country_text.get_height()) // 2))
+    
 
     def draw_right_bar(self):
         rightbar_rect = pygame.Rect(WIDTH - RIGHTBAR_WIDTH, STATUS_BAR_HEIGHT, RIGHTBAR_WIDTH, HEIGHT - STATUS_BAR_HEIGHT - BOTTOMBAR_HEIGHT)
         pygame.draw.rect(self.screen, (12, 18, 29), rightbar_rect)
         pygame.draw.rect(self.screen, (28, 38, 52), rightbar_rect, 1)
         pygame.draw.line(self.screen, (76, 64, 38), rightbar_rect.topleft, rightbar_rect.bottomleft, 1)
-        right_title = self.small_font.render("DEMANDS", True, (240, 198, 116))
+        
+        right_title = self.title_font.render("DEMANDS", True, (240, 198, 116))
         right_rect = right_title.get_rect(left=rightbar_rect.left + 20, y=rightbar_rect.y + 16)
         self.screen.blit(right_title, right_rect)
 
         mouse_pos = pygame.mouse.get_pos()
+        motion_time = pygame.time.get_ticks() / 1000.0
+
         if self.clear_btn_rect.collidepoint(mouse_pos):
             clear_btn_color = (40, 52, 72)
             clear_text_color = (255, 220, 150)
@@ -123,34 +134,36 @@ class PeaceTreatyScreen:
         pygame.draw.rect(self.screen, clear_btn_color, self.clear_btn_rect)
         pygame.draw.rect(self.screen, clear_text_color, self.clear_btn_rect, 1)
         
-        clear_font = pygame.font.SysFont("arial narrow", 18, bold=True)
+        clear_font = pygame.font.SysFont("bahnschrift", 14, bold=True)
         clear_surf = clear_font.render("CLEAR ALL", True, clear_text_color)
         clear_rect = clear_surf.get_rect(center=self.clear_btn_rect.center)
         self.screen.blit(clear_surf, clear_rect)
 
-        buttons = [
-            (self.ceasefire_btn_rect, "CEASEFIRE                      >"),
-            (self.state_transfer_btn_rect, "STATE TRANSFER               >"),
-            (self.puppet_state_btn_rect, "PUPPET STATE                  >"),
-            (self.military_access_btn_rect, "MILITARY ACCESS               >"),
-            (self.regime_change_btn_rect, "REGIME CHANGE                 >")
-        ]
+        for i, rect in enumerate(self.demand_rects):
+            demand_name = self.demands[i]
+            hovered = rect.collidepoint(mouse_pos)
+            is_selected = (demand_name in self.selected_demands_set)
 
-        for rect, label in buttons:
-            if rect.collidepoint(mouse_pos):
-                b_color, t_color = (40, 52, 72), (255, 220, 150)
+            glow = self._hover_glow.get(f"d_{demand_name}", 0.0)
+            if hovered:
+                glow = min(1.0, glow + 0.16)
             else:
-                b_color, t_color = (24, 33, 46), (240, 198, 116)
-            pygame.draw.rect(self.screen, b_color, rect)
-            pygame.draw.rect(self.screen, t_color, rect, 1)
-            txt_surf = self.small_font.render(label, True, t_color)
-            txt_rect = txt_surf.get_rect(center=rect.center)
-            self.screen.blit(txt_surf, txt_rect)
-            count_val = len(self.selected_demands_set)
-            count_str = f"{count_val} DEMAND SELECTED" if count_val == 1 else f"{count_val} DEMANDS SELECTED"
-            count_surf = self.small_font.render(count_str, True, (240, 198, 116))
-            count_rect = count_surf.get_rect(centerx=rightbar_rect.centerx, bottom=rightbar_rect.bottom - 20)
-            self.screen.blit(count_surf, count_rect)
+                glow = max(0.0, glow - 0.10)
+            self._hover_glow[f"d_{demand_name}"] = glow
+
+            self.draw_interactive_panel(self.screen, rect, hovered, is_selected, glow, motion_time)
+
+            text_x = rect.x + 18 + int(glow * 4)
+            text_color = (239, 224, 185) if is_selected else ((224, 228, 231) if hovered else (202, 207, 211))
+            
+            txt_surf = self.small_font.render(demand_name, True, text_color)
+            self.screen.blit(txt_surf, (text_x, rect.y + (rect.height - txt_surf.get_height()) // 2))
+
+        count_val = len(self.selected_demands_set)
+        count_str = f"{count_val} DEMAND SELECTED" if count_val == 1 else f"{count_val} DEMANDS SELECTED"
+        count_surf = self.small_font.render(count_str, True, (240, 198, 116))
+        count_rect = count_surf.get_rect(centerx=rightbar_rect.centerx, bottom=rightbar_rect.bottom - 20)
+        self.screen.blit(count_surf, count_rect)
 
     def draw_bottom_bar(self):
         bottombar_rect = pygame.Rect(0, HEIGHT - BOTTOMBAR_HEIGHT, WIDTH, BOTTOMBAR_HEIGHT)
@@ -272,18 +285,69 @@ class PeaceTreatyScreen:
                     if self.clear_btn_rect.collidepoint(event.pos):
                         self.selected_demands_set.clear()
 
-                    demands = [
-                        (self.ceasefire_btn_rect, "CEASEFIRE"),
-                        (self.state_transfer_btn_rect, "STATE TRANSFER"),
-                        (self.puppet_state_btn_rect, "PUPPET STATE"),
-                        (self.military_access_btn_rect, "MILITARY ACCESS"),
-                        (self.regime_change_btn_rect, "REGIME CHANGE")
-                    ]
-                    for rect, label in demands:
+                    for i, rect in enumerate(self.country_rects):
                         if rect.collidepoint(event.pos):
+                            self.selected_country = self.countries[i]
+
+                    for i, rect in enumerate(self.demand_rects):
+                        if rect.collidepoint(event.pos):
+                            label = self.demands[i]
                             self.selected_demand = label
-                            self.selected_demands_set.add(label)
+                            if label in self.selected_demands_set:
+                                self.selected_demands_set.remove(label)
+                            else:
+                                self.selected_demands_set.add(label)
                             self.active_popup = "demand"
+                    
+
+    def draw_interactive_panel(self, surface, rect, is_hovered, is_selected, glow_strength, motion_time, radius=6):
+        if is_selected:
+            base_color = (37, 35, 28) if not is_hovered else (50, 44, 30)
+            border_color = (212, 169, 77)
+        else:
+            base_color = (28, 39, 59) if is_hovered else (14, 22, 33)
+            border_color = (88, 101, 118) if is_hovered else (42, 55, 72)
+
+        shadow = pygame.Surface((rect.width + 8, rect.height + 8), pygame.SRCALPHA)
+        pygame.draw.rect(shadow, (0, 0, 0, 75), shadow.get_rect(), border_radius=radius + 2)
+        surface.blit(shadow, (rect.x - 3, rect.y - 1))
+
+        top_color = base_color
+        bottom_color = (9, 15, 24)
+        
+        gradient_surf = pygame.Surface(rect.size, pygame.SRCALPHA)
+        for y_offset in range(rect.height):
+            t = y_offset / max(1, rect.height - 1)
+            blended_rgb = tuple(int(top_color[i] + (bottom_color[i] - top_color[i]) * t) for i in range(3))
+            pygame.draw.line(gradient_surf, (*blended_rgb, 255), (0, y_offset), (rect.width, y_offset))
+        
+        mask = pygame.Surface(rect.size, pygame.SRCALPHA)
+        pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(), border_radius=radius)
+        gradient_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
+        surface.blit(gradient_surf, rect.topleft)
+
+        pygame.draw.rect(surface, border_color, rect, 1, border_radius=radius)
+
+        if glow_strength > 0.01:
+            glow_color = (212, 169, 77) if is_selected else (92, 116, 144)
+            glow_surf = pygame.Surface((rect.width + 20, rect.height + 20), pygame.SRCALPHA)
+            
+            for ring in range(4):
+                alpha = int(glow_strength * (36 - ring * 7))
+                if alpha <= 0:
+                    continue
+                offset = ring * 2 + 2
+                pygame.draw.rect(
+                    glow_surf,
+                    (*glow_color, alpha),
+                    (10 - offset, 10 - offset, rect.width + offset * 2, rect.height + offset * 2),
+                    border_radius=radius + offset,
+                    width=2,
+                )
+            surface.blit(glow_surf, (rect.x - 10, rect.y - 10))
+
+        if is_selected:
+            pygame.draw.rect(surface, (212, 169, 77), pygame.Rect(rect.x, rect.y + 8, 3, rect.height - 16), border_radius=2)
 
 
     def draw_popup(self):
