@@ -165,49 +165,53 @@ class PeaceTreatyScreen:
         clear_surf = clear_font.render("CLEAR ALL", True, clear_text_color)
         clear_rect = clear_surf.get_rect(center=self.clear_btn_rect.center)
         self.screen.blit(clear_surf, clear_rect)
+
+
     def draw_bottom_bar(self):
         bottombar_rect = pygame.Rect(0, HEIGHT - BOTTOMBAR_HEIGHT, WIDTH, BOTTOMBAR_HEIGHT)
         pygame.draw.rect(self.screen, (5, 10, 17), bottombar_rect)
         pygame.draw.line(self.screen, (240, 198, 116), bottombar_rect.topleft, bottombar_rect.topright, 1)
         
         mouse_pos = pygame.mouse.get_pos()
-        
-        if self.exit_btn_rect.collidepoint(mouse_pos):
-            button_color, text_color = (40, 52, 72), (255, 220, 150)
-        else:
-            button_color, text_color = (24, 33, 46), (240, 198, 116)
-        pygame.draw.rect(self.screen, button_color, self.exit_btn_rect)
-        pygame.draw.rect(self.screen, text_color, self.exit_btn_rect, 1)
-        btn_text = self.small_font.render("EXIT CONFERENCE", True, text_color)
+        motion_time = pygame.time.get_ticks() / 1000.0
+        for btn_name in ["exit", "chat", "history", "submit"]:
+            if f"b_{btn_name}" not in self._hover_glow:
+                self._hover_glow[f"b_{btn_name}"] = 0.0
+
+        exit_hovered = self.exit_btn_rect.collidepoint(mouse_pos)
+        exit_glow = self._hover_glow["b_exit"]
+        exit_glow = min(1.0, exit_glow + 0.16) if exit_hovered else max(0.0, exit_glow - 0.10)
+        self._hover_glow["b_exit"] = exit_glow
+        self.draw_interactive_panel(self.screen, self.exit_btn_rect, exit_hovered, False, exit_glow, motion_time)
+        exit_text_color = (239, 224, 185) if exit_hovered else (202, 207, 211)
+        btn_text = self.small_font.render("EXIT CONFERENCE", True, exit_text_color)
         self.screen.blit(btn_text, btn_text.get_rect(center=self.exit_btn_rect.center))
 
-        if self.chat_btn_rect.collidepoint(mouse_pos) or self.chat_open:
-            chat_btn_color = (40, 65, 100) if self.chat_open else (40, 52, 72)
-            chat_text_color = (255, 255, 255)
-        else:
-            chat_btn_color = (24, 33, 46)
-            chat_text_color = (180, 180, 180)
-
-        pygame.draw.rect(self.screen, chat_btn_color, self.chat_btn_rect)
-        pygame.draw.rect(self.screen, chat_text_color, self.chat_btn_rect, 1)
+        chat_hovered = self.chat_btn_rect.collidepoint(mouse_pos)
+        chat_glow = self._hover_glow["b_chat"]
+        chat_glow = min(1.0, chat_glow + 0.16) if chat_hovered else max(0.0, chat_glow - 0.10)
+        self._hover_glow["b_chat"] = chat_glow
+        self.draw_interactive_panel(self.screen, self.chat_btn_rect, chat_hovered, self.chat_open, chat_glow, motion_time)
+        chat_text_color = (239, 224, 185) if self.chat_open or chat_hovered else (202, 207, 211)
         chat_text = self.small_font.render("CHAT WITH LEADERS", True, chat_text_color)
         self.screen.blit(chat_text, chat_text.get_rect(center=self.chat_btn_rect.center))
 
-        if self.history_btn_rect.collidepoint(mouse_pos):
-            history_btn_color = (40, 52, 72)
-        else:
-            history_btn_color = (24, 33, 46)
-        pygame.draw.rect(self.screen, history_btn_color, self.history_btn_rect)
-        pygame.draw.rect(self.screen, (255, 255, 255), self.history_btn_rect, 1)
-        history_text = self.small_font.render("PROPOSAL HISTORY", True, (255, 255, 255))
+        history_hovered = self.history_btn_rect.collidepoint(mouse_pos)
+        history_glow = self._hover_glow["b_history"]
+        history_glow = min(1.0, history_glow + 0.16) if history_hovered else max(0.0, history_glow - 0.10)
+        self._hover_glow["b_history"] = history_glow
+        self.draw_interactive_panel(self.screen, self.history_btn_rect, history_hovered, False, history_glow, motion_time)
+        history_text_color = (239, 224, 185) if history_hovered else (202, 207, 211)
+        history_text = self.small_font.render("PROPOSAL HISTORY", True, history_text_color)
         self.screen.blit(history_text, history_text.get_rect(center=self.history_btn_rect.center))
 
-        if self.submit_btn_rect.collidepoint(mouse_pos):
-            submit_btn_color, submit_text_color = (40, 120, 40), (255, 255, 255) 
-        else:
-            submit_btn_color, submit_text_color = (30, 90, 30), (255, 255, 255)   
-        pygame.draw.rect(self.screen, submit_btn_color, self.submit_btn_rect)
-        pygame.draw.rect(self.screen, submit_text_color, self.submit_btn_rect, 1) 
+        submit_hovered = self.submit_btn_rect.collidepoint(mouse_pos)
+        submit_glow = self._hover_glow["b_submit"]
+        submit_glow = min(1.0, submit_glow + 0.16) if submit_hovered else max(0.0, submit_glow - 0.10)
+        self._hover_glow["b_submit"] = submit_glow
+        submit_colors = ((10, 50, 15), (0, 255, 0)) if submit_hovered else ((5, 35, 10), (0, 200, 0))
+        self.draw_interactive_panel(self.screen, self.submit_btn_rect, submit_hovered, False, submit_glow, motion_time, custom_colors=submit_colors)
+        submit_text_color = (150, 255, 150) if submit_hovered else (0, 220, 0)
         submit_text = self.small_font.render("SUBMIT DEMANDS", True, submit_text_color)
         self.screen.blit(submit_text, submit_text.get_rect(center=self.submit_btn_rect.center))
 
@@ -253,7 +257,7 @@ class PeaceTreatyScreen:
                         if self.chat_input_text.strip():
                             user_msg = self.chat_input_text
                             self.chat_history.append(("You", user_msg))
-                            reply = f"to be answered...... '{user_msg}'."
+                            reply = f"....AI to be implemented...."
                             self.chat_history.append(("LEADER", reply))
                             self.chat_input_text = ""
                     elif event.key == pygame.K_BACKSPACE:
@@ -264,7 +268,7 @@ class PeaceTreatyScreen:
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
-                    if self.active_popup == "demand":
+                    if self.active_popup in ["demand", "history"]:
                         if self.popup_close_btn.collidepoint(event.pos):
                             self.active_popup = None
                         return
@@ -280,6 +284,9 @@ class PeaceTreatyScreen:
                         self.chat_open = not self.chat_open
                     if self.exit_btn_rect.collidepoint(event.pos):
                         self.running = False
+
+                    if self.history_btn_rect.collidepoint(event.pos):
+                        self.active_popup = "history"
                     if self.submit_btn_rect.collidepoint(event.pos):
                         self.active_popup = "submit"
                     if self.clear_btn_rect.collidepoint(event.pos):
@@ -300,8 +307,10 @@ class PeaceTreatyScreen:
                             self.active_popup = "demand"
                     
 
-    def draw_interactive_panel(self, surface, rect, is_hovered, is_selected, glow_strength, motion_time, radius=6):
-        if is_selected:
+    def draw_interactive_panel(self, surface, rect, is_hovered, is_selected, glow_strength, motion_time, radius=6, custom_colors=None):
+        if custom_colors:
+            base_color, border_color = custom_colors
+        elif is_selected:
             base_color = (37, 35, 28) if not is_hovered else (50, 44, 30)
             border_color = (212, 169, 77)
         else:
@@ -329,7 +338,7 @@ class PeaceTreatyScreen:
         pygame.draw.rect(surface, border_color, rect, 1, border_radius=radius)
 
         if glow_strength > 0.01:
-            glow_color = (212, 169, 77) if is_selected else (92, 116, 144)
+            glow_color = custom_colors[1] if custom_colors else ((212, 169, 77) if is_selected else (92, 116, 144))
             glow_surf = pygame.Surface((rect.width + 20, rect.height + 20), pygame.SRCALPHA)
             
             for ring in range(4):
@@ -395,6 +404,23 @@ class PeaceTreatyScreen:
             pygame.draw.rect(self.screen, (255, 255, 255), self.popup_cancel_btn, 1)
             cancel_txt = self.small_font.render("CANCEL", True, (255, 255, 255))
             self.screen.blit(cancel_txt, cancel_txt.get_rect(center=self.popup_cancel_btn.center))
+
+
+        elif self.active_popup == "history":
+            p_title = self.title_font.render("PROPOSAL HISTORY", True, (240, 198, 116))
+            self.screen.blit(p_title, p_title.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 25))
+
+            p_msg1 = self.small_font.render("No previous proposals found.", True, (170, 180, 190))
+            self.screen.blit(p_msg1, p_msg1.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 75))
+            
+            
+
+            b_color = (40, 52, 72) if self.popup_close_btn.collidepoint(mouse_pos) else (24, 33, 46)
+            pygame.draw.rect(self.screen, b_color, self.popup_close_btn)
+            pygame.draw.rect(self.screen, (240, 198, 116), self.popup_close_btn, 1)
+            
+            btn_txt = self.small_font.render("CLOSE", True, (240, 198, 116))
+            self.screen.blit(btn_txt, btn_txt.get_rect(center=self.popup_close_btn.center))
             
     def draw(self):
         self.screen.fill((11, 18, 32))
