@@ -182,8 +182,16 @@ class PeaceTreatyScreen:
         exit_glow = self._hover_glow["b_exit"]
         exit_glow = min(1.0, exit_glow + 0.16) if exit_hovered else max(0.0, exit_glow - 0.10)
         self._hover_glow["b_exit"] = exit_glow
-        self.draw_interactive_panel(self.screen, self.exit_btn_rect, exit_hovered, False, exit_glow, motion_time)
-        exit_text_color = (239, 224, 185) if exit_hovered else (202, 207, 211)
+        
+        if exit_hovered:
+            exit_colors = ((80, 15, 15, 150), (255, 50, 50, 255))
+            exit_text_color = (255, 180, 180)
+        else:
+            exit_colors = ((45, 10, 10, 100), (200, 30, 30, 200))
+            exit_text_color = (220, 120, 120)
+            
+        self.draw_interactive_panel(self.screen, self.exit_btn_rect, exit_hovered, False, exit_glow, motion_time, custom_colors=exit_colors)
+        
         btn_text = self.small_font.render("EXIT CONFERENCE", True, exit_text_color)
         self.screen.blit(btn_text, btn_text.get_rect(center=self.exit_btn_rect.center))
 
@@ -310,35 +318,39 @@ class PeaceTreatyScreen:
     def draw_interactive_panel(self, surface, rect, is_hovered, is_selected, glow_strength, motion_time, radius=6, custom_colors=None):
         if custom_colors:
             base_color, border_color = custom_colors
+            base_color = base_color if len(base_color) == 4 else (*base_color, 255)
+            border_color = border_color if len(border_color) == 4 else (*border_color, 255)
         elif is_selected:
-            base_color = (37, 35, 28) if not is_hovered else (50, 44, 30)
-            border_color = (212, 169, 77)
+            base_color = (37, 35, 28, 255) if not is_hovered else (50, 44, 30, 255)
+            border_color = (212, 169, 77, 255)
         else:
-            base_color = (28, 39, 59) if is_hovered else (14, 22, 33)
-            border_color = (88, 101, 118) if is_hovered else (42, 55, 72)
+            base_color = (28, 39, 59, 255) if is_hovered else (14, 22, 33, 255)
+            border_color = (42, 55, 72, 255) if not is_hovered else (88, 101, 118, 255)
 
         shadow = pygame.Surface((rect.width + 8, rect.height + 8), pygame.SRCALPHA)
         pygame.draw.rect(shadow, (0, 0, 0, 75), shadow.get_rect(), border_radius=radius + 2)
         surface.blit(shadow, (rect.x - 3, rect.y - 1))
 
         top_color = base_color
-        bottom_color = (9, 15, 24)
+        bottom_color = (int(top_color[0] * 0.4), int(top_color[1] * 0.4), int(top_color[2] * 0.4), top_color[3])
         
         gradient_surf = pygame.Surface(rect.size, pygame.SRCALPHA)
         for y_offset in range(rect.height):
             t = y_offset / max(1, rect.height - 1)
-            blended_rgb = tuple(int(top_color[i] + (bottom_color[i] - top_color[i]) * t) for i in range(3))
-            pygame.draw.line(gradient_surf, (*blended_rgb, 255), (0, y_offset), (rect.width, y_offset))
+            blended_rgba = tuple(int(top_color[i] + (bottom_color[i] - top_color[i]) * t) for i in range(4))
+            pygame.draw.line(gradient_surf, blended_rgba, (0, y_offset), (rect.width, y_offset))
         
         mask = pygame.Surface(rect.size, pygame.SRCALPHA)
         pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(), border_radius=radius)
         gradient_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
         surface.blit(gradient_surf, rect.topleft)
 
-        pygame.draw.rect(surface, border_color, rect, 1, border_radius=radius)
+        border_surf = pygame.Surface(rect.size, pygame.SRCALPHA)
+        pygame.draw.rect(border_surf, border_color, border_surf.get_rect(), 1, border_radius=radius)
+        surface.blit(border_surf, rect.topleft)
 
         if glow_strength > 0.01:
-            glow_color = custom_colors[1] if custom_colors else ((212, 169, 77) if is_selected else (92, 116, 144))
+            glow_color = border_color[:3]
             glow_surf = pygame.Surface((rect.width + 20, rect.height + 20), pygame.SRCALPHA)
             
             for ring in range(4):
@@ -357,7 +369,6 @@ class PeaceTreatyScreen:
 
         if is_selected:
             pygame.draw.rect(surface, (212, 169, 77), pygame.Rect(rect.x, rect.y + 8, 3, rect.height - 16), border_radius=2)
-
 
     def draw_popup(self):
         if not self.active_popup:
