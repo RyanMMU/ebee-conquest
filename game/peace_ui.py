@@ -257,7 +257,7 @@ class PeaceTreatyScreen:
                         if self.chat_input_text.strip():
                             user_msg = self.chat_input_text
                             self.chat_history.append(("You", user_msg))
-                            reply = f"to be answered...... '{user_msg}'."
+                            reply = f"....AI to be implemented...."
                             self.chat_history.append(("LEADER", reply))
                             self.chat_input_text = ""
                     elif event.key == pygame.K_BACKSPACE:
@@ -268,7 +268,7 @@ class PeaceTreatyScreen:
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
-                    if self.active_popup == "demand":
+                    if self.active_popup in ["demand", "history"]:
                         if self.popup_close_btn.collidepoint(event.pos):
                             self.active_popup = None
                         return
@@ -284,6 +284,9 @@ class PeaceTreatyScreen:
                         self.chat_open = not self.chat_open
                     if self.exit_btn_rect.collidepoint(event.pos):
                         self.running = False
+
+                    if self.history_btn_rect.collidepoint(event.pos):
+                        self.active_popup = "history"
                     if self.submit_btn_rect.collidepoint(event.pos):
                         self.active_popup = "submit"
                     if self.clear_btn_rect.collidepoint(event.pos):
@@ -401,6 +404,23 @@ class PeaceTreatyScreen:
             pygame.draw.rect(self.screen, (255, 255, 255), self.popup_cancel_btn, 1)
             cancel_txt = self.small_font.render("CANCEL", True, (255, 255, 255))
             self.screen.blit(cancel_txt, cancel_txt.get_rect(center=self.popup_cancel_btn.center))
+
+
+        elif self.active_popup == "history":
+            p_title = self.title_font.render("PROPOSAL HISTORY", True, (240, 198, 116))
+            self.screen.blit(p_title, p_title.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 25))
+
+            p_msg1 = self.small_font.render("No previous proposals found.", True, (170, 180, 190))
+            self.screen.blit(p_msg1, p_msg1.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 75))
+            
+            
+
+            b_color = (40, 52, 72) if self.popup_close_btn.collidepoint(mouse_pos) else (24, 33, 46)
+            pygame.draw.rect(self.screen, b_color, self.popup_close_btn)
+            pygame.draw.rect(self.screen, (240, 198, 116), self.popup_close_btn, 1)
+            
+            btn_txt = self.small_font.render("CLOSE", True, (240, 198, 116))
+            self.screen.blit(btn_txt, btn_txt.get_rect(center=self.popup_close_btn.center))
             
     def draw(self):
         self.screen.fill((11, 18, 32))
