@@ -53,6 +53,12 @@ class PeaceTreatyScreen:
                                            HEIGHT - STATUS_BAR_HEIGHT - BOTTOMBAR_HEIGHT - 80)
         self.chat_input_rect = pygame.Rect(self.chat_panel_rect.x + 20, self.chat_panel_rect.bottom - 60, 
                                            self.chat_panel_rect.width - 40, 40)
+        
+        self.popup_open = False
+        self.selected_demand = ""
+        self.popup_rect = pygame.Rect((WIDTH // 2) - 200, (HEIGHT // 2) - 100, 400, 200)
+        self.popup_close_btn = pygame.Rect(self.popup_rect.centerx - 50, self.popup_rect.bottom - 50, 100, 35)
+        self.selected_demands_set = set()
 
     def draw_status_bar(self):
         status_rect = pygame.Rect(0, 0, WIDTH, STATUS_BAR_HEIGHT)
@@ -137,6 +143,11 @@ class PeaceTreatyScreen:
             txt_surf = self.small_font.render(label, True, t_color)
             txt_rect = txt_surf.get_rect(center=rect.center)
             self.screen.blit(txt_surf, txt_rect)
+            count_val = len(self.selected_demands_set)
+            count_str = f"{count_val} DEMAND SELECTED" if count_val == 1 else f"{count_val} DEMANDS SELECTED"
+            count_surf = self.small_font.render(count_str, True, (240, 198, 116))
+            count_rect = count_surf.get_rect(centerx=rightbar_rect.centerx, bottom=rightbar_rect.bottom - 20)
+            self.screen.blit(count_surf, count_rect)
 
     def draw_bottom_bar(self):
         bottombar_rect = pygame.Rect(0, HEIGHT - BOTTOMBAR_HEIGHT, WIDTH, BOTTOMBAR_HEIGHT)
@@ -221,15 +232,13 @@ class PeaceTreatyScreen:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
                 
-                if self.chat_open:
+                if self.chat_open and not self.popup_open:
                     if event.key == pygame.K_RETURN:
                         if self.chat_input_text.strip():
                             user_msg = self.chat_input_text
                             self.chat_history.append(("You", user_msg))
-                            
                             reply = f"to be answered...... '{user_msg}'."
                             self.chat_history.append(("LEADER", reply))
-                            
                             self.chat_input_text = ""
                     elif event.key == pygame.K_BACKSPACE:
                         self.chat_input_text = self.chat_input_text[:-1]
@@ -239,15 +248,60 @@ class PeaceTreatyScreen:
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
+                    if self.popup_open:
+                        if self.popup_close_btn.collidepoint(event.pos):
+                            self.popup_open = False
+                        return
+
                     if self.chat_btn_rect.collidepoint(event.pos):
                         self.chat_open = not self.chat_open
-                        
                     if self.exit_btn_rect.collidepoint(event.pos):
                         self.running = False
                     if self.submit_btn_rect.collidepoint(event.pos):
                         print("Demands Submitted!") 
                     if self.clear_btn_rect.collidepoint(event.pos):
-                        pass
+                        self.selected_demands_set.clear()
+
+                    demands = [
+                        (self.ceasefire_btn_rect, "CEASEFIRE"),
+                        (self.state_transfer_btn_rect, "STATE TRANSFER"),
+                        (self.puppet_state_btn_rect, "PUPPET STATE"),
+                        (self.military_access_btn_rect, "MILITARY ACCESS"),
+                        (self.regime_change_btn_rect, "REGIME CHANGE")
+                    ]
+                    for rect, label in demands:
+                        if rect.collidepoint(event.pos):
+                            self.selected_demand = label
+                            self.selected_demands_set.add(label)
+                            self.popup_open = True
+
+
+
+    def draw_popup(self):
+        if not self.popup_open:
+            return
+        
+        surf = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        surf.fill((0, 0, 0, 150))
+        self.screen.blit(surf, (0, 0))
+
+        pygame.draw.rect(self.screen, (16, 24, 38), self.popup_rect)
+        pygame.draw.rect(self.screen, (240, 198, 116), self.popup_rect, 2)
+
+        p_title = self.title_font.render("DEMAND SELECTED", True, (240, 198, 116))
+        self.screen.blit(p_title, p_title.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 25))
+
+        p_msg = self.small_font.render(f"You chose: {self.selected_demand}", True, (255, 255, 255))
+        self.screen.blit(p_msg, p_msg.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 75))
+
+        mouse_pos = pygame.mouse.get_pos()
+        b_color = (40, 52, 72) if self.popup_close_btn.collidepoint(mouse_pos) else (24, 33, 46)
+        
+        pygame.draw.rect(self.screen, b_color, self.popup_close_btn)
+        pygame.draw.rect(self.screen, (240, 198, 116), self.popup_close_btn, 1)
+        
+        btn_txt = self.small_font.render("CLOSE", True, (240, 198, 116))
+        self.screen.blit(btn_txt, btn_txt.get_rect(center=self.popup_close_btn.center))
 
     def draw(self):
         self.screen.fill((11, 18, 32))
@@ -255,8 +309,9 @@ class PeaceTreatyScreen:
         self.draw_left_bar()
         self.draw_right_bar()
         self.draw_bottom_bar()
-        
         self.draw_chat_window()
+        
+        self.draw_popup()
         
         pygame.display.flip()
 
