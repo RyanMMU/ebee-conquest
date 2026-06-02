@@ -24,7 +24,7 @@ class PeaceTreatyScreen:
         self.running = True
         
         self.exit_btn_rect = pygame.Rect(20, HEIGHT - BOTTOMBAR_HEIGHT + 15, 180, 40)
-        self.clear_btn_rect = pygame.Rect(WIDTH - 140, STATUS_BAR_HEIGHT + 10, 120, 32)
+        self.clear_btn_rect = pygame.Rect(WIDTH - RIGHTBAR_WIDTH + (RIGHTBAR_WIDTH - 140) // 2, HEIGHT - BOTTOMBAR_HEIGHT - 52, 140, 32)
         self.chat_btn_rect = pygame.Rect((WIDTH // 2) - 210, HEIGHT - BOTTOMBAR_HEIGHT + 15, 200, 40)
         self.history_btn_rect = pygame.Rect((WIDTH // 2) + 10, HEIGHT - BOTTOMBAR_HEIGHT + 15, 200, 40)
         self.submit_btn_rect = pygame.Rect(WIDTH - 200, HEIGHT - BOTTOMBAR_HEIGHT + 15, 180, 40)
@@ -117,27 +117,13 @@ class PeaceTreatyScreen:
         pygame.draw.rect(self.screen, (28, 38, 52), rightbar_rect, 1)
         pygame.draw.line(self.screen, (76, 64, 38), rightbar_rect.topleft, rightbar_rect.bottomleft, 1)
         
-        right_title = self.title_font.render("DEMANDS", True, (240, 198, 116))
+        sidebar_title_font = pygame.font.SysFont("bahnschrift", 16, bold=True)
+        right_title = sidebar_title_font.render("DEMANDS", True, (240, 198, 116))
         right_rect = right_title.get_rect(left=rightbar_rect.left + 20, y=rightbar_rect.y + 16)
         self.screen.blit(right_title, right_rect)
 
         mouse_pos = pygame.mouse.get_pos()
         motion_time = pygame.time.get_ticks() / 1000.0
-
-        if self.clear_btn_rect.collidepoint(mouse_pos):
-            clear_btn_color = (40, 52, 72)
-            clear_text_color = (255, 220, 150)
-        else:
-            clear_btn_color = (24, 33, 46)
-            clear_text_color = (240, 198, 116)
-
-        pygame.draw.rect(self.screen, clear_btn_color, self.clear_btn_rect)
-        pygame.draw.rect(self.screen, clear_text_color, self.clear_btn_rect, 1)
-        
-        clear_font = pygame.font.SysFont("bahnschrift", 10, bold=True)
-        clear_surf = clear_font.render("CLEAR ALL", True, clear_text_color)
-        clear_rect = clear_surf.get_rect(center=self.clear_btn_rect.center)
-        self.screen.blit(clear_surf, clear_rect)
 
         for i, rect in enumerate(self.demand_rects):
             demand_name = self.demands[i]
@@ -162,9 +148,23 @@ class PeaceTreatyScreen:
         count_val = len(self.selected_demands_set)
         count_str = f"{count_val} DEMAND SELECTED" if count_val == 1 else f"{count_val} DEMANDS SELECTED"
         count_surf = self.small_font.render(count_str, True, (240, 198, 116))
-        count_rect = count_surf.get_rect(centerx=rightbar_rect.centerx, bottom=rightbar_rect.bottom - 20)
+        count_rect = count_surf.get_rect(centerx=rightbar_rect.centerx, bottom=self.clear_btn_rect.top - 12)
         self.screen.blit(count_surf, count_rect)
 
+        if self.clear_btn_rect.collidepoint(mouse_pos):
+            clear_btn_color = (40, 52, 72)
+            clear_text_color = (255, 220, 150)
+        else:
+            clear_btn_color = (24, 33, 46)
+            clear_text_color = (240, 198, 116)
+
+        pygame.draw.rect(self.screen, clear_btn_color, self.clear_btn_rect)
+        pygame.draw.rect(self.screen, clear_text_color, self.clear_btn_rect, 1)
+        
+        clear_font = pygame.font.SysFont("bahnschrift", 11, bold=True)
+        clear_surf = clear_font.render("CLEAR ALL", True, clear_text_color)
+        clear_rect = clear_surf.get_rect(center=self.clear_btn_rect.center)
+        self.screen.blit(clear_surf, clear_rect)
     def draw_bottom_bar(self):
         bottombar_rect = pygame.Rect(0, HEIGHT - BOTTOMBAR_HEIGHT, WIDTH, BOTTOMBAR_HEIGHT)
         pygame.draw.rect(self.screen, (5, 10, 17), bottombar_rect)
