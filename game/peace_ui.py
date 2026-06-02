@@ -54,11 +54,14 @@ class PeaceTreatyScreen:
         self.chat_input_rect = pygame.Rect(self.chat_panel_rect.x + 20, self.chat_panel_rect.bottom - 60, 
                                            self.chat_panel_rect.width - 40, 40)
         
-        self.popup_open = False
+        
         self.selected_demand = ""
         self.popup_rect = pygame.Rect((WIDTH // 2) - 200, (HEIGHT // 2) - 100, 400, 200)
         self.popup_close_btn = pygame.Rect(self.popup_rect.centerx - 50, self.popup_rect.bottom - 50, 100, 35)
         self.selected_demands_set = set()
+        self.active_popup = None
+        self.popup_confirm_btn = pygame.Rect(self.popup_rect.centerx - 120, self.popup_rect.bottom - 50, 100, 35)
+        self.popup_cancel_btn = pygame.Rect(self.popup_rect.centerx + 20, self.popup_rect.bottom - 50, 100, 35)
 
     def draw_status_bar(self):
         status_rect = pygame.Rect(0, 0, WIDTH, STATUS_BAR_HEIGHT)
@@ -232,7 +235,7 @@ class PeaceTreatyScreen:
                 if event.key == pygame.K_ESCAPE:
                     self.running = False
                 
-                if self.chat_open and not self.popup_open:
+                if self.chat_open and not self.active_popup:
                     if event.key == pygame.K_RETURN:
                         if self.chat_input_text.strip():
                             user_msg = self.chat_input_text
@@ -248,9 +251,16 @@ class PeaceTreatyScreen:
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
-                    if self.popup_open:
+                    if self.active_popup == "demand":
                         if self.popup_close_btn.collidepoint(event.pos):
-                            self.popup_open = False
+                            self.active_popup = None
+                        return
+                    elif self.active_popup == "submit":
+                        if self.popup_confirm_btn.collidepoint(event.pos):
+                            print("Demands Submitted!")
+                            self.active_popup = None
+                        elif self.popup_cancel_btn.collidepoint(event.pos):
+                            self.active_popup = None
                         return
 
                     if self.chat_btn_rect.collidepoint(event.pos):
@@ -258,7 +268,7 @@ class PeaceTreatyScreen:
                     if self.exit_btn_rect.collidepoint(event.pos):
                         self.running = False
                     if self.submit_btn_rect.collidepoint(event.pos):
-                        print("Demands Submitted!") 
+                        self.active_popup = "submit"
                     if self.clear_btn_rect.collidepoint(event.pos):
                         self.selected_demands_set.clear()
 
@@ -273,12 +283,11 @@ class PeaceTreatyScreen:
                         if rect.collidepoint(event.pos):
                             self.selected_demand = label
                             self.selected_demands_set.add(label)
-                            self.popup_open = True
-
+                            self.active_popup = "demand"
 
 
     def draw_popup(self):
-        if not self.popup_open:
+        if not self.active_popup:
             return
         
         surf = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
@@ -287,22 +296,42 @@ class PeaceTreatyScreen:
 
         pygame.draw.rect(self.screen, (16, 24, 38), self.popup_rect)
         pygame.draw.rect(self.screen, (240, 198, 116), self.popup_rect, 2)
-
-        p_title = self.title_font.render("DEMAND SELECTED", True, (240, 198, 116))
-        self.screen.blit(p_title, p_title.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 25))
-
-        p_msg = self.small_font.render(f"You chose: {self.selected_demand}", True, (255, 255, 255))
-        self.screen.blit(p_msg, p_msg.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 75))
-
         mouse_pos = pygame.mouse.get_pos()
-        b_color = (40, 52, 72) if self.popup_close_btn.collidepoint(mouse_pos) else (24, 33, 46)
-        
-        pygame.draw.rect(self.screen, b_color, self.popup_close_btn)
-        pygame.draw.rect(self.screen, (240, 198, 116), self.popup_close_btn, 1)
-        
-        btn_txt = self.small_font.render("CLOSE", True, (240, 198, 116))
-        self.screen.blit(btn_txt, btn_txt.get_rect(center=self.popup_close_btn.center))
 
+        if self.active_popup == "demand":
+            p_title = self.title_font.render("DEMAND SELECTED", True, (240, 198, 116))
+            self.screen.blit(p_title, p_title.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 25))
+
+            p_msg = self.small_font.render(f"You chose: {self.selected_demand}", True, (255, 255, 255))
+            self.screen.blit(p_msg, p_msg.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 75))
+
+            b_color = (40, 52, 72) if self.popup_close_btn.collidepoint(mouse_pos) else (24, 33, 46)
+            pygame.draw.rect(self.screen, b_color, self.popup_close_btn)
+            pygame.draw.rect(self.screen, (240, 198, 116), self.popup_close_btn, 1)
+            
+            btn_txt = self.small_font.render("CLOSE", True, (240, 198, 116))
+            self.screen.blit(btn_txt, btn_txt.get_rect(center=self.popup_close_btn.center))
+
+        elif self.active_popup == "submit":
+            p_title = self.title_font.render("CONFIRM SUBMISSION", True, (240, 198, 116))
+            self.screen.blit(p_title, p_title.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 25))
+
+            count_val = len(self.selected_demands_set)
+            p_msg = self.small_font.render(f"You selected {count_val} demands, do you want to submit?", True, (255, 255, 255))
+            self.screen.blit(p_msg, p_msg.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 75))
+
+            confirm_color = (40, 120, 40) if self.popup_confirm_btn.collidepoint(mouse_pos) else (30, 90, 30)
+            pygame.draw.rect(self.screen, confirm_color, self.popup_confirm_btn)
+            pygame.draw.rect(self.screen, (255, 255, 255), self.popup_confirm_btn, 1)
+            confirm_txt = self.small_font.render("SUBMIT", True, (255, 255, 255))
+            self.screen.blit(confirm_txt, confirm_txt.get_rect(center=self.popup_confirm_btn.center))
+
+            cancel_color = (120, 40, 40) if self.popup_cancel_btn.collidepoint(mouse_pos) else (90, 30, 30)
+            pygame.draw.rect(self.screen, cancel_color, self.popup_cancel_btn)
+            pygame.draw.rect(self.screen, (255, 255, 255), self.popup_cancel_btn, 1)
+            cancel_txt = self.small_font.render("CANCEL", True, (255, 255, 255))
+            self.screen.blit(cancel_txt, cancel_txt.get_rect(center=self.popup_cancel_btn.center))
+            
     def draw(self):
         self.screen.fill((11, 18, 32))
         self.draw_status_bar()
