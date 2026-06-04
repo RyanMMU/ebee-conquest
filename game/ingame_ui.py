@@ -512,8 +512,12 @@ class InGameUI:
         self._warprogress_drag_offset = (0, 0)
         self._warprogress_active_index = 0
         self.production_popup_open = False
-        self._production_popup_back_rect = pygame.Rect(0, 0, 10,10)
-        self._production_selection_rects = [pygame.Rect(0, 0, 10,10) for _ in range(4)]
+        self._production_popup_back_rect = pygame.Rect(0, 0, 10, 10)
+        self._production_popup_rect = pygame.Rect(0, 0, 10, 10)
+        self._production_item_rects = {}
+        self._production_scroll = 0
+        self._production_max_scroll = 0
+        self._production_item_count = 44
         self.production_selected = None
         self._recruit_action_rect = pygame.Rect(0, 0, 10, 10)
         self._declarewar_rect = pygame.Rect(0, 0, 10, 10)
@@ -1844,6 +1848,25 @@ class InGameUI:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 self.production_popup_open = False
                 return None
+            if event.type == pygame.MOUSEWHEEL:
+                if self._production_popup_rect.collidepoint(pygame.mouse.get_pos()):
+                    self._production_scroll = max(0, min(self._production_max_scroll, self._production_scroll - int(event.y) * 40))
+                    return "production_scroll"
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if self._production_popup_back_rect.collidepoint(event.pos):
+                    self.production_popup_open = False
+                    return None
+                for idx, rect in self._production_item_rects.items():
+                    if rect.collidepoint(event.pos):
+                        self.production_selected = idx + 1
+                        self.ui_click_sound.play()
+                        self.production_popup_open = False
+                        return f"production_select_{idx+1}"
+                if not self._production_popup_rect.collidepoint(event.pos):
+                    self.production_popup_open = False
+                    return None
+                self.production_popup_open = False
+                return None
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if self._production_popup_back_rect.collidepoint(event.pos):
                     self.production_popup_open = False
@@ -2093,6 +2116,9 @@ class InGameUI:
        
     def ispointeroverui(self, mouseposition):
         if self.warprogressopen and self._warprogress_popup_rect.collidepoint(mouseposition):
+            return True
+        
+        if self.production_popup_open and self._production_popup_rect.collidepoint(mouseposition):
             return True
        
         if self.focusview.pointerover(mouseposition):
@@ -2371,42 +2397,56 @@ class InGameUI:
 
         if self.production_popup_open:
             overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 120))
+            overlay.fill((0, 0, 0, 140))
             surface.blit(overlay, (0, 0))
-            popup_rect = pygame.Rect(0, 0, 600, 400)
+            popup_rect = pygame.Rect(0, 0, 640, 520)
             popup_rect.center = surface.get_rect().center
+            self._production_popup_rect = popup_rect
             self._draw_glass_panel(surface, popup_rect, radius=8, border=(72, 86, 108), glow=True)
+
             title = self.title_font.render("PRODUCTION", True, _C_GOLD_BRIGHT)
-            surface.blit(title, title.get_rect(center=(popup_rect.centerx, popup_rect.y + 40)))
+            surface.blit(title, title.get_rect(center=(popup_rect.centerx, popup_rect.y + 32)))
+            subtitle = self.small_font.render("Select production item", True, _C_TEXT_MUTED)
+            surface.blit(subtitle, subtitle.get_rect(center=(popup_rect.centerx, popup_rect.y + 58)))
 
-            btn_w, btn_h = 160, 50
-            btn_gap_x, btn_gap_y = 20, 15
-            start_x = popup_rect.centerx - btn_w - btn_gap_x // 2
-            start_y = popup_rect.y + 90
+            list_top = popup_rect.y + 80
+            list_bottom = popup_rect.bottom - 70
+            list_rect = pygame.Rect(popup_rect.x + 24, list_top, popup_rect.width - 48, list_bottom - list_top)
+            pygame.draw.rect(surface, (7, 12, 20), list_rect, border_radius=6)
+            pygame.draw.rect(surface, (43, 56, 73), list_rect, 1, border_radius=6)
 
-            for i in range(4):
-                col = i % 2
-                row = i // 2
-                x = start_x + col * (btn_w + btn_gap_x)
-                y = start_y + row * (btn_h + btn_gap_y)
-                self._production_selection_rects[i] = pygame.Rect(x, y, btn_w, btn_h)
-                selected = self.production_selected == (i + 1)
-                label = f"selection {i + 1}"
-                self._draw_glow_btn(
-                    surface,
-                    f"prod_sel_{i}",
-                    self._production_selection_rects[i],
-                    True,
-                    label,
-                    primary=selected,
-                    selected=selected,
-                    mouse=mouse,
-                )
+            row_h = 44
+            gap = 6
+            total_h = self._production_item_count * (row_h + gap)
+            visible_h = list_rect.height
+            self._production_max_scroll = max(0, total_h - visible_h + gap)
+            self._production_scroll = max(0, min(self._production_scroll, self._production_max_scroll))
+
+            self._production_item_rects = {}
+            y = list_rect.y + 6 - self._production_scroll
+            for i in range(self._production_item_count):
+                row_rect = pygame.Rect(list_rect.x + 8, y, list_rect.width - 16, row_h)
+                if row_rect.bottom >= list_rect.y and row_rect.top <= list_rect.bottom:
+                    self._production_item_rects[i] = row_rect
+                    selected = self.production_selected == (i + 1)
+                    label = f"Production Item {i + 1}"
+                    self._draw_glow_btn(
+                        surface, f"prod_item_{i}", row_rect, True, label,
+                        primary=selected, selected=selected, mouse=mouse,
+                    )
+                y += row_h + gap
+
+            if self._production_max_scroll > 0:
+                track_rect = pygame.Rect(list_rect.right - 6, list_rect.y + 2, 4, list_rect.height - 4)
+                pygame.draw.rect(surface, (39, 51, 68), track_rect, border_radius=2)
+                thumb_h = max(28, int(list_rect.height * (visible_h / max(total_h, 1))))
+                thumb_y = track_rect.y + int((track_rect.height - thumb_h) * (self._production_scroll / self._production_max_scroll))
+                pygame.draw.rect(surface, _C_GOLD, pygame.Rect(track_rect.x, thumb_y, track_rect.width, thumb_h), border_radius=2)
 
             back_w, back_h = 140, 40
             self._production_popup_back_rect = pygame.Rect(0, 0, back_w, back_h)
             self._production_popup_back_rect.centerx = popup_rect.centerx
-            self._production_popup_back_rect.y = popup_rect.bottom - back_h - 20
+            self._production_popup_back_rect.y = popup_rect.bottom - back_h - 18
             self._draw_glow_btn(surface, "prod_back", self._production_popup_back_rect, True, "BACK", mouse=mouse)
 
         if self.focusview.isopen:
