@@ -369,7 +369,7 @@ class AnimatedMainMenu:
         self._draw_button(back, "settings_back", "BACK", dt)
         self._draw_button(cache, "settings_cache", "REMOVE CACHE", dt, danger=True)
 
-        warning = self.small_font.render("Removing cache rebuilds map geometry next launch.", True, (236, 166, 166))
+        warning = self.small_font.render("WARNING: REMOVING CACHE WILL CAUSE THE GAME TO LAUNCH SLOWER WHEN YOU RUN IT !!!", True, (236, 166, 166))
         self.screen.blit(warning, (panel.x + 54, panel.bottom - 50))
 
     def _handle_settings_click(self):
