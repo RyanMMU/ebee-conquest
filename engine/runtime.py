@@ -124,6 +124,7 @@ from . import api as apimodule
 from . import camera as cameramodule
 from . import eso as esomodule
 from . import npc as npcmodule
+from . import domestic as domesticmodule
 from .events import EventBus, EngineEventType
 
 
@@ -1588,6 +1589,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
         recruitpopulationcostperunit,
     ) = initializeplayereconomy(economyconfig)
     focustree = loadfocustreeforcountry(None)
+    domesticaffairsstate = domesticmodule.create_domestic_affairs_state()
 
 
     # THIS is the NPC instance
@@ -2886,6 +2888,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
             npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
 
             if playercountry:
+                applydomesticstartingstateforplayer()
                 gamephase = "play"
                 updatescriptengine()
                 eventbus.emit(
@@ -2936,6 +2939,158 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
         "COUNTRY COLLAPSED",
         p.get("description", f"{p.get('country', '?')} has collapsed."),
     ))
+
+    def builddomesticplayermetrics():
+        return {
+            "stability": playerstability,
+            "public_approval": playerstability,
+            "gold": playergold,
+            "population": playerpopulation,
+            "political_power": playerpp,
+            "action_points": playerap,
+        }
+
+    def applydomesticstartingstateforplayer():
+        nonlocal playerstability
+        countryentry = domesticmodule.get_country_entry(domesticaffairsstate, playercountry)
+        if not countryentry:
+            return
+        playerstability = max(0.0, min(100.0, float(countryentry.get("government_stability", playerstability) or playerstability)))
+
+    def getdomestictargetcountry():
+        return countrymenutarget or runtimeui._selectedmapcountry or playercountry
+
+    def builddomesticaffairsviewdata():
+        if gamephase != "play":
+            return {}
+        targetcountry = getdomestictargetcountry()
+        if not targetcountry:
+            return {}
+        metrics = builddomesticplayermetrics() if targetcountry == playercountry else None
+        return domesticmodule.build_domestic_affairs_view(
+            domesticaffairsstate,
+            targetcountry,
+            currentturnnumber,
+            player_metrics=metrics,
+        )
+
+    def refreshfocustreecontext():
+        countryentry = domesticmodule.get_country_entry(domesticaffairsstate, playercountry)
+        focuscontext = domesticmodule.build_focus_context(
+            countryentry,
+            currentturnnumber,
+            player_metrics=builddomesticplayermetrics(),
+        ) if countryentry else {}
+        focuscontext["political_power"] = playerpp
+        focustree.setcontext(focuscontext)
+        return countryentry, focuscontext
+
+    def buildfocuseffectcontext():
+        focuseffectcontext = FocusEffectContext(
+            gold=playergold,
+            population=playerpopulation,
+            economyconfig=economyconfig,
+            country=playercountry,
+        )
+        countryentry, _ = refreshfocustreecontext()
+        metadata = focuseffectcontext.metadata
+        metadata.update({
+            "domestic_state": domesticaffairsstate,
+            "domestic_country": countryentry,
+            "turn": currentturnnumber,
+            "current_date": domesticmodule.turn_to_date(currentturnnumber).isoformat(),
+        })
+        activefocus = focustree.getfocus(focustree.activeid)
+        if activefocus and countryentry:
+            metadata["focus_type"] = activefocus.focustype
+            metadata["focus_progress_multiplier"] = domesticmodule.calculate_focus_speed_modifier(
+                countryentry,
+                activefocus.focustype,
+            )
+            requireslegislature = activefocus.focustype == "legislative_focus" or (
+                activefocus.focustype == "economic_focus" and "budget" in activefocus.id
+            )
+            if requireslegislature:
+                lawresult = domesticmodule.resolve_policy_vote(
+                    countryentry,
+                    currentturnnumber,
+                    activefocus.id,
+                    policy_type=activefocus.focustype,
+                )
+                metadata.update({
+                    "requires_legislature": True,
+                    "law_passing_chance": lawresult["chance"],
+                    "law_roll": lawresult["roll"],
+                    "law_passed": lawresult["passed"],
+                })
+        return focuseffectcontext
+
+    def applydomesticfocusresult(focusturnresult, focuseffectcontext):
+        if not focusturnresult.completedfocusid:
+            return
+        countryentry = domesticmodule.get_country_entry(domesticaffairsstate, playercountry)
+        if not countryentry:
+            return
+
+        metadata = focuseffectcontext.metadata or {}
+        lawpassed = bool(metadata.get("law_passed", True))
+        chance = int(metadata.get("law_passing_chance", 0) or 0)
+        roll = int(metadata.get("law_roll", 0) or 0)
+        focusid = focusturnresult.completedfocusid
+        if lawpassed:
+            countryentry["government_stability"] = domesticmodule.clamp(countryentry.get("government_stability", 50) + 0.7)
+            countryentry["public_approval"] = domesticmodule.clamp(countryentry.get("public_approval", 50) + 0.4)
+            countryentry["coalition_loyalty"] = domesticmodule.clamp(countryentry.get("coalition_loyalty", 50) + 0.5)
+            domesticmodule.refresh_government_state(countryentry)
+            if chance and chance < 45:
+                pushnotification(
+                    "POLICY PASSED NARROWLY",
+                    f"{focusid} passed the legislature with a {chance}% chance against a roll of {roll}.",
+                )
+            return
+
+        countryentry["government_stability"] = domesticmodule.clamp(countryentry.get("government_stability", 50) - 2.5)
+        countryentry["coalition_loyalty"] = domesticmodule.clamp(countryentry.get("coalition_loyalty", 50) - 3.0)
+        countryentry["public_unrest"] = domesticmodule.clamp(countryentry.get("public_unrest", 25) + 2.0)
+        domesticmodule.refresh_government_state(countryentry)
+        pushnotification(
+            "POLICY BLOCKED",
+            f"{focusid} failed its domestic law check ({chance}% chance, roll {roll}).",
+        )
+
+    def advancedomesticturneffects():
+        nonlocal playerstability
+        nonlocal playerpp
+        nonlocal playerap
+
+        result = domesticmodule.advance_domestic_affairs_turn(
+            domesticaffairsstate,
+            currentturnnumber,
+            playercountry=playercountry,
+            player_metrics=builddomesticplayermetrics(),
+            npc_economies=getattr(npcdirector, "countryeconomy", {}),
+            countriesatwarset=countriesatwarset,
+        )
+        effects = result.get("effects", {})
+        playerstability = max(0.0, min(100.0, playerstability + float(effects.get("player_stability_delta", 0.0) or 0.0)))
+        playerpp = max(0, playerpp + int(effects.get("player_pp_delta", 0) or 0))
+        playerap = max(0, playerap + int(effects.get("player_ap_delta", 0) or 0))
+
+        for countryid, countryentry in domesticaffairsstate.items():
+            if countryid == playercountry:
+                continue
+            economyentry = getattr(npcdirector, "countryeconomy", {}).get(countryid)
+            if isinstance(economyentry, dict):
+                economyentry["stability"] = domesticmodule.clamp(countryentry.get("government_stability", economyentry.get("stability", 50)))
+
+        for domesticevent in result.get("events", ()):
+            if not isinstance(domesticevent, dict):
+                continue
+            pushnotification(
+                domesticevent.get("title", "DOMESTIC AFFAIRS"),
+                domesticevent.get("description", "A domestic political event occurred."),
+            )
+
     scriptmanager = scriptengine.initscripts("scripts", autoload=True)
     # UI chrome + map viewport
     # runtime-owned font/caches (previously stored on EngineUI)
@@ -3057,6 +3212,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
             npcdirector.setplayercountry(playercountry)
             npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
             focustree = loadfocustreeforcountry(playercountry)
+            applydomesticstartingstateforplayer()
             updatescriptengine()
             eventbus.emit(
                 EngineEventType.PLAYERCOUNTRYSELECTED,
@@ -3722,18 +3878,23 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                 npc_economy = getattr(npcdirector, "countryeconomy", {}).get(selected_country, {})
                 stability = npc_economy.get("stability", base_stats.get("stability", 50.0))
                 population = npc_economy.get("population", base_stats.get("population", 0))
+            countryentry = domesticmodule.get_country_entry(domesticaffairsstate, selected_country)
+            leadername = domesticmodule.current_leader_name(countryentry) if countryentry else base_stats.get("leader", "Unknown")
             
             current_stats = {
                 "population": population,
                 "manpower": total_manpower,
                 "stability": stability,
-                "leader": base_stats.get("leader", "Unknown"),
+                "leader": leadername,
             }
         if perfidlecollecting:
             now = time.perf_counter()
             perf_sections_frame["ui_state_prep"] = (now - perf_section_start) * 1000.0
             perf_section_start = now
         
+        if gamephase == "play":
+            refreshfocustreecontext()
+
         runtimeui.sync(
             gamephase,
             pendingcountry,
@@ -3765,6 +3926,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                 "researching_turns_remaining": researching_turns_remaining,
             },
             warprogressdata=warprogressdata,
+            domesticaffairsdata=builddomesticaffairsviewdata(),
             selected_country_stats=current_stats,
             systemstatus={
                 "fps": clock.get_fps(),
@@ -3906,6 +4068,8 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                     npcdirector.setplayercountry(playercountry)
                     npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
                     focustree = loadfocustreeforcountry(playercountry)
+                    applydomesticstartingstateforplayer()
+                    refreshfocustreecontext()
                     updatescriptengine()
                     eventbus.emit(
                         EngineEventType.PLAYERCOUNTRYSELECTED,
@@ -3988,8 +4152,12 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                 and uiaction[0] == InGameUI.actionstartfocus
                 and gamephase == "play"
             ):
+                refreshfocustreecontext()
                 focusstartresult = focustree.startfocus(uiaction[1])
                 if focusstartresult.success:
+                    focuscost = focustree.focuscost(focusstartresult.focusid)
+                    if focuscost and not developmentmode:
+                        playerpp = max(0, playerpp - focuscost)
                     eventbus.emit(
                         EngineEventType.FOCUSSTARTED,
                         {
@@ -4029,13 +4197,9 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                     countrycapitalprovinceidlookup=countrycapitalprovinceidlookup,
                 )
                 countrybordersdirty = True
-                focuseffectcontext = FocusEffectContext(
-                    gold=playergold,
-                    population=playerpopulation,
-                    economyconfig=economyconfig,
-                    country=playercountry,
-                )
+                focuseffectcontext = buildfocuseffectcontext()
                 focusturnresult = focustree.advanceturn(focuseffectcontext)
+                applydomesticfocusresult(focusturnresult, focuseffectcontext)
                 playergold = max(0, int(focuseffectcontext.gold))
                 playerpopulation = max(0, int(focuseffectcontext.population))
                 if focusturnresult.completedfocusid:
@@ -4070,6 +4234,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                     playerstability,
                     npcdirector.countryeconomy,
                 )
+                advancedomesticturneffects()
                 if researching_node_id and researching_turns_remaining > 0:
                     researching_turns_remaining -= 1
                     if researching_turns_remaining <= 0:
@@ -4639,13 +4804,9 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                         countrycapitalprovinceidlookup=countrycapitalprovinceidlookup,
                     )
                     countrybordersdirty = True
-                    focuseffectcontext = FocusEffectContext(
-                        gold=playergold,
-                        population=playerpopulation,
-                        economyconfig=economyconfig,
-                        country=playercountry,
-                    )
+                    focuseffectcontext = buildfocuseffectcontext()
                     focusturnresult = focustree.advanceturn(focuseffectcontext)
+                    applydomesticfocusresult(focusturnresult, focuseffectcontext)
                     playergold = max(0, int(focuseffectcontext.gold))
                     playerpopulation = max(0, int(focuseffectcontext.population))
                     if focusturnresult.completedfocusid:
@@ -4680,6 +4841,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                         playerstability,
                         npcdirector.countryeconomy,
                     )
+                    advancedomesticturneffects()
                     if researching_node_id and researching_turns_remaining > 0:
                         researching_turns_remaining -= 1
                         if researching_turns_remaining <= 0:

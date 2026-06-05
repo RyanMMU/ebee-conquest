@@ -1,0 +1,27 @@
+{
+  "source": "Wikipedia/Wikimedia page thumbnail images downloaded for local game assets.",
+  "standard_display_size": [50, 70],
+  "leaders": {
+    "abdullah_of_pahang.jpg": "https://en.wikipedia.org/wiki/Abdullah_of_Pahang",
+    "mahathir_mohamad.jpg": "https://commons.wikimedia.org/wiki/File:Mahathir_Mohamad_(cropped_4to3_portrait).jpg",
+    "anwar_ibrahim.jpg": "https://commons.wikimedia.org/wiki/File:Anwar_Ibrahim,_2019_(crop_version_1,_format_4to3_portrait.jpg",
+    "muhyiddin_yassin.jpg": "https://en.wikipedia.org/wiki/Muhyiddin_Yassin",
+    "joko_widodo.jpg": "https://en.wikipedia.org/wiki/Joko_Widodo",
+    "maha_vajiralongkorn.jpg": "https://en.wikipedia.org/wiki/Maha_Vajiralongkorn",
+    "prayut_chan_o_cha.jpg": "https://en.wikipedia.org/wiki/Prayut_Chan-o-cha",
+    "halimah_yacob.jpg": "https://en.wikipedia.org/wiki/Halimah_Yacob",
+    "lee_hsien_loong.jpg": "https://en.wikipedia.org/wiki/Lee_Hsien_Loong",
+    "rodrigo_duterte.jpg": "https://en.wikipedia.org/wiki/Rodrigo_Duterte",
+    "nguyen_xuan_phuc.jpg": "https://en.wikipedia.org/wiki/Nguyen_Xuan_Phuc",
+    "pham_minh_chinh.jpg": "https://en.wikipedia.org/wiki/Pham_Minh_Chinh",
+    "thongloun_sisoulith.jpg": "https://en.wikipedia.org/wiki/Thongloun_Sisoulith",
+    "phankham_viphavanh.jpg": "https://en.wikipedia.org/wiki/Phankham_Viphavanh",
+    "norodom_sihamoni.jpg": "https://en.wikipedia.org/wiki/Norodom_Sihamoni",
+    "hun_sen.jpg": "https://en.wikipedia.org/wiki/Hun_Sen",
+    "win_myint.jpg": "https://en.wikipedia.org/wiki/Win_Myint",
+    "aung_san_suu_kyi.jpg": "https://en.wikipedia.org/wiki/Aung_San_Suu_Kyi",
+    "hassanal_bolkiah.jpg": "https://en.wikipedia.org/wiki/Hassanal_Bolkiah",
+    "francisco_guterres.jpg": "https://en.wikipedia.org/wiki/Francisco_Guterres",
+    "taur_matan_ruak.jpg": "https://en.wikipedia.org/wiki/Taur_Matan_Ruak"
+  }
+}

@@ -441,6 +441,7 @@ class FocusTreeView:
         progress = int(focus.get("progress", 0) or 0)
         turns = int(focus.get("turnsrequired", 1) or 1)
         y = self.drawfield(surface, "Status", status, font, x, y, contentw)
+        y = self.drawfield(surface, "Type", str(focus.get("focus_type", "administrative_focus")).replace("_", " "), font, x, y, contentw)
         y = self.drawfield(surface, "Turns", str(turns), font, x, y, contentw)
         y = self.drawfield(surface, "Progress", f"{progress}/{turns}", font, x, y, contentw)
         y = self.drawfield(surface, "Prerequisites", self.namelist(focus.get("prerequisites", ())), font, x, y, contentw)
@@ -610,6 +611,14 @@ class FocusTreeView:
                 parts.append(f"Gold {sign}{amount}")
             elif effecttype == "modify_population_growth":
                 parts.append(f"Population growth {sign}{amount}")
+            elif effecttype == "modify_domestic_variable":
+                key = str(effect.get("key") or effect.get("variable") or "domestic").replace("_", " ")
+                parts.append(f"{key} {sign}{amount}")
+            elif effecttype == "set_domestic_value":
+                key = str(effect.get("key") or effect.get("variable") or "domestic").replace("_", " ")
+                parts.append(f"{key}: {effect.get('value')}")
+            elif effecttype == "set_domestic_flag":
+                parts.append(str(effect.get("flag") or effect.get("key") or "flag"))
             else:
                 parts.append(str(effecttype))
         return ", ".join(parts) if parts else "None"
@@ -627,5 +636,7 @@ class FocusTreeView:
             "blocked": ((90, 46, 46), (220, 125, 125)),
             "locked": ((52, 54, 59), (122, 126, 136)),
             "waiting": ((50, 54, 62), (122, 132, 145)),
+            "failed": ((88, 42, 42), (232, 118, 118)),
+            "bypassed": ((54, 62, 70), (148, 162, 174)),
         }
         return colors.get(status, colors["locked"])

@@ -1,535 +1,639 @@
 {
   "id": "malaysia",
   "country": "Malaysia",
-  "name": "Malaysia Focus Tree",
+  "name": "Malaysia National Policy",
   "cover_image": "assets/focus/malaysia_national_policy_banner.png",
   "focuses": [
     {
-      "id": "resolve_political_crisis",
-      "title": "Resolve the Political Crisis",
-      "description": "Stabilize the government after the Sheraton Move era and set the country back on course.",
-      "icon": "assets/focus/government.png",
-      "turns": 20,
-      "x": 1,
-      "y": 0,
-      "effects": [
-        { "type": "modify_gold", "amount": 25 }
-      ]
-    },
-    {
-      "id": "post_pandemic_recovery_plan",
-      "title": "Post-Pandemic Recovery Plan",
-      "description": "Relaunch the economy with emergency support and a stronger recovery footing.",
-      "icon": "assets/focus/economy.png",
-      "turns": 20,
-      "x": 4,
-      "y": 0,
-      "effects": [
-        { "type": "modify_gold", "amount": 40 },
-        { "type": "modify_population_growth", "amount": 1 }
-      ]
-    },
-    {
-      "id": "review_national_defense_strategy",
-      "title": "Review National Defense Strategy",
-      "description": "Reassess Malaysia's defense posture and identify the most urgent modernization gaps.",
-      "icon": "assets/focus/military.png",
-      "turns": 20,
-      "x": 7,
-      "y": 0,
-      "effects": [
-        { "type": "modify_gold", "amount": 10 }
-      ]
-    },
-    {
-      "id": "define_malaysia_world_role",
-      "title": "Define Malaysia's Role in the World",
-      "description": "Choose a clear foreign policy direction for a more uncertain global era.",
-      "icon": "assets/focus/diplomacy.png",
-      "turns": 20,
-      "x": 10,
-      "y": 0,
-      "effects": [
-        { "type": "modify_gold", "amount": 15 }
-      ]
-    },
-    {
-      "id": "digital_transformation_agenda",
-      "title": "Digital Transformation Agenda",
-      "description": "Lay the groundwork for a more connected, productive, and modern Malaysia.",
-      "icon": "assets/focus/technology.png",
-      "turns": 20,
-      "x": 13,
-      "y": 0,
-      "effects": [
-        { "type": "modify_gold", "amount": 20 },
-        { "type": "modify_population_growth", "amount": 1 }
-      ]
-    },
-    {
-      "id": "strengthen_parliamentary_democracy",
-      "title": "Strengthen Parliamentary Democracy",
-      "description": "Rebuild public trust through stronger institutions and a more stable parliamentary system.",
+      "id": "continue_reformasi_agenda",
+      "title": "Continue Reformasi Agenda",
+      "description": "Keep Pakatan Harapan's reform mandate alive while coalition discipline remains fragile.",
+      "branch": "Pakatan Harapan Reform",
+      "focus_type": "administrative_focus",
+      "duration_days": 15,
+      "political_power_cost": 5,
       "icon": "assets/focus/parliament.png",
-      "turns": 30,
-      "prerequisites": ["resolve_political_crisis"],
-      "mutually_exclusive": ["empower_the_monarchy", "emergency_rule"],
+      "x": 0,
+      "y": 0,
+      "requirements": {
+        "current_prime_minister": ["Mahathir Mohamad", "Anwar Ibrahim"],
+        "ruling_coalition": "Pakatan Harapan",
+        "sheraton_move_succeeded": false
+      },
+      "effects": [
+        {"type": "modify_domestic_variable", "key": "reform_momentum", "amount": 8},
+        {"type": "modify_domestic_variable", "key": "corruption_reform_momentum", "amount": 6},
+        {"type": "modify_domestic_variable", "key": "opposition_pressure", "amount": 4}
+      ]
+    },
+    {
+      "id": "strengthen_macc_independence",
+      "title": "Strengthen MACC Independence",
+      "description": "Give anti-corruption investigators more independence and political protection.",
+      "branch": "Pakatan Harapan Reform",
+      "focus_type": "legislative_focus",
+      "duration_days": 20,
+      "political_power_cost": 8,
+      "icon": "assets/focus/security.png",
       "x": 0,
       "y": 1,
+      "prerequisites": ["continue_reformasi_agenda"],
+      "requirements": {
+        "ruling_coalition": "Pakatan Harapan",
+        "caretaker_government": false,
+        "min": {"government_stability": 35, "corruption_level": 20}
+      },
+      "cancel_conditions": {
+        "any_of": [
+          {"sheraton_move_succeeded": true},
+          {"caretaker_government": true}
+        ]
+      },
       "effects": [
-        { "type": "modify_population_growth", "amount": 1 }
+        {"type": "modify_domestic_variable", "key": "corruption_level", "amount": -8},
+        {"type": "modify_domestic_variable", "key": "reform_momentum", "amount": 10},
+        {"type": "modify_domestic_variable", "key": "international_confidence", "amount": 5},
+        {"type": "modify_domestic_variable", "key": "elite_resistance", "amount": 8}
       ]
     },
     {
-      "id": "empower_the_monarchy",
-      "title": "Empower the Monarchy",
-      "description": "Lean on royal authority to calm political infighting and restore order.",
-      "icon": "assets/focus/monarchy.png",
-      "turns": 30,
-      "prerequisites": ["resolve_political_crisis"],
-      "mutually_exclusive": ["strengthen_parliamentary_democracy", "emergency_rule"],
+      "id": "judicial_reform_package",
+      "title": "Judicial Reform Package",
+      "description": "Advance institutional reform through judicial independence and parliamentary safeguards.",
+      "branch": "Pakatan Harapan Reform",
+      "focus_type": "legislative_focus",
+      "duration_days": 25,
+      "political_power_cost": 10,
+      "icon": "assets/focus/parliament.png",
       "x": 1,
       "y": 1,
+      "prerequisites": ["continue_reformasi_agenda"],
+      "requirements": {"ruling_coalition": "Pakatan Harapan", "caretaker_government": false},
       "effects": [
-        { "type": "modify_gold", "amount": 15 }
+        {"type": "modify_domestic_variable", "key": "democracy_score", "amount": 6},
+        {"type": "modify_domestic_variable", "key": "international_confidence", "amount": 6},
+        {"type": "modify_domestic_variable", "key": "elite_resistance", "amount": 5}
       ]
     },
     {
-      "id": "emergency_rule",
-      "title": "Emergency Rule",
-      "description": "Centralize authority in the name of national stability during a crisis year.",
-      "icon": "assets/focus/security.png",
-      "turns": 30,
-      "prerequisites": ["resolve_political_crisis"],
-      "mutually_exclusive": ["strengthen_parliamentary_democracy", "empower_the_monarchy"],
+      "id": "reduce_political_appointments",
+      "title": "Reduce Political Appointments",
+      "description": "Trim patronage appointments even as coalition partners demand influence.",
+      "branch": "Pakatan Harapan Reform",
+      "focus_type": "administrative_focus",
+      "duration_days": 15,
+      "political_power_cost": 6,
+      "icon": "assets/focus/government.png",
       "x": 2,
       "y": 1,
+      "prerequisites": ["continue_reformasi_agenda"],
+      "requirements": {"ruling_coalition": "Pakatan Harapan", "caretaker_government": false},
       "effects": [
-        { "type": "modify_gold", "amount": 30 }
+        {"type": "modify_domestic_variable", "key": "corruption_level", "amount": -4},
+        {"type": "modify_domestic_variable", "key": "bersatu_loyalty", "amount": -4},
+        {"type": "modify_domestic_variable", "key": "reform_momentum", "amount": 5}
       ]
     },
     {
-      "id": "attract_foreign_investment",
-      "title": "Attract Foreign Investment",
-      "description": "Open the door to new capital and rebuild confidence in Malaysia's economic outlook.",
+      "id": "institutional_reform_bill",
+      "title": "Institutional Reform Bill",
+      "description": "Put the reform agenda to a Dewan Rakyat vote.",
+      "branch": "Pakatan Harapan Reform",
+      "focus_type": "legislative_focus",
+      "duration_days": 30,
+      "political_power_cost": 12,
+      "icon": "assets/focus/parliament.png",
+      "x": 1,
+      "y": 2,
+      "prerequisites": ["strengthen_macc_independence", "judicial_reform_package"],
+      "requirements": {"ruling_coalition": "Pakatan Harapan", "caretaker_government": false},
+      "effects": [
+        {"type": "modify_domestic_variable", "key": "corruption_level", "amount": -10},
+        {"type": "modify_domestic_variable", "key": "democracy_score", "amount": 8},
+        {"type": "modify_domestic_variable", "key": "international_confidence", "amount": 8},
+        {"type": "modify_domestic_variable", "key": "elite_resistance", "amount": 5}
+      ]
+    },
+    {
+      "id": "transparent_procurement",
+      "title": "Transparent Procurement",
+      "description": "Clean up public procurement while balancing the backlash from entrenched interests.",
+      "branch": "Pakatan Harapan Reform",
+      "focus_type": "legislative_focus",
+      "duration_days": 20,
+      "political_power_cost": 8,
       "icon": "assets/focus/trade.png",
-      "turns": 30,
-      "prerequisites": ["post_pandemic_recovery_plan"],
-      "mutually_exclusive": ["industrial_expansion", "green_economy_initiative"],
-      "x": 4,
-      "y": 1,
+      "x": 2,
+      "y": 2,
+      "prerequisites": ["reduce_political_appointments"],
+      "requirements": {"ruling_coalition": "Pakatan Harapan", "caretaker_government": false},
       "effects": [
-        { "type": "modify_gold", "amount": 50 }
+        {"type": "modify_domestic_variable", "key": "corruption_level", "amount": -7},
+        {"type": "modify_domestic_variable", "key": "investor_confidence", "amount": 6},
+        {"type": "modify_domestic_variable", "key": "elite_resistance", "amount": 5}
       ]
     },
     {
-      "id": "industrial_expansion",
-      "title": "Industrial Expansion",
-      "description": "Push manufacturing, logistics, and production networks to the forefront of recovery.",
-      "icon": "assets/focus/factory.png",
-      "turns": 30,
-      "prerequisites": ["post_pandemic_recovery_plan"],
-      "mutually_exclusive": ["attract_foreign_investment", "green_economy_initiative"],
-      "x": 5,
-      "y": 1,
-      "effects": [
-        { "type": "modify_gold", "amount": 45 }
-      ]
-    },
-    {
-      "id": "green_economy_initiative",
-      "title": "Green Economy Initiative",
-      "description": "Back cleaner industry and long-term resilience through more sustainable investment.",
-      "icon": "assets/focus/renewable.png",
-      "turns": 30,
-      "prerequisites": ["post_pandemic_recovery_plan"],
-      "mutually_exclusive": ["attract_foreign_investment", "industrial_expansion"],
-      "x": 6,
-      "y": 1,
-      "effects": [
-        { "type": "modify_population_growth", "amount": 2 }
-      ]
-    },
-    {
-      "id": "naval_expansion",
-      "title": "Naval Expansion",
-      "description": "Strengthen maritime reach and secure Malaysia's strategic waters.",
-      "icon": "assets/focus/navy.png",
-      "turns": 30,
-      "prerequisites": ["review_national_defense_strategy"],
-      "mutually_exclusive": ["air_force_modernization", "joint_forces_doctrine"],
-      "x": 7,
-      "y": 1,
-      "effects": [
-        { "type": "modify_gold", "amount": 35 }
-      ]
-    },
-    {
-      "id": "air_force_modernization",
-      "title": "Air Force Modernization",
-      "description": "Update aerial defenses and keep the skies ready for the next decade.",
-      "icon": "assets/focus/airforce.png",
-      "turns": 30,
-      "prerequisites": ["review_national_defense_strategy"],
-      "mutually_exclusive": ["naval_expansion", "joint_forces_doctrine"],
-      "x": 8,
-      "y": 1,
-      "effects": [
-        { "type": "modify_gold", "amount": 35 }
-      ]
-    },
-    {
-      "id": "joint_forces_doctrine",
-      "title": "Joint Forces Doctrine",
-      "description": "Improve coordination across the armed forces for a more integrated defense posture.",
-      "icon": "assets/focus/command.png",
-      "turns": 30,
-      "prerequisites": ["review_national_defense_strategy"],
-      "mutually_exclusive": ["naval_expansion", "air_force_modernization"],
-      "x": 9,
-      "y": 1,
-      "effects": [
-        { "type": "modify_population_growth", "amount": 1 }
-      ]
-    },
-    {
-      "id": "strengthen_asean_unity",
-      "title": "Strengthen ASEAN Unity",
-      "description": "Build closer regional ties and present Malaysia as a steady ASEAN partner.",
-      "icon": "assets/focus/asean.png",
-      "turns": 30,
-      "prerequisites": ["define_malaysia_world_role"],
-      "mutually_exclusive": ["align_with_china", "pivot_to_the_west", "non_aligned_strategy"],
-      "x": 10,
-      "y": 1,
-      "effects": [
-        { "type": "modify_population_growth", "amount": 1 }
-      ]
-    },
-    {
-      "id": "align_with_china",
-      "title": "Align with China",
-      "description": "Deepen economic ties and coordinate more closely with Beijing.",
-      "icon": "assets/focus/china.png",
-      "turns": 30,
-      "prerequisites": ["define_malaysia_world_role"],
-      "mutually_exclusive": ["strengthen_asean_unity", "pivot_to_the_west", "non_aligned_strategy"],
-      "x": 11,
-      "y": 1,
-      "effects": [
-        { "type": "modify_gold", "amount": 60 }
-      ]
-    },
-    {
-      "id": "pivot_to_the_west",
-      "title": "Pivot to the West",
-      "description": "Seek stronger ties with the United States and other Western partners.",
-      "icon": "assets/focus/west.png",
-      "turns": 30,
-      "prerequisites": ["define_malaysia_world_role"],
-      "mutually_exclusive": ["strengthen_asean_unity", "align_with_china", "non_aligned_strategy"],
-      "x": 12,
-      "y": 1,
-      "effects": [
-        { "type": "modify_gold", "amount": 55 }
-      ]
-    },
-    {
-      "id": "non_aligned_strategy",
-      "title": "Non-Aligned Strategy",
-      "description": "Keep Malaysia flexible by balancing relationships across major powers.",
+      "id": "balance_ethnic_power_sharing",
+      "title": "Balance Ethnic Power Sharing",
+      "description": "Reassure reform partners and Malay nationalist factions without giving either side everything.",
+      "branch": "Pakatan Harapan Reform",
+      "focus_type": "administrative_focus",
+      "duration_days": 15,
+      "political_power_cost": 6,
       "icon": "assets/focus/balance.png",
-      "turns": 30,
-      "prerequisites": ["define_malaysia_world_role"],
-      "mutually_exclusive": ["strengthen_asean_unity", "align_with_china", "pivot_to_the_west"],
-      "x": 13,
-      "y": 1,
+      "x": 3,
+      "y": 2,
+      "prerequisites": ["continue_reformasi_agenda"],
+      "requirements": {"ruling_coalition": "Pakatan Harapan"},
       "effects": [
-        { "type": "modify_population_growth", "amount": 1 }
+        {"type": "modify_domestic_variable", "key": "coalition_unity", "amount": 6},
+        {"type": "modify_domestic_variable", "key": "conservative_backlash", "amount": -4},
+        {"type": "modify_domestic_variable", "key": "sheraton_move_risk", "amount": -5}
       ]
     },
     {
-      "id": "5g_expansion",
-      "title": "5G Expansion",
-      "description": "Roll out a nationwide digital backbone to connect businesses and households.",
-      "icon": "assets/focus/5g.png",
-      "turns": 30,
-      "prerequisites": ["digital_transformation_agenda"],
-      "mutually_exclusive": ["ai_automation", "education_reform"],
-      "x": 13,
-      "y": 1,
-      "effects": [
-        { "type": "modify_gold", "amount": 40 }
-      ]
-    },
-    {
-      "id": "ai_automation",
-      "title": "AI & Automation",
-      "description": "Push productivity gains through smarter systems and modernized industry.",
-      "icon": "assets/focus/ai.png",
-      "turns": 30,
-      "prerequisites": ["digital_transformation_agenda"],
-      "mutually_exclusive": ["5g_expansion", "education_reform"],
-      "x": 14,
-      "y": 1,
-      "effects": [
-        { "type": "modify_gold", "amount": 45 }
-      ]
-    },
-    {
-      "id": "education_reform",
-      "title": "Education Reform",
-      "description": "Improve universities and skills training for the next generation of workers.",
-      "icon": "assets/focus/education.png",
-      "turns": 30,
-      "prerequisites": ["digital_transformation_agenda"],
-      "mutually_exclusive": ["5g_expansion", "ai_automation"],
-      "x": 15,
-      "y": 1,
-      "effects": [
-        { "type": "modify_population_growth", "amount": 2 }
-      ]
-    },
-    {
-      "id": "regional_economic_hub",
-      "title": "Regional Economic Hub",
-      "description": "Turn Malaysia into a magnet for regional commerce and investment.",
-      "icon": "assets/focus/trade_hub.png",
-      "turns": 20,
-      "prerequisites": ["attract_foreign_investment"],
+      "id": "manage_sabah_sarawak_demands",
+      "title": "Manage Sabah and Sarawak Demands",
+      "description": "Keep regional partners aligned through autonomy and development commitments.",
+      "branch": "Pakatan Harapan Reform",
+      "focus_type": "administrative_focus",
+      "duration_days": 15,
+      "political_power_cost": 5,
+      "icon": "assets/focus/asean.png",
       "x": 4,
       "y": 2,
+      "prerequisites": ["continue_reformasi_agenda"],
+      "requirements": {"ruling_coalition": "Pakatan Harapan"},
       "effects": [
-        { "type": "modify_gold", "amount": 80 }
+        {"type": "modify_domestic_variable", "key": "warisan_support", "amount": 10},
+        {"type": "modify_domestic_variable", "key": "government_stability", "amount": 3},
+        {"type": "modify_domestic_variable", "key": "economic_pressure", "amount": 2}
       ]
     },
     {
-      "id": "made_in_malaysia_2",
-      "title": "Made in Malaysia 2.0",
-      "description": "Build a stronger domestic production base for electronics and manufacturing.",
-      "icon": "assets/focus/factory2.png",
-      "turns": 20,
-      "prerequisites": ["industrial_expansion"],
-      "x": 5,
-      "y": 2,
+      "id": "prepare_leadership_transition",
+      "title": "Prepare Leadership Transition",
+      "description": "Start a managed Mahathir-Anwar transition before factional distrust breaks the coalition.",
+      "branch": "Pakatan Harapan Reform",
+      "focus_type": "administrative_focus",
+      "duration_days": 15,
+      "political_power_cost": 6,
+      "icon": "assets/focus/government.png",
+      "x": 0,
+      "y": 3,
+      "prerequisites": ["balance_ethnic_power_sharing"],
+      "requirements": {"current_prime_minister": "Mahathir Mohamad", "ruling_coalition": "Pakatan Harapan"},
       "effects": [
-        { "type": "modify_gold", "amount": 90 }
+        {"type": "modify_domestic_variable", "key": "succession_tension", "amount": -12},
+        {"type": "modify_domestic_variable", "key": "anwar_succession_pressure", "amount": -8},
+        {"type": "modify_domestic_variable", "key": "pkr_internal_split", "amount": -8},
+        {"type": "set_domestic_value", "key": "sheraton_route", "value": "anwar_transition"}
       ]
     },
     {
-      "id": "southeast_asias_green_leader",
-      "title": "Southeast Asia's Green Leader",
-      "description": "Put sustainability at the center of Malaysia's long-term development story.",
-      "icon": "assets/focus/green_energy.png",
-      "turns": 20,
-      "prerequisites": ["green_economy_initiative"],
+      "id": "delay_succession_question",
+      "title": "Delay the Transition",
+      "description": "Mahathir keeps the succession question open to preserve his own room to maneuver.",
+      "branch": "Mahathir Succession",
+      "focus_type": "administrative_focus",
+      "duration_days": 10,
+      "political_power_cost": 4,
+      "icon": "assets/focus/monarchy.png",
       "x": 6,
-      "y": 2,
+      "y": 0,
+      "requirements": {"current_prime_minister": "Mahathir Mohamad", "ruling_coalition": "Pakatan Harapan"},
       "effects": [
-        { "type": "modify_population_growth", "amount": 3 }
+        {"type": "modify_domestic_variable", "key": "mahathir_authority", "amount": 10},
+        {"type": "modify_domestic_variable", "key": "anwar_trust", "amount": -10},
+        {"type": "modify_domestic_variable", "key": "succession_tension", "amount": 8},
+        {"type": "modify_domestic_variable", "key": "bersatu_loyalty", "amount": 5},
+        {"type": "modify_domestic_variable", "key": "sheraton_move_risk", "amount": 5}
       ]
     },
     {
-      "id": "defenders_of_the_straits",
-      "title": "Defenders of the Straits",
-      "description": "Assert a firmer presence along Malaysia's maritime frontiers.",
-      "icon": "assets/focus/straits.png",
-      "turns": 20,
-      "prerequisites": ["naval_expansion"],
+      "id": "appease_pkr_leadership",
+      "title": "Appease PKR Leadership",
+      "description": "Reassure Anwar's camp and reduce the odds of PKR factional defections.",
+      "branch": "Mahathir Succession",
+      "focus_type": "administrative_focus",
+      "duration_days": 10,
+      "political_power_cost": 4,
+      "icon": "assets/focus/diplomacy.png",
       "x": 7,
-      "y": 2,
+      "y": 0,
+      "requirements": {"current_prime_minister": "Mahathir Mohamad", "ruling_coalition": "Pakatan Harapan"},
       "effects": [
-        { "type": "modify_gold", "amount": 70 }
+        {"type": "modify_domestic_variable", "key": "pkr_internal_split", "amount": -10},
+        {"type": "modify_domestic_variable", "key": "bersatu_loyalty", "amount": -5},
+        {"type": "modify_domestic_variable", "key": "succession_tension", "amount": -10},
+        {"type": "modify_domestic_variable", "key": "sheraton_move_risk", "amount": -5}
       ]
     },
     {
-      "id": "air_superiority_doctrine",
-      "title": "Air Superiority Doctrine",
-      "description": "Adopt a posture built around modern aerial response and readiness.",
-      "icon": "assets/focus/air_superiority.png",
-      "turns": 20,
-      "prerequisites": ["air_force_modernization"],
+      "id": "preserve_bersatu_influence",
+      "title": "Preserve Bersatu Influence",
+      "description": "Give Bersatu enough influence to keep it inside the government.",
+      "branch": "Mahathir Succession",
+      "focus_type": "administrative_focus",
+      "duration_days": 10,
+      "political_power_cost": 4,
+      "icon": "assets/focus/government.png",
+      "x": 8,
+      "y": 0,
+      "requirements": {"current_prime_minister": "Mahathir Mohamad", "ruling_coalition": "Pakatan Harapan"},
+      "effects": [
+        {"type": "modify_domestic_variable", "key": "bersatu_loyalty", "amount": 12},
+        {"type": "modify_domestic_variable", "key": "ph_trust", "amount": -6},
+        {"type": "modify_domestic_variable", "key": "sheraton_move_risk", "amount": -6}
+      ]
+    },
+    {
+      "id": "neutralize_azmin_faction",
+      "title": "Neutralize Azmin Faction",
+      "description": "Move quickly against PKR factionalism before it becomes a realignment vehicle.",
+      "branch": "Mahathir Succession",
+      "focus_type": "administrative_focus",
+      "duration_days": 10,
+      "political_power_cost": 5,
+      "icon": "assets/focus/security.png",
+      "x": 7,
+      "y": 1,
+      "prerequisites": ["appease_pkr_leadership"],
+      "requirements": {"current_prime_minister": "Mahathir Mohamad", "ruling_coalition": "Pakatan Harapan"},
+      "effects": [
+        {"type": "modify_domestic_variable", "key": "pkr_internal_split", "amount": -18},
+        {"type": "modify_domestic_variable", "key": "sheraton_move_risk", "amount": -10},
+        {"type": "set_domestic_value", "key": "sheraton_route", "value": "prevented"}
+      ]
+    },
+    {
+      "id": "open_talks_with_opposition",
+      "title": "Open Talks With Opposition",
+      "description": "Explore a unity route through UMNO and PAS, alarming Pakatan Harapan partners.",
+      "branch": "Mahathir Succession",
+      "focus_type": "crisis_focus",
+      "duration_days": 10,
+      "political_power_cost": 4,
+      "icon": "assets/focus/diplomacy.png",
+      "x": 9,
+      "y": 1,
+      "requirements": {"current_prime_minister": "Mahathir Mohamad"},
+      "effects": [
+        {"type": "modify_domestic_variable", "key": "umno_negotiation_channel", "amount": 10},
+        {"type": "modify_domestic_variable", "key": "pas_negotiation_channel", "amount": 8},
+        {"type": "modify_domestic_variable", "key": "ph_trust", "amount": -15},
+        {"type": "modify_domestic_variable", "key": "sheraton_move_risk", "amount": 15},
+        {"type": "set_domestic_value", "key": "sheraton_route", "value": "mahathir_consensus"}
+      ]
+    },
+    {
+      "id": "reject_umno_cooperation",
+      "title": "Reject UMNO Cooperation",
+      "description": "Rule out cooperation with UMNO and try to keep the PH mandate intact.",
+      "branch": "Mahathir Succession",
+      "focus_type": "crisis_focus",
+      "duration_days": 10,
+      "political_power_cost": 4,
+      "icon": "assets/focus/parliament.png",
       "x": 8,
       "y": 2,
+      "prerequisites": ["preserve_bersatu_influence"],
+      "requirements": {"current_prime_minister": "Mahathir Mohamad", "ruling_coalition": "Pakatan Harapan"},
       "effects": [
-        { "type": "modify_gold", "amount": 70 }
+        {"type": "modify_domestic_variable", "key": "ph_trust", "amount": 10},
+        {"type": "modify_domestic_variable", "key": "umno_negotiation_channel", "amount": -10},
+        {"type": "modify_domestic_variable", "key": "sheraton_move_risk", "amount": -10},
+        {"type": "modify_domestic_variable", "key": "bersatu_loyalty", "amount": -5},
+        {"type": "set_domestic_value", "key": "sheraton_route", "value": "prevented"}
       ]
     },
     {
-      "id": "integrated_defense_network",
-      "title": "Integrated Defense Network",
-      "description": "Tie the armed forces together into a more coordinated whole.",
-      "icon": "assets/focus/defense_network.png",
-      "turns": 20,
-      "prerequisites": ["joint_forces_doctrine"],
-      "x": 9,
+      "id": "promise_immediate_anwar_transition",
+      "title": "Promise Immediate Anwar Transition",
+      "description": "Offer Anwar a rapid transition and force the crisis onto a PH survival path.",
+      "branch": "Mahathir Succession",
+      "focus_type": "crisis_focus",
+      "duration_days": 10,
+      "political_power_cost": 5,
+      "icon": "assets/focus/government.png",
+      "x": 6,
       "y": 2,
+      "prerequisites": ["appease_pkr_leadership"],
+      "requirements": {"current_prime_minister": "Mahathir Mohamad", "ruling_coalition": "Pakatan Harapan"},
       "effects": [
-        { "type": "modify_population_growth", "amount": 1 }
+        {"type": "modify_domestic_variable", "key": "pkr_internal_split", "amount": -14},
+        {"type": "modify_domestic_variable", "key": "ph_trust", "amount": 15},
+        {"type": "modify_domestic_variable", "key": "bersatu_loyalty", "amount": -20},
+        {"type": "modify_domestic_variable", "key": "sheraton_move_risk", "amount": -10},
+        {"type": "set_domestic_value", "key": "sheraton_route", "value": "anwar_transition"}
       ]
     },
     {
-      "id": "asean_leadership_role",
-      "title": "ASEAN Leadership Role",
-      "description": "Take a more active role in shaping regional consensus and cooperation.",
-      "icon": "assets/focus/asean_leadership.png",
-      "turns": 20,
-      "prerequisites": ["strengthen_asean_unity"],
-      "x": 10,
-      "y": 2,
-      "effects": [
-        { "type": "modify_population_growth", "amount": 2 }
-      ]
-    },
-    {
-      "id": "belt_and_road_integration",
-      "title": "Belt and Road Integration",
-      "description": "Tie Malaysia more tightly into Chinese-led trade and infrastructure flows.",
-      "icon": "assets/focus/bri.png",
-      "turns": 20,
-      "prerequisites": ["align_with_china"],
+      "id": "rumours_of_realignment",
+      "title": "Rumours of Realignment",
+      "description": "Coalition partners are meeting outside official channels. Decide whether to intervene.",
+      "branch": "Sheraton Move Crisis",
+      "focus_type": "crisis_focus",
+      "duration_days": 5,
+      "political_power_cost": 0,
+      "icon": "assets/focus/security.png",
       "x": 11,
-      "y": 2,
+      "y": 0,
+      "available_condition": {
+        "date_at_least": "2020-02-15",
+        "min": {"sheraton_move_risk": 60}
+      },
       "effects": [
-        { "type": "modify_gold", "amount": 90 }
+        {"type": "modify_domestic_variable", "key": "sheraton_move_risk", "amount": -3},
+        {"type": "modify_domestic_variable", "key": "ph_trust", "amount": 3}
       ]
     },
     {
-      "id": "strategic_partnership_agreements",
-      "title": "Strategic Partnership Agreements",
-      "description": "Expand long-term agreements with Western partners and international institutions.",
-      "icon": "assets/focus/agreements.png",
-      "turns": 20,
-      "prerequisites": ["pivot_to_the_west"],
+      "id": "the_sheraton_meeting",
+      "title": "The Sheraton Meeting",
+      "description": "The government faces an organized realignment attempt.",
+      "branch": "Sheraton Move Crisis",
+      "focus_type": "crisis_focus",
+      "duration_days": 5,
+      "political_power_cost": 0,
+      "icon": "assets/focus/government.png",
       "x": 12,
-      "y": 2,
+      "y": 0,
+      "prerequisites": ["rumours_of_realignment"],
+      "available_condition": {
+        "date_at_least": "2020-02-23",
+        "min": {"sheraton_move_risk": 70}
+      },
       "effects": [
-        { "type": "modify_gold", "amount": 85 }
+        {"type": "modify_domestic_variable", "key": "palace_confidence", "amount": 5},
+        {"type": "modify_domestic_variable", "key": "sheraton_move_risk", "amount": 4}
       ]
     },
     {
-      "id": "neutral_but_influential",
-      "title": "Neutral but Influential",
-      "description": "Preserve strategic flexibility while shaping outcomes from the middle.",
-      "icon": "assets/focus/neutral.png",
-      "turns": 20,
-      "prerequisites": ["non_aligned_strategy"],
+      "id": "palace_consultations",
+      "title": "Palace Consultations",
+      "description": "Prepare for royal interviews and the test of who commands a Dewan Rakyat majority.",
+      "branch": "Sheraton Move Crisis",
+      "focus_type": "crisis_focus",
+      "duration_days": 5,
+      "political_power_cost": 0,
+      "icon": "assets/focus/monarchy.png",
       "x": 13,
-      "y": 2,
+      "y": 0,
+      "prerequisites": ["the_sheraton_meeting"],
+      "available_condition": {"date_at_least": "2020-02-24"},
       "effects": [
-        { "type": "modify_population_growth", "amount": 1 }
+        {"type": "modify_domestic_variable", "key": "palace_confidence", "amount": 10},
+        {"type": "modify_domestic_variable", "key": "mahathir_authority", "amount": 5}
       ]
     },
     {
-      "id": "connected_malaysia",
-      "title": "Connected Malaysia",
-      "description": "Bring the country online with a stronger digital economy and wider access.",
-      "icon": "assets/focus/connected.png",
-      "turns": 20,
-      "prerequisites": ["5g_expansion"],
-      "x": 13,
-      "y": 2,
+      "id": "form_pn_cabinet",
+      "title": "Form Perikatan Nasional Cabinet",
+      "description": "Build a cabinet for the new Perikatan Nasional-aligned government.",
+      "branch": "PN Consolidation",
+      "focus_type": "administrative_focus",
+      "duration_days": 15,
+      "political_power_cost": 5,
+      "icon": "assets/focus/government.png",
+      "x": 0,
+      "y": 5,
+      "requirements": {
+        "current_prime_minister": "Muhyiddin Yassin",
+        "ruling_coalition": "Perikatan Nasional-aligned government"
+      },
       "effects": [
-        { "type": "modify_gold", "amount": 75 }
+        {"type": "modify_domestic_variable", "key": "government_stability", "amount": 6},
+        {"type": "modify_domestic_variable", "key": "coalition_loyalty", "amount": 5},
+        {"type": "modify_domestic_variable", "key": "muhyiddin_legitimacy", "amount": 4}
       ]
     },
     {
-      "id": "smart_nation_initiative",
-      "title": "Smart Nation Initiative",
-      "description": "Use automation and data tools to lift productivity across the economy.",
-      "icon": "assets/focus/smart_nation.png",
-      "turns": 20,
-      "prerequisites": ["ai_automation"],
-      "x": 14,
-      "y": 2,
+      "id": "secure_umno_support",
+      "title": "Secure UMNO Support",
+      "description": "Keep UMNO inside the narrow government through concessions.",
+      "branch": "PN Consolidation",
+      "focus_type": "administrative_focus",
+      "duration_days": 15,
+      "political_power_cost": 6,
+      "icon": "assets/focus/diplomacy.png",
+      "x": 1,
+      "y": 6,
+      "prerequisites": ["form_pn_cabinet"],
+      "requirements": {"current_prime_minister": "Muhyiddin Yassin"},
       "effects": [
-        { "type": "modify_gold", "amount": 80 }
+        {"type": "modify_domestic_variable", "key": "coalition_loyalty", "amount": 8},
+        {"type": "modify_domestic_variable", "key": "corruption_level", "amount": 4},
+        {"type": "modify_domestic_variable", "key": "opposition_pressure", "amount": 4}
       ]
     },
     {
-      "id": "future_ready_generation",
-      "title": "Future-Ready Generation",
-      "description": "Prepare a more skilled workforce for the demands of the next decade.",
-      "icon": "assets/focus/graduation.png",
-      "turns": 20,
-      "prerequisites": ["education_reform"],
-      "x": 15,
-      "y": 2,
+      "id": "secure_pas_support",
+      "title": "Secure PAS Support",
+      "description": "Bind PAS to the new government through conservative policy signals.",
+      "branch": "PN Consolidation",
+      "focus_type": "administrative_focus",
+      "duration_days": 15,
+      "political_power_cost": 5,
+      "icon": "assets/focus/security.png",
+      "x": 2,
+      "y": 6,
+      "prerequisites": ["form_pn_cabinet"],
+      "requirements": {"current_prime_minister": "Muhyiddin Yassin"},
       "effects": [
-        { "type": "modify_population_growth", "amount": 3 }
+        {"type": "modify_domestic_variable", "key": "coalition_loyalty", "amount": 6},
+        {"type": "modify_domestic_variable", "key": "conservative_backlash", "amount": -4},
+        {"type": "modify_domestic_variable", "key": "democracy_score", "amount": -2}
       ]
     },
     {
-      "id": "heart_of_southeast_asia",
-      "title": "Heart of Southeast Asia",
-      "description": "Become the region's most trusted diplomatic center.",
-      "icon": "assets/focus/heart_asean.png",
-      "turns": 20,
-      "prerequisites": ["asean_leadership_role"],
-      "x": 10,
-      "y": 3,
+      "id": "negotiate_gps_backing",
+      "title": "Negotiate GPS Backing",
+      "description": "Use regional development promises to hold the Sarawak bloc.",
+      "branch": "PN Consolidation",
+      "focus_type": "administrative_focus",
+      "duration_days": 15,
+      "political_power_cost": 5,
+      "icon": "assets/focus/asean.png",
+      "x": 3,
+      "y": 6,
+      "prerequisites": ["form_pn_cabinet"],
+      "requirements": {"current_prime_minister": "Muhyiddin Yassin"},
       "effects": [
-        { "type": "modify_population_growth", "amount": 2 }
+        {"type": "modify_domestic_variable", "key": "gps_support", "amount": 14},
+        {"type": "modify_domestic_variable", "key": "government_stability", "amount": 3},
+        {"type": "modify_domestic_variable", "key": "economic_pressure", "amount": 2}
       ]
     },
     {
-      "id": "gateway_between_east_and_west",
-      "title": "Gateway Between East and West",
-      "description": "Position Malaysia as a key connector in global trade flows.",
-      "icon": "assets/focus/gateway.png",
-      "turns": 20,
-      "prerequisites": ["regional_economic_hub", "belt_and_road_integration", "strategic_partnership_agreements"],
-      "x": 11,
-      "y": 3,
+      "id": "survive_first_parliamentary_test",
+      "title": "Survive First Parliamentary Test",
+      "description": "Prepare the wafer-thin PN government for its first confidence challenge.",
+      "branch": "PN Consolidation",
+      "focus_type": "legislative_focus",
+      "duration_days": 20,
+      "political_power_cost": 8,
+      "icon": "assets/focus/parliament.png",
+      "x": 2,
+      "y": 7,
+      "prerequisites": ["secure_umno_support", "secure_pas_support"],
+      "requirements": {"current_prime_minister": "Muhyiddin Yassin"},
       "effects": [
-        { "type": "modify_gold", "amount": 120 }
+        {"type": "modify_domestic_variable", "key": "government_stability", "amount": 8},
+        {"type": "modify_domestic_variable", "key": "muhyiddin_legitimacy", "amount": 6},
+        {"type": "modify_domestic_variable", "key": "opposition_pressure", "amount": -4}
       ]
     },
     {
-      "id": "master_of_maritime_security",
-      "title": "Master of Maritime Security",
-      "description": "Claim the Strait of Malacca as a strategic responsibility and strength.",
-      "icon": "assets/focus/maritime_security.png",
-      "turns": 20,
-      "prerequisites": ["defenders_of_the_straits"],
+      "id": "budget_2021_survival",
+      "title": "Budget 2021 Survival",
+      "description": "Frame Budget 2021 as a COVID relief confidence test.",
+      "branch": "PN Consolidation",
+      "focus_type": "economic_focus",
+      "duration_days": 20,
+      "political_power_cost": 8,
+      "icon": "assets/focus/economy.png",
+      "x": 2,
+      "y": 8,
+      "prerequisites": ["survive_first_parliamentary_test"],
+      "requirements": {
+        "current_prime_minister": "Muhyiddin Yassin",
+        "budget_confidence_test_unlocked": true
+      },
+      "available_condition": {"date_at_least": "2020-11-01"},
+      "effects": [
+        {"type": "modify_domestic_variable", "key": "government_stability", "amount": 12},
+        {"type": "modify_domestic_variable", "key": "muhyiddin_legitimacy", "amount": 10},
+        {"type": "modify_domestic_variable", "key": "coalition_loyalty", "amount": 5}
+      ]
+    },
+    {
+      "id": "activate_health_crisis_council",
+      "title": "Activate Health Crisis Council",
+      "description": "Coordinate federal health agencies as COVID pressure grows.",
+      "branch": "COVID Governance",
+      "focus_type": "emergency_focus",
+      "duration_days": 10,
+      "political_power_cost": 4,
+      "icon": "assets/focus/security.png",
+      "x": 6,
+      "y": 5,
+      "available_condition": {"min": {"covid_crisis_level": 10}},
+      "effects": [
+        {"type": "modify_domestic_variable", "key": "covid_crisis_level", "amount": -5},
+        {"type": "modify_domestic_variable", "key": "public_approval", "amount": 3},
+        {"type": "modify_domestic_variable", "key": "state_capacity", "amount": 3}
+      ]
+    },
+    {
+      "id": "movement_control_order",
+      "title": "Movement Control Order",
+      "description": "Restrict movement to slow the outbreak, at a heavy economic cost.",
+      "branch": "COVID Governance",
+      "focus_type": "emergency_focus",
+      "duration_days": 10,
+      "political_power_cost": 5,
+      "icon": "assets/focus/security.png",
       "x": 7,
-      "y": 3,
+      "y": 6,
+      "prerequisites": ["activate_health_crisis_council"],
+      "available_condition": {"min": {"covid_crisis_level": 20}},
       "effects": [
-        { "type": "modify_gold", "amount": 110 }
+        {"type": "modify_domestic_variable", "key": "covid_crisis_level", "amount": -14},
+        {"type": "modify_domestic_variable", "key": "economic_pressure", "amount": 10},
+        {"type": "modify_domestic_variable", "key": "public_unrest", "amount": 4}
       ]
     },
     {
-      "id": "diplomatic_capital_of_asia",
-      "title": "Diplomatic Capital of Asia",
-      "description": "Host dialogue and talks that give Malaysia a larger international role.",
-      "icon": "assets/focus/diplomatic_capital.png",
-      "turns": 20,
-      "prerequisites": ["neutral_but_influential"],
-      "x": 13,
-      "y": 3,
+      "id": "economic_stimulus_package",
+      "title": "Economic Stimulus Package",
+      "description": "Protect households and firms while lockdown pressure builds.",
+      "branch": "COVID Governance",
+      "focus_type": "economic_focus",
+      "duration_days": 15,
+      "political_power_cost": 6,
+      "icon": "assets/focus/economy.png",
+      "x": 8,
+      "y": 6,
+      "prerequisites": ["activate_health_crisis_council"],
+      "available_condition": {"min": {"covid_crisis_level": 10}},
       "effects": [
-        { "type": "modify_population_growth", "amount": 2 }
+        {"type": "modify_gold", "amount": 35},
+        {"type": "modify_domestic_variable", "key": "economic_pressure", "amount": -8},
+        {"type": "modify_domestic_variable", "key": "public_approval", "amount": 4}
       ]
     },
     {
-      "id": "respected_on_the_world_stage",
-      "title": "Respected on the World Stage",
-      "description": "Malaysia enters a stronger era of international confidence, trade, and influence.",
-      "icon": "assets/focus/global_prestige.png",
-      "turns": 20,
-      "prerequisites": [
-        "heart_of_southeast_asia",
-        "gateway_between_east_and_west",
-        "master_of_maritime_security",
-        "diplomatic_capital_of_asia",
-        "smart_nation_initiative",
-        "made_in_malaysia_2"
-      ],
+      "id": "hospital_capacity_expansion",
+      "title": "Hospital Capacity Expansion",
+      "description": "Expand health system capacity to reduce crisis strain.",
+      "branch": "COVID Governance",
+      "focus_type": "emergency_focus",
+      "duration_days": 15,
+      "political_power_cost": 6,
+      "icon": "assets/focus/factory.png",
+      "x": 7,
+      "y": 7,
+      "prerequisites": ["movement_control_order"],
+      "available_condition": {"min": {"covid_crisis_level": 10}},
+      "effects": [
+        {"type": "modify_domestic_variable", "key": "covid_crisis_level", "amount": -8},
+        {"type": "modify_domestic_variable", "key": "state_capacity", "amount": 6},
+        {"type": "modify_domestic_variable", "key": "public_approval", "amount": 3}
+      ]
+    },
+    {
+      "id": "negotiate_with_gps",
+      "title": "Negotiate With GPS",
+      "description": "Try to make GPS the bridge out of a hung parliament.",
+      "branch": "Hung Parliament",
+      "focus_type": "crisis_focus",
+      "duration_days": 10,
+      "political_power_cost": 4,
+      "icon": "assets/focus/diplomacy.png",
+      "x": 11,
+      "y": 5,
+      "requirements": {"parliament_status": "Hung parliament"},
+      "effects": [
+        {"type": "modify_domestic_variable", "key": "gps_support", "amount": 15},
+        {"type": "modify_domestic_variable", "key": "palace_confidence", "amount": 5}
+      ]
+    },
+    {
+      "id": "request_palace_mediation",
+      "title": "Request Palace Mediation",
+      "description": "Let the palace mediate between blocs to avoid a snap election.",
+      "branch": "Hung Parliament",
+      "focus_type": "crisis_focus",
+      "duration_days": 10,
+      "political_power_cost": 4,
+      "icon": "assets/focus/monarchy.png",
       "x": 12,
-      "y": 4,
+      "y": 5,
+      "requirements": {"parliament_status": "Hung parliament"},
       "effects": [
-        { "type": "modify_gold", "amount": 150 },
-        { "type": "modify_population_growth", "amount": 2 }
+        {"type": "modify_domestic_variable", "key": "palace_confidence", "amount": 18},
+        {"type": "modify_domestic_variable", "key": "public_approval", "amount": 2}
+      ]
+    },
+    {
+      "id": "confidence_and_supply_agreement",
+      "title": "Confidence and Supply Agreement",
+      "description": "Create a limited parliamentary agreement to pass budgets and avoid immediate collapse.",
+      "branch": "Hung Parliament",
+      "focus_type": "legislative_focus",
+      "duration_days": 20,
+      "political_power_cost": 8,
+      "icon": "assets/focus/parliament.png",
+      "x": 12,
+      "y": 6,
+      "prerequisites": ["negotiate_with_gps", "request_palace_mediation"],
+      "requirements": {"parliament_status": "Hung parliament"},
+      "effects": [
+        {"type": "set_domestic_value", "key": "parliament_status", "value": "Confidence-and-supply agreement"},
+        {"type": "modify_domestic_variable", "key": "government_stability", "amount": 14},
+        {"type": "modify_domestic_variable", "key": "policy_passing_buffer", "amount": 10}
       ]
     }
   ]

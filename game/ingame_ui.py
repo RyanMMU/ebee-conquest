@@ -88,11 +88,13 @@ class LeftBar:
         font_bold=None,
         icons=None,
         selected=None,
+        disabled_items=None,
         statusdata=None,
         notification_count=0,
     ):
         motion_time = pygame.time.get_ticks() / 1000.0
         icons = icons or {}
+        disabled_items = {str(item).upper() for item in (disabled_items or set())}
         statusdata = statusdata or {}
         notification_count = max(0, int(notification_count or 0))
         pygame.draw.rect(surface, _C_PANEL_DARK, self.rect)
@@ -103,10 +105,12 @@ class LeftBar:
         self.item_rects = {}
         radius = 6
         item_index = 0
+        item_step = 58
+        item_height = 48
         for item in self.items:
             item_text = str(item).strip()
             if not item_text:
-                divider_y = self.rect.y + 22 + item_index * 60
+                divider_y = self.rect.y + 22 + item_index * item_step
                 pygame.draw.line(
                     surface,
                     (76, 64, 38),
@@ -117,15 +121,18 @@ class LeftBar:
                 continue
 
             x = self.rect.x + 14
-            y = self.rect.y + 16 + item_index * 66
+            y = self.rect.y + 16 + item_index * item_step
             w = self.rect.width - 28
-            h = 52
+            h = item_height
             rect = pygame.Rect(x, y, w, h)
             item_key = item_text.upper()
             self.item_rects[item_key] = rect
             item_index += 1
 
             hovered = rect.collidepoint(mouse_pos)
+            disabled = item_key in disabled_items
+            if disabled:
+                hovered = False
             glow = self._hover_glow.get(item_key, 0.0)
             if hovered:
                 glow = min(1.0, glow + 0.16)
@@ -133,8 +140,10 @@ class LeftBar:
                 glow = max(0.0, glow - 0.10)
             self._hover_glow[item_key] = glow
 
-            is_selected = item_key == selected
-            if "CLEAR ALL" in item_text:
+            is_selected = item_key == selected and not disabled
+            if disabled:
+                color = (29, 34, 42)
+            elif "CLEAR ALL" in item_text:
                 color = (35, 45, 47) if hovered else (20, 30, 36)
             elif is_selected:
                 color = (37, 35, 28) if not hovered else (50, 44, 30)
@@ -145,7 +154,9 @@ class LeftBar:
             pygame.draw.rect(shadow, (0, 0, 0, 75), shadow.get_rect(), border_radius=radius + 2)
             surface.blit(shadow, (x - 3, y - 1))
             pygame.draw.rect(surface, color, rect, border_radius=radius)
-            if "CLEAR ALL" in item_text:
+            if disabled:
+                bordercolor = (55, 60, 68)
+            elif "CLEAR ALL" in item_text:
                 bordercolor = (89, 110, 105) if hovered else (45, 61, 66)
             elif is_selected:
                 bordercolor = _C_GOLD
@@ -186,7 +197,7 @@ class LeftBar:
                     (icon_x + icon.get_width() // 2, y + h // 2),
                     motion_time,
                     hover=0.65 if (hovered or is_selected) else 0.0,
-                    accent=_C_GOLD if is_selected else (92, 116, 144),
+                    accent=(92, 98, 108) if disabled else (_C_GOLD if is_selected else (92, 116, 144)),
                     phase=item_index * 0.7,
                 )
             else:
@@ -203,6 +214,8 @@ class LeftBar:
                 badge_reserved_width = badge_rect.width + 12
 
             text_color = (224, 228, 231) if hovered else (202, 207, 211)
+            if disabled:
+                text_color = (112, 119, 130)
             if "CLEAR ALL" in item_text:
                 text_color = (224, 228, 216)
             if is_selected:
@@ -380,6 +393,7 @@ class InGameUI:
     actiondetachregiment = "detachregiment"
     actiontogglefocuspanel = "togglefocuspanel"
     actionstartfocus = "startfocus"
+    actiondomesticaffairs = "domesticaffairs"
     actionpausemenu = "pausemenu"
     actionquitgame = "quitgame"
     actionweapon1 = "weapon_1"
@@ -454,6 +468,11 @@ class InGameUI:
         self.warprogressopen = False
         self._warprogressdata = {}
         self.actionwarprogress = "warprogress"
+        self.domesticaffairsopen = False
+        self._domesticaffairsdata = {}
+        self._domestic_active_tab = "Executive"
+        self._domestic_selected_party_id = None
+        self._domestic_segment_hitboxes = []
         self._systemstatus = {"fps": 0.0, "latency_ms": 0.0}
         self.notifications = []
         self._expanded_notification = None
@@ -478,6 +497,7 @@ class InGameUI:
             key: pygame.transform.scale(img, (20, 14))
             for key, img in self._flags.items()
         }
+        self._leaderportraits = self._load_leader_portraits()
         self._topbar_icons = self._load_topbar_icons()
 
         self._choose_rect = pygame.Rect(0, 0, 160, 34)
@@ -511,6 +531,13 @@ class InGameUI:
         self._warprogress_dragging = False
         self._warprogress_drag_offset = (0, 0)
         self._warprogress_active_index = 0
+        self._domestic_popup_rect = pygame.Rect(0, 0, 10, 10)
+        self._domestic_close_rect = pygame.Rect(0, 0, 10, 10)
+        self._domestic_header_rect = pygame.Rect(0, 0, 10, 10)
+        self._domestic_tab_rects = {}
+        self._domestic_popup_pos = None
+        self._domestic_dragging = False
+        self._domestic_drag_offset = (0, 0)
         self.production_popup_open = False
         self._production_popup_back_rect = pygame.Rect(0, 0, 10, 10)
         self._production_popup_rect = pygame.Rect(0, 0, 10, 10)
@@ -539,7 +566,8 @@ class InGameUI:
                 "LOGISTICS",
                 "COMBAT",
                 "INTEL",
-                "NATIONAL POLICY"
+                "NATIONAL POLICY",
+                "DOMESTIC AFFAIRS"
             ]
         )
         self.bottom_buttons.set_items(
@@ -599,6 +627,39 @@ class InGameUI:
 
         return flags
 
+    def _load_leader_portraits(self):
+        portraits = {}
+        portrait_path = os.path.normpath(
+            os.path.join(os.path.dirname(__file__), "..", "assets", "leaders")
+        )
+        if not os.path.isdir(portrait_path):
+            return portraits
+        for filename in os.listdir(portrait_path):
+            lower = filename.lower()
+            if not (lower.endswith(".png") or lower.endswith(".jpg") or lower.endswith(".jpeg")):
+                continue
+            key = os.path.splitext(filename)[0].strip().lower()
+            filepath = os.path.join(portrait_path, filename)
+            try:
+                portraits[key] = pygame.image.load(filepath).convert_alpha()
+            except pygame.error:
+                continue
+        return portraits
+
+    @staticmethod
+    def _portrait_key(name):
+        text = str(name or "").strip().lower()
+        chars = []
+        previous_sep = False
+        for character in text:
+            if character.isalnum():
+                chars.append(character)
+                previous_sep = False
+            elif not previous_sep:
+                chars.append("_")
+                previous_sep = True
+        return "".join(chars).strip("_")
+
     def _load_topbar_icons(self):
         icons = {}
         icon_path = os.path.normpath(
@@ -619,11 +680,13 @@ class InGameUI:
             "COMBAT": "combat.svg",
             "INTEL": "intel.svg",
             "NATIONAL POLICY": "national_policy.svg",
+            "DOMESTIC AFFAIRS": "domestic_affairs.svg",
             "notifications": "notifications.svg",
             "logistics": "logistics.svg",
             "combat": "combat.svg",
             "intel": "intel.svg",
             "national_policy": "national_policy.svg",
+            "domestic_affairs": "domestic_affairs.svg",
             "RESEARCH": "research.svg",
             "DIPLOMACY": "diplomacy.svg",
             "TRADE": "trade.svg",
@@ -1693,6 +1756,7 @@ class InGameUI:
         focusview=None,
         researchdata=None,
         warprogressdata=None,
+        domesticaffairsdata=None,
         selected_country_stats=None,
         systemstatus=None,
         notifications=None,
@@ -1729,6 +1793,8 @@ class InGameUI:
         
         if warprogressdata is not None:
             self._warprogressdata = warprogressdata
+        if domesticaffairsdata is not None:
+            self._domesticaffairsdata = domesticaffairsdata
         if selected_country_stats is not None:
             self._selected_country_stats = selected_country_stats
         if systemstatus is not None:
@@ -1828,6 +1894,12 @@ class InGameUI:
     def process_event(self, event):
 
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            if self.domesticaffairsopen:
+                self.domesticaffairsopen = False
+                if self.active_left_tab == "DOMESTIC AFFAIRS":
+                    self.active_left_tab = None
+                self._domestic_dragging = False
+                return None
             if self.warprogressopen:
                 self.warprogressopen = False
                 return None
@@ -1845,6 +1917,45 @@ class InGameUI:
                     min(self._notification_max_scroll, self._notification_scroll - int(event.y) * 42),
                 )
                 return "notification_scroll"
+
+        if self.domesticaffairsopen:
+            if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                self._domestic_dragging = False
+                if self._domestic_popup_rect.collidepoint(event.pos):
+                    return None
+            if event.type == pygame.MOUSEMOTION and self._domestic_dragging:
+                target_x = int(event.pos[0] - self._domestic_drag_offset[0])
+                target_y = int(event.pos[1] - self._domestic_drag_offset[1])
+                popup = self._domestic_popup_rect.copy()
+                popup.topleft = (target_x, target_y)
+                bounds = pygame.Rect(12, self.topbar_height + 8, self.window_size[0] - 24, self.window_size[1] - self.topbar_height - 20)
+                popup.clamp_ip(bounds)
+                self._domestic_popup_pos = popup.topleft
+                return None
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if self._domestic_close_rect.collidepoint(event.pos):
+                    self.domesticaffairsopen = False
+                    self._domestic_dragging = False
+                    if self.active_left_tab == "DOMESTIC AFFAIRS":
+                        self.active_left_tab = None
+                    return None
+                for tab_name, tab_rect in (self._domestic_tab_rects or {}).items():
+                    if tab_rect.collidepoint(event.pos):
+                        self._domestic_active_tab = tab_name
+                        return None
+                segment = self._get_domestic_segment_at_pos(event.pos)
+                if segment is not None:
+                    self._domestic_selected_party_id = segment.get("party_id")
+                    return None
+                if self._domestic_header_rect.collidepoint(event.pos):
+                    self._domestic_dragging = True
+                    self._domestic_drag_offset = (
+                        event.pos[0] - self._domestic_popup_rect.x,
+                        event.pos[1] - self._domestic_popup_rect.y,
+                    )
+                    return None
+                if self._domestic_popup_rect.collidepoint(event.pos):
+                    return None
         
         if self.production_popup_open:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -1945,10 +2056,13 @@ class InGameUI:
                     self.active_left_tab = None
                     if selected_left_tab == "NATIONAL POLICY":
                         self.focusview.isopen = False
+                    if selected_left_tab == "DOMESTIC AFFAIRS":
+                        self.domesticaffairsopen = False
                     self.applylayout()
                     return None
         
         if self.focusview.isopen:
+            self.domesticaffairsopen = False
             result = self.focusview.handleevent(event)
             if not self.focusview.isopen:
                 self.active_left_tab = None
@@ -1956,6 +2070,7 @@ class InGameUI:
             return result
 
         if self.researchview.isopen:
+            self.domesticaffairsopen = False
             result = self.researchview.handleevent(event)
             if not self.researchview.isopen:
                 self.bottom_buttons.set_selected(None)
@@ -1981,21 +2096,34 @@ class InGameUI:
                     self._notification_scroll = 0
                     return None
                 if item == "NOTIFICATIONS":
+                    self.domesticaffairsopen = False
                     self.active_left_tab = None if self.active_left_tab == "NOTIFICATIONS" else "NOTIFICATIONS"
                     self.applylayout()
                     return None
                 if item == "COMBAT":
+                    self.domesticaffairsopen = False
                     self.active_left_tab = None if self.active_left_tab == "COMBAT" else "COMBAT"
                     self._countrymenutarget = None
                     self._selectedmapcountry = None
                     self.applylayout()
                     return None
                 if item == "NATIONAL POLICY":
+                    self.domesticaffairsopen = False
                     self.active_left_tab = None if self.active_left_tab == "NATIONAL POLICY" else "NATIONAL POLICY"
                     self._countrymenutarget = None
                     self._selectedmapcountry = None
                     self.applylayout()
                     return None
+                if item == "DOMESTIC AFFAIRS":
+                    if not self.playercountry:
+                        return None
+                    self.domesticaffairsopen = not self.domesticaffairsopen
+                    self.active_left_tab = "DOMESTIC AFFAIRS" if self.domesticaffairsopen else None
+                    if self.domesticaffairsopen:
+                        self._domestic_active_tab = self._domestic_active_tab or "Executive"
+                    self.applylayout()
+                    return self.actiondomesticaffairs
+                self.domesticaffairsopen = False
                 self.active_left_tab = item
                 self.applylayout()
                 if item == "NOTIFICATIONS":
@@ -2005,6 +2133,9 @@ class InGameUI:
         for item, rect in (self.bottom_buttons.item_rects or {}).items():
             if rect.collidepoint(pos):
                 self.ui_click_sound.play()
+                self.domesticaffairsopen = False
+                if self.active_left_tab == "DOMESTIC AFFAIRS":
+                    self.active_left_tab = None
                 self.bottom_buttons.set_selected(item)
                 self.applylayout()
                 if item == "RESEARCH":
@@ -2104,6 +2235,9 @@ class InGameUI:
             return None
        
     def ispointeroverui(self, mouseposition):
+        if self.domesticaffairsopen and self._domestic_popup_rect.collidepoint(mouseposition):
+            return True
+
         if self.warprogressopen and self._warprogress_popup_rect.collidepoint(mouseposition):
             return True
         
@@ -2194,6 +2328,7 @@ class InGameUI:
                 font_bold=self.font_bold,
                 icons=self._topbar_icons,
                 selected=self.active_left_tab,
+                disabled_items=set() if self.playercountry else {"DOMESTIC AFFAIRS"},
                 statusdata=self._systemstatus,
                 notification_count=self._notificationcount,
             )
@@ -2469,6 +2604,8 @@ class InGameUI:
             self._draw_policy_popup(surface, mouse)
             if self.warprogressopen:
                 self._draw_war_progress_popup(surface, mouse)
+            if self.domesticaffairsopen:
+                self._draw_domestic_affairs_popup(surface, mouse)
             if self.pausemenuopen:
                 self._draw_pausemenu(surface)
             self._ui_pulses.draw(surface)
@@ -2482,6 +2619,8 @@ class InGameUI:
             self._draw_policy_popup(surface, mouse)
             if self.warprogressopen:
                 self._draw_war_progress_popup(surface, mouse)
+            if self.domesticaffairsopen:
+                self._draw_domestic_affairs_popup(surface, mouse)
             if self.pausemenuopen:
                 self._draw_pausemenu(surface)
             self._ui_pulses.draw(surface)
@@ -2495,6 +2634,8 @@ class InGameUI:
             self._draw_policy_popup(surface, mouse)
             if self.warprogressopen:
                 self._draw_war_progress_popup(surface, mouse)
+            if self.domesticaffairsopen:
+                self._draw_domestic_affairs_popup(surface, mouse)
             if self.pausemenuopen:
                 self._draw_pausemenu(surface)
             self._ui_pulses.draw(surface)
@@ -2749,6 +2890,8 @@ class InGameUI:
 
         if self.warprogressopen:
             self._draw_war_progress_popup(surface, mouse)
+        if self.domesticaffairsopen:
+            self._draw_domestic_affairs_popup(surface, mouse)
 
         if self.pausemenuopen:
             self._draw_pausemenu(surface)
@@ -2795,6 +2938,559 @@ class InGameUI:
 
         count_surface = self.small_font.render(str(count_text), True, _C_TEXT_MUTED)
         surface.blit(count_surface, (rect.x, bar_rect.bottom + 6))
+
+    @staticmethod
+    def _parse_ui_color(value, fallback=(132, 145, 160)):
+        if isinstance(value, (tuple, list)) and len(value) >= 3:
+            try:
+                return tuple(max(0, min(255, int(component))) for component in value[:3])
+            except (TypeError, ValueError):
+                return fallback
+        text = str(value or "").strip()
+        if text.startswith("#") and len(text) == 7:
+            try:
+                return tuple(int(text[index:index + 2], 16) for index in (1, 3, 5))
+            except ValueError:
+                return fallback
+        return fallback
+
+    def _draw_value_bar(self, surface, rect, label, value, accent=_C_GOLD, suffix="%"):
+        try:
+            numeric = max(0.0, min(100.0, float(value or 0.0)))
+        except (TypeError, ValueError):
+            numeric = 0.0
+        self._draw_text_fit(surface, label, _C_TEXT_MUTED, rect.x, rect.y, rect.width - 64, self.small_font_bold)
+        value_text = f"{numeric:.0f}{suffix}"
+        value_surface = self.small_font_bold.render(value_text, True, _C_TEXT)
+        surface.blit(value_surface, (rect.right - value_surface.get_width(), rect.y))
+        bar_rect = pygame.Rect(rect.x, rect.y + 18, rect.width, 9)
+        pygame.draw.rect(surface, (7, 12, 20), bar_rect, border_radius=4)
+        pygame.draw.rect(surface, (43, 56, 73), bar_rect, 1, border_radius=4)
+        fill_rect = bar_rect.copy()
+        fill_rect.width = int(bar_rect.width * numeric / 100.0)
+        if fill_rect.width > 0:
+            self._draw_vertical_gradient_rect(surface, fill_rect, accent, tuple(max(0, channel - 42) for channel in accent), radius=4)
+
+    def _draw_domestic_info_row(self, surface, x, y, label, value, width):
+        label_w = min(156, max(96, int(width * 0.38)))
+        self._draw_text_fit(surface, str(label).upper(), _C_TEXT_MUTED, x, y, label_w, self.small_font_bold)
+        self._draw_text_fit(surface, value, _C_TEXT, x + label_w + 10, y - 1, max(20, width - label_w - 10), self.font_bold)
+
+    def _get_domestic_segment_at_pos(self, pos):
+        mx, my = pos
+        for segment in self._domestic_segment_hitboxes or ():
+            cx, cy = segment.get("center", (0, 0))
+            dx = mx - cx
+            dy = my - cy
+            distance = math.hypot(dx, dy)
+            if distance < segment.get("inner_radius", 0) or distance > segment.get("outer_radius", 0):
+                continue
+            angle = math.atan2(dy, dx)
+            if angle < 0:
+                angle += math.tau
+            if angle < math.pi:
+                angle += math.tau
+            if segment.get("start_angle", 0) <= angle <= segment.get("end_angle", 0):
+                return segment.get("party")
+        return None
+
+    def _draw_domestic_affairs_popup(self, surface, mouse):
+        popup_w = min(980, max(700, self.map_rect.width - 48))
+        max_popup_h = max(540, surface.get_height() - self.topbar_height - 36)
+        popup_h = min(760, max_popup_h, max(620, self.map_rect.height - 52))
+        popup_rect = pygame.Rect(0, 0, popup_w, popup_h)
+        if self._domestic_popup_pos is None:
+            popup_rect.center = self.map_rect.center
+        else:
+            popup_rect.topleft = self._domestic_popup_pos
+        popup_rect.clamp_ip(surface.get_rect().inflate(-32, -32))
+        self._domestic_popup_pos = popup_rect.topleft
+        self._domestic_popup_rect = popup_rect
+
+        shadow = pygame.Surface((popup_rect.width + 28, popup_rect.height + 28), pygame.SRCALPHA)
+        pygame.draw.rect(shadow, (0, 0, 0, 154), shadow.get_rect(), border_radius=12)
+        surface.blit(shadow, (popup_rect.x - 14, popup_rect.y - 10))
+        self._draw_glass_panel(surface, popup_rect, radius=8, border=(92, 74, 42), glow=True)
+
+        header_h = 64
+        self._domestic_header_rect = pygame.Rect(popup_rect.x, popup_rect.y, popup_rect.width, header_h)
+        pygame.draw.line(surface, (76, 64, 38), (popup_rect.x + 16, popup_rect.y + header_h), (popup_rect.right - 16, popup_rect.y + header_h), 1)
+
+        icon = self._topbar_icons.get("domestic_affairs")
+        title_x = popup_rect.x + 24
+        if icon is not None:
+            surface.blit(icon, (title_x, popup_rect.y + 21))
+            title_x += icon.get_width() + 12
+        title = self.title_font.render("DOMESTIC AFFAIRS", True, _C_GOLD_BRIGHT)
+        data = self._domesticaffairsdata or {}
+        subtitle_text = data.get("country_name") or data.get("country_id") or "No country selected"
+        subtitle = self.small_font.render(str(subtitle_text).upper(), True, _C_TEXT_MUTED)
+        surface.blit(title, (title_x, popup_rect.y + 14))
+        surface.blit(subtitle, (title_x, popup_rect.y + 40))
+
+        close_size = 34
+        self._domestic_close_rect = pygame.Rect(popup_rect.right - close_size - 16, popup_rect.y + 15, close_size, close_size)
+        close_hovered = self._domestic_close_rect.collidepoint(mouse)
+        close_top = (45, 55, 68) if close_hovered else (23, 32, 48)
+        self._draw_vertical_gradient_rect(surface, self._domestic_close_rect, close_top, (10, 16, 25), radius=6)
+        pygame.draw.rect(surface, (_C_DANGER if close_hovered else (62, 76, 95)), self._domestic_close_rect, 1, border_radius=6)
+        close_icon = self._topbar_icons.get("close")
+        if close_icon is not None:
+            surface.blit(close_icon, close_icon.get_rect(center=self._domestic_close_rect.center))
+        else:
+            close_label = self.font_bold.render("X", True, _C_TEXT)
+            surface.blit(close_label, close_label.get_rect(center=self._domestic_close_rect.center))
+
+        content_rect = pygame.Rect(popup_rect.x + 28, popup_rect.y + header_h + 18, popup_rect.width - 56, popup_rect.height - header_h - 38)
+        self._domestic_tab_rects = {}
+        tabs = ("Executive", "Economy", "Internal Policies")
+        gap = 8
+        tab_w = min(190, max(132, (content_rect.width - gap * (len(tabs) - 1)) // len(tabs)))
+        tab_y = content_rect.y
+        for index, tab_name in enumerate(tabs):
+            tab_rect = pygame.Rect(content_rect.x + index * (tab_w + gap), tab_y, tab_w, 38)
+            self._domestic_tab_rects[tab_name] = tab_rect
+            selected = self._domestic_active_tab == tab_name
+            hovered = tab_rect.collidepoint(mouse)
+            top = (43, 36, 24) if selected else ((28, 39, 59) if hovered else (14, 22, 33))
+            bottom = (25, 22, 18) if selected else (9, 15, 24)
+            self._draw_vertical_gradient_rect(surface, tab_rect, top, bottom, radius=6)
+            pygame.draw.rect(surface, (_C_GOLD if selected else (46, 59, 78)), tab_rect, 1, border_radius=6)
+            self._draw_text_fit(surface, tab_name, (_C_GOLD_BRIGHT if selected else _C_TEXT), tab_rect.x + 12, tab_rect.y + 10, tab_rect.width - 24, self.font_bold if selected else self.font)
+
+        body_rect = pygame.Rect(content_rect.x, tab_y + 52, content_rect.width, content_rect.height - 52)
+        if not data:
+            self._domestic_segment_hitboxes = []
+            empty = self.font_bold.render("No domestic affairs data loaded.", True, _C_TEXT)
+            surface.blit(empty, empty.get_rect(center=(body_rect.centerx, body_rect.y + 120)))
+            return
+
+        if self._domestic_active_tab not in tabs:
+            self._domestic_active_tab = "Executive"
+        if self._domestic_active_tab == "Economy":
+            self._draw_domestic_economy_tab(surface, body_rect, data, mouse)
+        elif self._domestic_active_tab == "Internal Policies":
+            self._draw_domestic_internal_policies_tab(surface, body_rect, data, mouse)
+        else:
+            self._draw_domestic_executive_tab(surface, body_rect, data, mouse)
+
+        hovered_party = self._get_domestic_segment_at_pos(mouse)
+        if hovered_party is not None:
+            self._draw_domestic_party_tooltip(surface, mouse, hovered_party)
+
+    def _draw_domestic_executive_tab(self, surface, rect, data, mouse):
+        self._domestic_segment_hitboxes = []
+        left_w = min(540, max(390, int(rect.width * 0.58)))
+        gap = 14
+        left_rect = pygame.Rect(rect.x, rect.y, left_w, rect.height)
+        right_rect = pygame.Rect(left_rect.right + gap, rect.y, rect.width - left_w - gap, rect.height)
+
+        summary_rect = pygame.Rect(left_rect.x, left_rect.y, left_rect.width, 146)
+        self._draw_vertical_gradient_rect(surface, summary_rect, (16, 26, 41), (8, 13, 22), radius=6)
+        pygame.draw.rect(surface, (52, 65, 82), summary_rect, 1, border_radius=6)
+
+        flag_key = str(data.get("country_id") or data.get("country_name") or "").strip().lower().replace(" ", "_").replace("-", "_")
+        flag = self._flags.get(flag_key)
+        draw_x = summary_rect.x + 14
+        if flag is not None:
+            scaled_flag = pygame.transform.smoothscale(flag, (76, 48))
+            surface.blit(scaled_flag, (draw_x, summary_rect.y + 16))
+            draw_x += 92
+        leader_name = data.get("current_prime_minister") or data.get("head_of_government")
+        portrait_key = self._portrait_key(leader_name)
+        portrait = self._leaderportraits.get(portrait_key)
+        portrait_reserved = 0
+        if portrait is not None and summary_rect.width >= 420:
+            portrait_rect = pygame.Rect(summary_rect.right - 68, summary_rect.y + 14, 50, 70)
+            self._draw_vertical_gradient_rect(surface, portrait_rect.inflate(4, 4), (41, 49, 60), (9, 15, 24), radius=5)
+            portrait_img = pygame.transform.smoothscale(portrait, portrait_rect.size)
+            surface.blit(portrait_img, portrait_rect)
+            pygame.draw.rect(surface, _C_GOLD, portrait_rect, 1, border_radius=4)
+            portrait_reserved = 84
+        text_w = summary_rect.right - draw_x - 12 - portrait_reserved
+        self._draw_text_fit(surface, data.get("country_name", "Unknown"), _C_TEXT, draw_x, summary_rect.y + 12, text_w, self.title_font)
+        self._draw_text_fit(surface, data.get("government_system", ""), _C_TEXT_MUTED, draw_x, summary_rect.y + 42, text_w, self.small_font)
+        self._draw_domestic_info_row(surface, draw_x, summary_rect.y + 68, data.get("head_of_state_title", "Head of state"), data.get("head_of_state", "Unknown"), text_w)
+        pm_title = "Interim Prime Minister" if data.get("interim_prime_minister") else data.get("head_of_government_title", "Government")
+        self._draw_domestic_info_row(surface, draw_x, summary_rect.y + 92, pm_title, leader_name or "Unknown", text_w)
+        self._draw_domestic_info_row(surface, draw_x, summary_rect.y + 116, "Coalition", data.get("ruling_coalition", data.get("current_ruling_bloc", "Unknown")), text_w)
+
+        chart_rect = pygame.Rect(left_rect.x, summary_rect.bottom + 14, left_rect.width, min(250, max(212, rect.height // 2)))
+        self._draw_legislature_chart(surface, chart_rect, data, mouse)
+
+        legend_rect = pygame.Rect(left_rect.x, chart_rect.bottom + 12, left_rect.width, max(96, rect.bottom - chart_rect.bottom - 12))
+        self._draw_domestic_legend(surface, legend_rect, data)
+
+        metrics_rect = pygame.Rect(right_rect.x, right_rect.y, right_rect.width, min(242, rect.height))
+        self._draw_vertical_gradient_rect(surface, metrics_rect, (16, 26, 41), (8, 13, 22), radius=6)
+        pygame.draw.rect(surface, (52, 65, 82), metrics_rect, 1, border_radius=6)
+        y = metrics_rect.y + 14
+        self._draw_text_fit(surface, "EXECUTIVE CONTROL", _C_GOLD_BRIGHT, metrics_rect.x + 14, y, metrics_rect.width - 28, self.font_bold)
+        y += 28
+        rows = (
+            ("Ruling coalition", data.get("ruling_coalition", data.get("current_ruling_bloc", "Unknown"))),
+            ("Government status", data.get("government_status", data.get("legislature_status", "Unknown"))),
+            ("Crisis risk", data.get("political_crisis_risk", data.get("no_confidence_risk", "Unknown"))),
+            ("Succession tension", f"{float(data.get('succession_tension', 0) or 0):.0f}%"),
+            ("Legislature", data.get("legislature_name", "Unknown")),
+            ("Lower house", data.get("main_chamber_name", data.get("lower_house_name", "Unknown"))),
+            ("Total seats", self._format_number(data.get("total_seats", 0))),
+            ("Majority", self._format_number(data.get("majority_needed", 0))),
+            ("Government", self._format_number(data.get("government_seats", 0))),
+            ("Opposition", self._format_number(data.get("opposition_seats", 0))),
+        )
+        for label, value in rows:
+            self._draw_domestic_info_row(surface, metrics_rect.x + 14, y, label, value, metrics_rect.width - 28)
+            y += 18
+
+        bars_y = metrics_rect.bottom + 10
+        bars_rect = pygame.Rect(right_rect.x, bars_y, right_rect.width, 112)
+        if bars_rect.bottom <= rect.bottom:
+            self._draw_vertical_gradient_rect(surface, bars_rect, (14, 23, 36), (8, 13, 22), radius=6)
+            pygame.draw.rect(surface, (52, 65, 82), bars_rect, 1, border_radius=6)
+            bar_x = bars_rect.x + 14
+            bar_w = bars_rect.width - 28
+            self._draw_value_bar(surface, pygame.Rect(bar_x, bars_rect.y + 8, bar_w, 30), "Political stability", data.get("government_stability", 0), _C_SUCCESS)
+            self._draw_value_bar(surface, pygame.Rect(bar_x, bars_rect.y + 42, bar_w, 30), "Public approval", data.get("public_approval", 0), _C_INFO)
+            self._draw_value_bar(surface, pygame.Rect(bar_x, bars_rect.y + 76, bar_w, 30), "Corruption level", data.get("corruption_level", 0), _C_DANGER)
+
+        panel_y = (bars_rect.bottom + 10) if bars_rect.bottom <= rect.bottom else (metrics_rect.bottom + 10)
+        panel_rect = pygame.Rect(right_rect.x, panel_y, right_rect.width, max(96, rect.bottom - panel_y))
+        if panel_rect.height > 40:
+            selected_party = None
+            for party in data.get("chart_parties", ()):
+                if party.get("party_id") == self._domestic_selected_party_id:
+                    selected_party = party
+                    break
+            if selected_party is not None:
+                self._draw_domestic_party_panel(surface, panel_rect, selected_party)
+            else:
+                self._draw_domestic_warning_panel(surface, panel_rect, data)
+
+    def _draw_legislature_chart(self, surface, rect, data, mouse):
+        self._draw_vertical_gradient_rect(surface, rect, (13, 21, 34), (7, 12, 20), radius=6)
+        pygame.draw.rect(surface, (52, 65, 82), rect, 1, border_radius=6)
+        self._draw_text_fit(surface, data.get("main_chamber_name", data.get("lower_house_name", "Legislature")), _C_GOLD_BRIGHT, rect.x + 14, rect.y + 10, rect.width - 28, self.font_bold)
+
+        parties = [party for party in data.get("chart_parties", ()) if int(party.get("seat_count", 0) or 0) > 0]
+        total_seats = max(1, int(data.get("total_seats", 0) or sum(int(p.get("seat_count", 0) or 0) for p in parties) or 1))
+        center = (rect.centerx, rect.bottom - 20)
+        outer_radius = max(70, min(rect.width // 2 - 24, rect.height - 58))
+        inner_radius = max(44, int(outer_radius * 0.52))
+        start_angle = math.pi
+        segments = []
+        for party in parties:
+            seats = max(0, int(party.get("seat_count", 0) or 0))
+            sweep = math.pi * seats / total_seats
+            end_angle = start_angle + sweep
+            segments.append({
+                "party": party,
+                "party_id": party.get("party_id"),
+                "center": center,
+                "inner_radius": inner_radius,
+                "outer_radius": outer_radius,
+                "start_angle": start_angle,
+                "end_angle": end_angle,
+            })
+            start_angle = end_angle
+        self._domestic_segment_hitboxes = segments
+        hovered_party = self._get_domestic_segment_at_pos(mouse)
+        hovered_id = hovered_party.get("party_id") if hovered_party else None
+
+        for segment in segments:
+            party = segment["party"]
+            points = []
+            sweep = max(0.003, segment["end_angle"] - segment["start_angle"])
+            steps = max(4, int(28 * sweep / math.pi))
+            for step in range(steps + 1):
+                angle = segment["start_angle"] + sweep * step / steps
+                points.append((
+                    int(center[0] + math.cos(angle) * outer_radius),
+                    int(center[1] + math.sin(angle) * outer_radius),
+                ))
+            for step in range(steps, -1, -1):
+                angle = segment["start_angle"] + sweep * step / steps
+                points.append((
+                    int(center[0] + math.cos(angle) * inner_radius),
+                    int(center[1] + math.sin(angle) * inner_radius),
+                ))
+            color = self._parse_ui_color(party.get("color"), _C_STEEL)
+            pygame.draw.polygon(surface, color, points)
+            border = _C_GOLD_BRIGHT if hovered_id == party.get("party_id") or self._domestic_selected_party_id == party.get("party_id") else (11, 18, 32)
+            pygame.draw.polygon(surface, border, points, 2 if border == _C_GOLD_BRIGHT else 1)
+
+        self._draw_legislature_side_brackets(surface, rect, center, outer_radius, segments)
+
+        majority = max(1, int(data.get("majority_needed", 1) or 1))
+        marker_angle = math.pi + min(1.0, majority / total_seats) * math.pi
+        inner_point = (
+            int(center[0] + math.cos(marker_angle) * (inner_radius - 8)),
+            int(center[1] + math.sin(marker_angle) * (inner_radius - 8)),
+        )
+        outer_point = (
+            int(center[0] + math.cos(marker_angle) * (outer_radius + 10)),
+            int(center[1] + math.sin(marker_angle) * (outer_radius + 10)),
+        )
+        pygame.draw.line(surface, _C_GOLD_BRIGHT, inner_point, outer_point, 2)
+        majority_label = self.small_font_bold.render(str(majority), True, _C_GOLD_BRIGHT)
+        surface.blit(majority_label, (outer_point[0] - majority_label.get_width() // 2, outer_point[1] - 18))
+
+        total_surface = self.title_font.render(self._format_number(total_seats), True, _C_TEXT)
+        total_label = self.small_font.render("SEATS", True, _C_TEXT_MUTED)
+        surface.blit(total_surface, total_surface.get_rect(center=(center[0], center[1] - 35)))
+        surface.blit(total_label, total_label.get_rect(center=(center[0], center[1] - 12)))
+        status = data.get("legislature_status", "")
+        status_surface = self.small_font_bold.render(str(status).upper(), True, _C_GOLD_BRIGHT)
+        surface.blit(status_surface, status_surface.get_rect(center=(center[0], rect.bottom - 10)))
+
+    def _draw_legislature_side_brackets(self, surface, rect, center, outer_radius, segments):
+        groups = []
+        for segment in segments:
+            side = str(segment.get("party", {}).get("status", "neutral"))
+            seats = int(segment.get("party", {}).get("seat_count", 0) or 0)
+            if groups and groups[-1]["side"] == side:
+                groups[-1]["end_angle"] = segment["end_angle"]
+                groups[-1]["seats"] += seats
+            else:
+                groups.append({
+                    "side": side,
+                    "start_angle": segment["start_angle"],
+                    "end_angle": segment["end_angle"],
+                    "seats": seats,
+                })
+
+        colors = {
+            "government": _C_GOLD_BRIGHT,
+            "opposition": (210, 104, 104),
+            "neutral": (150, 162, 176),
+            "military": (132, 145, 160),
+            "appointed": (132, 145, 160),
+        }
+        labels = {
+            "government": "Government",
+            "opposition": "Opposition",
+        }
+        bracket_radius = outer_radius + 13
+        arc_rect = pygame.Rect(0, 0, bracket_radius * 2, bracket_radius * 2)
+        arc_rect.center = center
+        for group in groups:
+            side = group["side"]
+            if side not in labels:
+                continue
+            start_angle = group["start_angle"] + 0.012
+            end_angle = group["end_angle"] - 0.012
+            if end_angle <= start_angle:
+                continue
+            color = colors.get(side, _C_TEXT_MUTED)
+            pygame.draw.arc(surface, color, arc_rect, start_angle, end_angle, 3)
+            for angle in (start_angle, end_angle):
+                outer_point = (
+                    int(center[0] + math.cos(angle) * (bracket_radius + 4)),
+                    int(center[1] + math.sin(angle) * (bracket_radius + 4)),
+                )
+                inner_point = (
+                    int(center[0] + math.cos(angle) * (bracket_radius - 9)),
+                    int(center[1] + math.sin(angle) * (bracket_radius - 9)),
+                )
+                pygame.draw.line(surface, color, inner_point, outer_point, 3)
+
+            label = f"{labels[side]} {group['seats']}"
+            text = self.small_font_bold.render(label, True, color)
+            mid_angle = (start_angle + end_angle) * 0.5
+            label_x = int(center[0] + math.cos(mid_angle) * (bracket_radius + 28) - text.get_width() / 2)
+            label_y = int(center[1] + math.sin(mid_angle) * (bracket_radius + 28) - text.get_height() / 2)
+            label_x = max(rect.x + 8, min(rect.right - text.get_width() - 8, label_x))
+            label_y = max(rect.y + 32, min(rect.bottom - text.get_height() - 26, label_y))
+            label_bg = pygame.Rect(label_x - 5, label_y - 3, text.get_width() + 10, text.get_height() + 6)
+            pygame.draw.rect(surface, (7, 12, 20), label_bg, border_radius=4)
+            pygame.draw.rect(surface, color, label_bg, 1, border_radius=4)
+            surface.blit(text, (label_x, label_y))
+
+    def _draw_domestic_legend(self, surface, rect, data):
+        self._draw_vertical_gradient_rect(surface, rect, (13, 21, 34), (7, 12, 20), radius=6)
+        pygame.draw.rect(surface, (52, 65, 82), rect, 1, border_radius=6)
+        self._draw_text_fit(surface, "LEGISLATURE", _C_GOLD_BRIGHT, rect.x + 14, rect.y + 10, rect.width - 28, self.font_bold)
+        parties = list(data.get("chart_parties", ()))
+        row_h = 34
+        y = rect.y + 38
+        max_rows = max(0, (rect.bottom - y - 8) // row_h)
+        for party in parties[:max_rows]:
+            seats = max(0, int(party.get("seat_count", 0) or 0))
+            color = self._parse_ui_color(party.get("color"), _C_STEEL)
+            row_rect = pygame.Rect(rect.x + 10, y, rect.width - 20, row_h - 5)
+            hovered = self._domestic_selected_party_id == party.get("party_id")
+            self._draw_vertical_gradient_rect(surface, row_rect, (20, 30, 46) if hovered else (14, 22, 34), (8, 13, 22), radius=5)
+            pygame.draw.rect(surface, _C_GOLD if hovered else (40, 52, 69), row_rect, 1, border_radius=5)
+            swatch = pygame.Rect(row_rect.x + 8, row_rect.y + 8, 14, 14)
+            pygame.draw.rect(surface, color, swatch, border_radius=3)
+            pygame.draw.rect(surface, (9, 15, 24), swatch, 1, border_radius=3)
+            text_x = swatch.right + 8
+            name = f"{party.get('short_name', party.get('party_name', '?'))} - {seats} seats ({party.get('seat_percent', 0)}%)"
+            self._draw_text_fit(surface, name, _C_TEXT, text_x, row_rect.y + 3, row_rect.width - 168, self.small_font_bold)
+            detail = f"{party.get('status', 'neutral').title()} | {party.get('leader_name', 'Unknown')} | {party.get('ideology', 'Unknown')}"
+            self._draw_text_fit(surface, detail, _C_TEXT_MUTED, text_x, row_rect.y + 17, row_rect.width - 28, self.small_font)
+            y += row_h
+        if len(parties) > max_rows:
+            self._draw_text_fit(surface, f"+{len(parties) - max_rows} more blocs", _C_TEXT_MUTED, rect.x + 14, rect.bottom - 22, rect.width - 28, self.small_font)
+
+    def _draw_domestic_warning_panel(self, surface, rect, data):
+        self._draw_vertical_gradient_rect(surface, rect, (14, 23, 36), (8, 13, 22), radius=6)
+        pygame.draw.rect(surface, (52, 65, 82), rect, 1, border_radius=6)
+        self._draw_text_fit(surface, "POLITICAL WARNINGS", _C_GOLD_BRIGHT, rect.x + 14, rect.y + 12, rect.width - 28, self.font_bold)
+        y = rect.y + 42
+        warnings = list(data.get("warnings", ()))
+        if not warnings:
+            warnings = ["No immediate domestic crisis."]
+        max_warning_rows = max(1, (rect.bottom - y - 8) // 20)
+        for warning in warnings[:max_warning_rows]:
+            color = _C_DANGER if "lost" in warning.lower() or "risk" in warning.lower() else _C_TEXT
+            self._draw_text_fit(surface, warning, color, rect.x + 14, y, rect.width - 28, self.small_font_bold if color == _C_DANGER else self.small_font)
+            y += 20
+        mechanics = data.get("special_mechanics", ())
+        if y + 42 < rect.bottom and mechanics:
+            self._draw_text_fit(surface, "SPECIAL MECHANICS", _C_GOLD_BRIGHT, rect.x + 14, y + 6, rect.width - 28, self.small_font_bold)
+            y += 28
+            for mechanic in mechanics[:4]:
+                self._draw_text_fit(surface, mechanic, _C_TEXT_MUTED, rect.x + 14, y, rect.width - 28, self.small_font)
+                y += 18
+
+    def _draw_domestic_party_panel(self, surface, rect, party):
+        color = self._parse_ui_color(party.get("color"), _C_GOLD)
+        self._draw_vertical_gradient_rect(surface, rect, (14, 23, 36), (8, 13, 22), radius=6)
+        pygame.draw.rect(surface, color, rect, 1, border_radius=6)
+        pygame.draw.line(surface, color, (rect.x + 8, rect.y + 10), (rect.x + 8, rect.bottom - 10), 3)
+        self._draw_text_fit(surface, party.get("party_name", "Unknown party"), _C_TEXT, rect.x + 18, rect.y + 12, rect.width - 32, self.font_bold)
+        y = rect.y + 42
+        rows = (
+            ("Short name", party.get("short_name", "")),
+            ("Leader", party.get("leader_name", "Unknown")),
+            ("Coalition", party.get("coalition", "None")),
+            ("Status", party.get("status", "neutral").title()),
+            ("Ideology", party.get("ideology", "Unknown")),
+            ("Seats", self._format_number(party.get("seat_count", 0))),
+            ("Vote share", f"{float(party.get('vote_share', 0) or 0):.1f}%"),
+            ("Loyalty", f"{float(party.get('loyalty_to_government', 0) or 0):.0f}%"),
+            ("Defection risk", f"{float(party.get('defection_risk', 0) or 0):.0f}%"),
+        )
+        for label, value in rows:
+            if y + 18 > rect.bottom - 8:
+                break
+            self._draw_domestic_info_row(surface, rect.x + 18, y, label, value, rect.width - 36)
+            y += 22
+
+    def _draw_domestic_party_tooltip(self, surface, mouse, party):
+        lines = [
+            str(party.get("party_name", "Unknown party")),
+            f"Coalition: {party.get('coalition', 'None')}",
+            f"Seats: {self._format_number(party.get('seat_count', 0))}",
+            f"Vote share: {float(party.get('vote_share', 0) or 0):.1f}%",
+            f"Leader: {party.get('leader_name', 'Unknown')}",
+            f"Status: {party.get('status', 'neutral').title()}",
+            f"Loyalty: {float(party.get('loyalty_to_government', 0) or 0):.0f}%",
+            f"Defection risk: {float(party.get('defection_risk', 0) or 0):.0f}%",
+        ]
+        text_surfs = []
+        for index, line in enumerate(lines):
+            font = self.small_font_bold if index == 0 else self.small_font
+            color = _C_GOLD_BRIGHT if index == 0 else _C_TEXT
+            text_surfs.append(font.render(line, True, color))
+        padding = 10
+        width = max(text.get_width() for text in text_surfs) + padding * 2
+        height = sum(text.get_height() for text in text_surfs) + padding * 2 + 3
+        x = min(self.window_size[0] - width - 8, mouse[0] + 16)
+        y = min(self.window_size[1] - height - 8, mouse[1] + 16)
+        tooltip_rect = pygame.Rect(max(8, x), max(8, y), width, height)
+        self._draw_glass_panel(surface, tooltip_rect, radius=5, border=(126, 102, 58), glow=False)
+        draw_y = tooltip_rect.y + padding
+        for text in text_surfs:
+            surface.blit(text, (tooltip_rect.x + padding, draw_y))
+            draw_y += text.get_height()
+
+    def _draw_domestic_economy_tab(self, surface, rect, data, mouse):
+        effects = data.get("economy_effects", {}) if isinstance(data.get("economy_effects", {}), dict) else {}
+        chip_gap = 10
+        chip_w = (rect.width - chip_gap * 2) // 3
+        self._draw_metric_chip(surface, pygame.Rect(rect.x, rect.y, chip_w, 58), "Investor confidence", f"{float(effects.get('investor_confidence', 0) or 0):.0f}%", icon_key="gold", accent=_C_GOLD)
+        self._draw_metric_chip(surface, pygame.Rect(rect.x + chip_w + chip_gap, rect.y, chip_w, 58), "Currency stability", f"{float(effects.get('currency_stability', 0) or 0):.0f}%", icon_key="trade", accent=_C_INFO)
+        self._draw_metric_chip(surface, pygame.Rect(rect.x + (chip_w + chip_gap) * 2, rect.y, chip_w, 58), "Policy chance", f"{int(data.get('policy_passing_chance', 0) or 0)}%", icon_key="political_power", accent=_C_SUCCESS)
+
+        body_y = rect.y + 78
+        left_rect = pygame.Rect(rect.x, body_y, rect.width // 2 - 7, rect.bottom - body_y)
+        right_rect = pygame.Rect(left_rect.right + 14, body_y, rect.width - left_rect.width - 14, rect.bottom - body_y)
+        self._draw_vertical_gradient_rect(surface, left_rect, (15, 24, 38), (8, 13, 22), radius=6)
+        pygame.draw.rect(surface, (52, 65, 82), left_rect, 1, border_radius=6)
+        self._draw_text_fit(surface, "ECONOMIC LINK", _C_GOLD_BRIGHT, left_rect.x + 14, left_rect.y + 12, left_rect.width - 28, self.font_bold)
+        y = left_rect.y + 44
+        rows = (
+            ("Budget", effects.get("budget_passing", "Unknown")),
+            ("Projects", effects.get("project_speed", "Normal")),
+            ("Election rule", data.get("election_system", "Unknown")),
+            ("Next election", str(data.get("next_election_year", "Unknown"))),
+        )
+        for label, value in rows:
+            self._draw_domestic_info_row(surface, left_rect.x + 14, y, label, value, left_rect.width - 28)
+            y += 42 if label == "Budget" else 24
+
+        self._draw_vertical_gradient_rect(surface, right_rect, (15, 24, 38), (8, 13, 22), radius=6)
+        pygame.draw.rect(surface, (52, 65, 82), right_rect, 1, border_radius=6)
+        self._draw_text_fit(surface, "ELECTION OUTCOMES", _C_GOLD_BRIGHT, right_rect.x + 14, right_rect.y + 12, right_rect.width - 28, self.font_bold)
+        outcome_lines = [
+            "Stable result: investor confidence and currency stability improve.",
+            "Disputed result: protest risk and corruption risk rise.",
+            "Landslide: reforms pass faster, but checks can weaken.",
+            "Hung parliament: budgets slow and investor confidence drops.",
+        ]
+        y = right_rect.y + 44
+        for line in outcome_lines:
+            self._draw_text_fit(surface, line, _C_TEXT, right_rect.x + 14, y, right_rect.width - 28, self.small_font)
+            y += 25
+        self._draw_value_bar(surface, pygame.Rect(right_rect.x + 14, right_rect.bottom - 48, right_rect.width - 28, 32), "Coalition loyalty", data.get("coalition_loyalty", 0), _C_GOLD)
+
+    def _draw_domestic_internal_policies_tab(self, surface, rect, data, mouse):
+        effects = data.get("internal_policy_effects", {}) if isinstance(data.get("internal_policy_effects", {}), dict) else {}
+        top_h = 142
+        top_rect = pygame.Rect(rect.x, rect.y, rect.width, top_h)
+        self._draw_vertical_gradient_rect(surface, top_rect, (15, 24, 38), (8, 13, 22), radius=6)
+        pygame.draw.rect(surface, (52, 65, 82), top_rect, 1, border_radius=6)
+        bar_gap = 18
+        bar_w = (top_rect.width - 28 - bar_gap) // 2
+        self._draw_value_bar(surface, pygame.Rect(top_rect.x + 14, top_rect.y + 16, bar_w, 32), "Protest risk", effects.get("protest_risk", 0), _C_DANGER)
+        self._draw_value_bar(surface, pygame.Rect(top_rect.x + 14 + bar_w + bar_gap, top_rect.y + 16, bar_w, 32), "Anti-corruption swing", effects.get("anti_corruption_swing", 0), _C_GOLD)
+        self._draw_value_bar(surface, pygame.Rect(top_rect.x + 14, top_rect.y + 74, bar_w, 32), "Policy passing chance", effects.get("policy_passing_chance", 0), _C_SUCCESS)
+        self._draw_value_bar(surface, pygame.Rect(top_rect.x + 14 + bar_w + bar_gap, top_rect.y + 74, bar_w, 32), "Regime pressure", effects.get("regime_survival_pressure", 0), _C_INFO)
+
+        body_y = top_rect.bottom + 14
+        left_rect = pygame.Rect(rect.x, body_y, rect.width // 2 - 7, rect.bottom - body_y)
+        right_rect = pygame.Rect(left_rect.right + 14, body_y, rect.width - left_rect.width - 14, rect.bottom - body_y)
+        for panel_rect, title in ((left_rect, "INTERNAL POLICY LINKS"), (right_rect, "POLITICAL RULES")):
+            self._draw_vertical_gradient_rect(surface, panel_rect, (15, 24, 38), (8, 13, 22), radius=6)
+            pygame.draw.rect(surface, (52, 65, 82), panel_rect, 1, border_radius=6)
+            self._draw_text_fit(surface, title, _C_GOLD_BRIGHT, panel_rect.x + 14, panel_rect.y + 12, panel_rect.width - 28, self.font_bold)
+
+        policy_lines = [
+            "Low civil liberties with strong opposition raises protest risk.",
+            "High corruption creates anti-government swing in elections.",
+            "High media freedom spreads scandals but improves legitimacy.",
+            "Identity tension strengthens identity-based parties.",
+            "Police effectiveness can lower unrest; brutality raises anger.",
+        ]
+        y = left_rect.y + 44
+        for line in policy_lines:
+            self._draw_text_fit(surface, line, _C_TEXT, left_rect.x + 14, y, left_rect.width - 28, self.small_font)
+            y += 24
+
+        rule_rows = (
+            ("Snap election", "Yes" if data.get("can_call_snap_election") else "No"),
+            ("No-confidence", "Yes" if data.get("can_have_no_confidence_vote") else "No"),
+            ("Coalition collapse", "Yes" if data.get("can_have_coalition_collapse") else "No"),
+            ("Coup risk", "Yes" if data.get("can_have_coup_risk") else "No"),
+            ("One-party election", "Yes" if data.get("can_have_single_party_election") else "No"),
+            ("Appointed legislature", "Yes" if data.get("can_have_appointed_legislature") else "No"),
+        )
+        y = right_rect.y + 44
+        for label, value in rule_rows:
+            self._draw_domestic_info_row(surface, right_rect.x + 14, y, label, value, right_rect.width - 28)
+            y += 24
 
     def _draw_war_progress_popup(self, surface, mouse):
         popup_w = min(900, max(640, self.map_rect.width - 72))
