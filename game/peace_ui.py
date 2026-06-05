@@ -381,8 +381,8 @@ class PeaceTreatyScreen:
         surf.fill((0, 0, 0, 150))
         self.screen.blit(surf, (0, 0))
 
-        pygame.draw.rect(self.screen, (16, 24, 38), self.popup_rect)
-        pygame.draw.rect(self.screen, (240, 198, 116), self.popup_rect, 2)
+        pygame.draw.rect(self.screen, (16, 24, 38), self.popup_rect,border_radius=10)
+        pygame.draw.rect(self.screen, (240, 198, 116), self.popup_rect, 2,border_radius=10)
         mouse_pos = pygame.mouse.get_pos()
 
         if self.active_popup == "demand":
@@ -393,8 +393,8 @@ class PeaceTreatyScreen:
             self.screen.blit(p_msg, p_msg.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 75))
 
             b_color = (40, 52, 72) if self.popup_close_btn.collidepoint(mouse_pos) else (24, 33, 46)
-            pygame.draw.rect(self.screen, b_color, self.popup_close_btn)
-            pygame.draw.rect(self.screen, (240, 198, 116), self.popup_close_btn, 1)
+            pygame.draw.rect(self.screen, b_color, self.popup_close_btn,border_radius=6)
+            pygame.draw.rect(self.screen, (240, 198, 116), self.popup_close_btn, 1, border_radius=6)
             
             btn_txt = self.small_font.render("CLOSE", True, (240, 198, 116))
             self.screen.blit(btn_txt, btn_txt.get_rect(center=self.popup_close_btn.center))
