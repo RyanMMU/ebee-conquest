@@ -3,9 +3,7 @@ import sys
 import ctypes
 
 WIDTH, HEIGHT = 1280, 720
-STATUS_BAR_HEIGHT = 60  
-FPS = 60
-
+STATUS_BAR_HEIGHT = 60 
 LEFTBAR_WIDTH = 230
 RIGHTBAR_WIDTH = 250
 BOTTOMBAR_HEIGHT = 70
@@ -457,7 +455,7 @@ class PeaceTreatyScreen:
         while self.running:
             self.handle_events()
             self.draw()
-            self.clock.tick(FPS)
+            self.clock.tick(60)
         pygame.quit()
         sys.exit()
 
