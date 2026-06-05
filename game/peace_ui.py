@@ -73,7 +73,7 @@ class PeaceTreatyScreen:
         ebee_rect = ebee_surf.get_rect(midleft=(16, STATUS_BAR_HEIGHT // 2))
         self.screen.blit(ebee_surf, ebee_rect)
         
-        title_surf = self.title_font.render("PEACE CONFERENCE", True, (240, 198, 116))
+        title_surf = self.title_font.render("PEACE CONFERENCE", True, (255, 255,255))
         title_rect = title_surf.get_rect(center=(WIDTH // 2, STATUS_BAR_HEIGHT // 2))
         self.screen.blit(title_surf, title_rect)
 
