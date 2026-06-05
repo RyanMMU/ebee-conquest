@@ -519,6 +519,7 @@ class InGameUI:
         self._production_max_scroll = 0
         self._production_item_count = 44
         self.production_selected = None
+        self._researched_weapon_nodes: list[dict] = []
         self._recruit_action_rect = pygame.Rect(0, 0, 10, 10)
         self._declarewar_rect = pygame.Rect(0, 0, 10, 10)
         self._split_rect = pygame.Rect(0, 0, 10, 10)
@@ -1724,7 +1725,8 @@ class InGameUI:
                 researchdata.get("researching_id"),
                 researchdata.get("researching_turns_remaining", 0),
             )
-        # reflow after state changes (tab visibility depends on selection/menu)
+            self._researched_weapon_nodes = self.researchview.get_researched_nodes()
+        
         if warprogressdata is not None:
             self._warprogressdata = warprogressdata
         if selected_country_stats is not None:
@@ -2416,12 +2418,34 @@ class InGameUI:
                 if row_rect.bottom >= list_rect.y and row_rect.top <= list_rect.bottom:
                     self._production_item_rects[i] = row_rect
                     selected = self.production_selected == (i + 1)
-                    label = f"Production Item {i + 1}"
+
+                    
+                    researched = self._researched_weapon_nodes
+                    if i < len(researched):
+                        node = researched[i]
+                        label = node["label"]
+                        is_unlocked = True
+                 
+                        cat_tag = node.get("category", "")
+                        display_label = f"{label}  [{cat_tag}]" if cat_tag else label
+                    else:
+                        display_label = f"Production Item {i + 1}"
+                        is_unlocked = False
+
                     self._draw_glow_btn(
-                        surface, f"prod_item_{i}", row_rect, True, label,
-                        primary=selected, selected=selected, mouse=mouse,
+                        surface, f"prod_item_{i}", row_rect, True, display_label,
+                        primary=selected or is_unlocked, selected=selected, mouse=mouse,
                         align='left'
                     )
+
+                    
+                    if is_unlocked and row_rect.width >= 120:
+                        badge_text = self.small_font_bold.render("✓ RESEARCHED", True, (67, 181, 129))
+                        badge_x = row_rect.right - badge_text.get_width() - 12
+                        badge_y = row_rect.centery - badge_text.get_height() // 2
+                        if badge_x > row_rect.x + row_rect.width // 2:
+                            surface.blit(badge_text, (badge_x, badge_y))
+
                 y += row_h + gap
 
             if self._production_max_scroll > 0:
@@ -2481,7 +2505,7 @@ class InGameUI:
         content_rect = self.rightbar.rect.inflate(-24, -24)
         content_rect.topleft = (self.rightbar.rect.x + 12, self.rightbar.rect.y + 12)
 
-        # base panel — premium command drawer
+        
         self._draw_glass_panel(surface, self.rightbar.rect, radius=0, border=(44, 58, 76))
         pygame.draw.rect(surface, (10, 16, 25), content_rect, border_radius=6)
 
@@ -2491,7 +2515,7 @@ class InGameUI:
 
         y_cursor = content_rect.y + 24
 
-        # Country menu overrides all tabs (only shown when needed)
+       
         if self._countrymenutarget:
             alreadyatwar = self._countrymenutarget in self._countriesatwarset
             surface.blit(self.font.render("Country actions", True, (240, 240, 240)), (content_rect.x, y_cursor + 6))
