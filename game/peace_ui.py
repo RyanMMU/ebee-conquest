@@ -20,7 +20,9 @@ class PeaceTreatyScreen:
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         self.clock = pygame.time.Clock()
         self.title_font = pygame.font.SysFont("bahnschrift", 20, bold=True)  
+        self.mini_font= pygame.font.SysFont("bahnschrift", 12)  
         self.small_font = pygame.font.SysFont("bahnschrift", 15)
+        
         self.running = True
         
         self.exit_btn_rect = pygame.Rect(20, HEIGHT - BOTTOMBAR_HEIGHT + 15, 180, 40)
@@ -77,13 +79,19 @@ class PeaceTreatyScreen:
         title_rect = title_surf.get_rect(center=(WIDTH // 2, STATUS_BAR_HEIGHT // 2))
         self.screen.blit(title_surf, title_rect)
 
+
+
+        points_surf = self.mini_font.render("CONFERENCE POINTS:", True, (255,255,255))
+        points_rect = points_surf.get_rect(midright=(WIDTH - 16, STATUS_BAR_HEIGHT // 2))
+        self.screen.blit(points_surf, points_rect)
+
     def draw_left_bar(self):
         leftbar_rect = pygame.Rect(0, STATUS_BAR_HEIGHT, LEFTBAR_WIDTH, HEIGHT - STATUS_BAR_HEIGHT - BOTTOMBAR_HEIGHT)
         pygame.draw.rect(self.screen, (12, 18, 29), leftbar_rect)
         pygame.draw.rect(self.screen, (28, 38, 52), leftbar_rect, 1)
         pygame.draw.line(self.screen, (76, 64, 38), leftbar_rect.topright, leftbar_rect.bottomright, 1)
         
-        left_title = self.title_font.render("PARTICIPANTS", True, (240, 198, 116))
+        left_title = self.small_font.render("PARTICIPANTS", True, (240, 198, 116))
         left_rect = left_title.get_rect(centerx=leftbar_rect.centerx, y=leftbar_rect.y + 16)
         self.screen.blit(left_title, left_rect)
 
@@ -117,8 +125,8 @@ class PeaceTreatyScreen:
         pygame.draw.rect(self.screen, (28, 38, 52), rightbar_rect, 1)
         pygame.draw.line(self.screen, (76, 64, 38), rightbar_rect.topleft, rightbar_rect.bottomleft, 1)
         
-        sidebar_title_font = pygame.font.SysFont("bahnschrift", 16, bold=True)
-        right_title = sidebar_title_font.render("DEMANDS", True, (240, 198, 116))
+         
+        right_title = self.small_font.render("                 DEMANDS", True, (240, 198, 116))
         right_rect = right_title.get_rect(left=rightbar_rect.left + 20, y=rightbar_rect.y + 16)
         self.screen.blit(right_title, right_rect)
 
