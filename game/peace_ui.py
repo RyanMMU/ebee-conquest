@@ -303,8 +303,17 @@ class PeaceTreatyScreen:
                             self.active_popup = None
                         return
                     elif self.active_popup == "submit":
+                        
                         if self.popup_confirm_btn.collidepoint(event.pos):
                             print("Demands Submitted!")
+                            self.active_popup = None
+                        elif self.popup_cancel_btn.collidepoint(event.pos):
+                            self.active_popup = None
+                        return
+                    
+                    elif self.active_popup == "remove_demand":
+                        if self.popup_confirm_btn.collidepoint(event.pos):
+                            self.selected_demands_set.discard(self.selected_demand)
                             self.active_popup = None
                         elif self.popup_cancel_btn.collidepoint(event.pos):
                             self.active_popup = None
@@ -331,10 +340,10 @@ class PeaceTreatyScreen:
                             label = self.demands[i]
                             self.selected_demand = label
                             if label in self.selected_demands_set:
-                                self.selected_demands_set.remove(label)
+                                self.active_popup = "remove_demand"
                             else:
                                 self.selected_demands_set.add(label)
-                            self.active_popup = "demand"
+                                self.active_popup = "demand"
                     
 
     def draw_interactive_panel(self, surface, rect, is_hovered, is_selected, glow_strength, motion_time, radius=6, custom_colors=None):
@@ -454,6 +463,26 @@ class PeaceTreatyScreen:
             
             btn_txt = self.small_font.render("CLOSE", True, (240, 198, 116))
             self.screen.blit(btn_txt, btn_txt.get_rect(center=self.popup_close_btn.center))
+
+
+        elif self.active_popup == "remove_demand":
+            p_title = self.title_font.render("REMOVE DEMAND", True, (240, 198, 116))
+            self.screen.blit(p_title, p_title.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 25))
+
+            p_msg = self.small_font.render(f"Remove demand: {self.selected_demand}?", True, (255, 255, 255))
+            self.screen.blit(p_msg, p_msg.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 75))
+
+            confirm_color = (40, 120, 40) if self.popup_confirm_btn.collidepoint(mouse_pos) else (30, 90, 30)
+            pygame.draw.rect(self.screen, confirm_color, self.popup_confirm_btn, border_radius=6)
+            pygame.draw.rect(self.screen, (255, 255, 255), self.popup_confirm_btn, 1, border_radius=6)
+            confirm_txt = self.small_font.render("CONFIRM", True, (255, 255, 255))
+            self.screen.blit(confirm_txt, confirm_txt.get_rect(center=self.popup_confirm_btn.center))
+
+            cancel_color = (120, 40, 40) if self.popup_cancel_btn.collidepoint(mouse_pos) else (90, 30, 30)
+            pygame.draw.rect(self.screen, cancel_color, self.popup_cancel_btn, border_radius=6)
+            pygame.draw.rect(self.screen, (255, 255, 255), self.popup_cancel_btn, 1, border_radius=6)
+            cancel_txt = self.small_font.render("CANCEL", True, (255, 255, 255))
+            self.screen.blit(cancel_txt, cancel_txt.get_rect(center=self.popup_cancel_btn.center))
             
     def draw(self):
         self.screen.fill((11, 18, 32))
