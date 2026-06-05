@@ -157,20 +157,17 @@ class PeaceTreatyScreen:
         count_rect = count_surf.get_rect(centerx=rightbar_rect.centerx, bottom=self.clear_btn_rect.top - 12)
         self.screen.blit(count_surf, count_rect)
 
-        if self.clear_btn_rect.collidepoint(mouse_pos):
-            clear_btn_color = (40, 52, 72)
-            clear_text_color = (255, 220, 150)
-        else:
-            clear_btn_color = (24, 33, 46)
-            clear_text_color = (240, 198, 116)
+       
+        clear_hovered = self.clear_btn_rect.collidepoint(mouse_pos)
+        clear_glow = self._hover_glow.get("b_clear", 0.0)
+        clear_glow = min(1.0, clear_glow + 0.16) if clear_hovered else max(0.0, clear_glow - 0.10)
+        self._hover_glow["b_clear"] = clear_glow
 
-        pygame.draw.rect(self.screen, clear_btn_color, self.clear_btn_rect)
-        pygame.draw.rect(self.screen, clear_text_color, self.clear_btn_rect, 1)
-        
-        clear_font = pygame.font.SysFont("bahnschrift", 11, bold=True)
-        clear_surf = clear_font.render("CLEAR ALL", True, clear_text_color)
-        clear_rect = clear_surf.get_rect(center=self.clear_btn_rect.center)
-        self.screen.blit(clear_surf, clear_rect)
+        self.draw_interactive_panel(self.screen, self.clear_btn_rect, clear_hovered, False, clear_glow, motion_time)
+
+        clear_text_color = (239, 224, 185) if clear_hovered else (202, 207, 211)
+        clear_surf = self.small_font.render("CLEAR ALL", True, clear_text_color)
+        self.screen.blit(clear_surf, clear_surf.get_rect(center=self.clear_btn_rect.center))
 
 
     def draw_bottom_bar(self):
