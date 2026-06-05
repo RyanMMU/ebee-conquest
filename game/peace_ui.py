@@ -230,14 +230,14 @@ class PeaceTreatyScreen:
         if not self.chat_open:
             return
             
-        pygame.draw.rect(self.screen, (16, 24, 38), self.chat_panel_rect)
-        pygame.draw.rect(self.screen, (240, 198, 116), self.chat_panel_rect, 2)
+        pygame.draw.rect(self.screen, (16, 24, 38), self.chat_panel_rect,border_radius=10)
+        pygame.draw.rect(self.screen, (240, 198, 116), self.chat_panel_rect, 2,border_radius=10)
         
         header_surf = self.title_font.render("NEGOTIATE PLACE", True, (240, 198, 116))
         self.screen.blit(header_surf, (self.chat_panel_rect.x + 20, self.chat_panel_rect.y + 15))
         pygame.draw.line(self.screen, (40, 52, 72), 
-                         (self.chat_panel_rect.x, self.chat_panel_rect.y + 50), 
-                         (self.chat_panel_rect.right, self.chat_panel_rect.y + 50), 2)
+                         (self.chat_panel_rect.x+10, self.chat_panel_rect.y + 50), 
+                         (self.chat_panel_rect.right-10, self.chat_panel_rect.y + 50), 2)
         
         start_y = self.chat_panel_rect.y + 70
         for sender, msg in self.chat_history[-8:]:
@@ -247,8 +247,8 @@ class PeaceTreatyScreen:
             self.screen.blit(msg_surf, (self.chat_panel_rect.x + 20, start_y))
             start_y += 30
 
-        pygame.draw.rect(self.screen, (24, 33, 46), self.chat_input_rect)
-        pygame.draw.rect(self.screen, (76, 64, 38), self.chat_input_rect, 1)
+        pygame.draw.rect(self.screen, (24, 33, 46), self.chat_input_rect,border_radius=8)
+        pygame.draw.rect(self.screen, (76, 64, 38), self.chat_input_rect, 1,border_radius=8)
         
         text_to_render = self.chat_input_text + ("|" if pygame.time.get_ticks() % 1000 < 500 else "")
         input_surf = self.small_font.render(text_to_render, True, (255, 255, 255))
