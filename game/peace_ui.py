@@ -20,7 +20,11 @@ class PeaceTreatyScreen:
         self.title_font = pygame.font.SysFont("bahnschrift", 20, bold=True)  
         self.mini_font= pygame.font.SysFont("bahnschrift", 12)  
         self.small_font = pygame.font.SysFont("bahnschrift", 15)
-        
+        self.backspace_held = False
+        self.backspace_timer = 0
+        self.backspace_delay = 400 
+        self.backspace_interval = 50 
+                
         self.running = True
         
         self.exit_btn_rect = pygame.Rect(20, HEIGHT - BOTTOMBAR_HEIGHT + 15, 180, 40)
@@ -273,9 +277,24 @@ class PeaceTreatyScreen:
                             self.chat_input_text = ""
                     elif event.key == pygame.K_BACKSPACE:
                         self.chat_input_text = self.chat_input_text[:-1]
+
+
+                    
+                        self.backspace_held = True
+                        self.backspace_timer = pygame.time.get_ticks()
+
+                   
                     else:
                         if event.unicode.isprintable():
                             self.chat_input_text += event.unicode
+
+
+            if event.type == pygame.KEYUP:
+                        if event.key == pygame.K_BACKSPACE:
+                            self.backspace_held = False
+
+
+                
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
@@ -451,6 +470,11 @@ class PeaceTreatyScreen:
     def run(self):
         while self.running:
             self.handle_events()
+            now = pygame.time.get_ticks()
+            if self.backspace_held and self.chat_open and not self.active_popup:
+                if now - self.backspace_timer > self.backspace_delay:
+                    if (now - self.backspace_timer - self.backspace_delay) % self.backspace_interval < 20:
+                        self.chat_input_text = self.chat_input_text[:-1]
             self.draw()
             self.clock.tick(60)
         pygame.quit()
