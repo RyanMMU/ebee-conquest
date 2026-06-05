@@ -512,9 +512,14 @@ class InGameUI:
         self._warprogress_drag_offset = (0, 0)
         self._warprogress_active_index = 0
         self.production_popup_open = False
-        self._production_popup_back_rect = pygame.Rect(0, 0, 10,10)
-        self._production_selection_rects = [pygame.Rect(0, 0, 10,10) for _ in range(4)]
+        self._production_popup_back_rect = pygame.Rect(0, 0, 10, 10)
+        self._production_popup_rect = pygame.Rect(0, 0, 10, 10)
+        self._production_item_rects = {}
+        self._production_scroll = 0
+        self._production_max_scroll = 0
+        self._production_item_count = 44
         self.production_selected = None
+        self._researched_weapon_nodes: list[dict] = []
         self._recruit_action_rect = pygame.Rect(0, 0, 10, 10)
         self._declarewar_rect = pygame.Rect(0, 0, 10, 10)
         self._split_rect = pygame.Rect(0, 0, 10, 10)
@@ -1720,7 +1725,8 @@ class InGameUI:
                 researchdata.get("researching_id"),
                 researchdata.get("researching_turns_remaining", 0),
             )
-        # reflow after state changes (tab visibility depends on selection/menu)
+            self._researched_weapon_nodes = self.researchview.get_researched_nodes()
+        
         if warprogressdata is not None:
             self._warprogressdata = warprogressdata
         if selected_country_stats is not None:
@@ -1844,51 +1850,57 @@ class InGameUI:
             if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 self.production_popup_open = False
                 return None
+            if event.type == pygame.MOUSEWHEEL:
+                if self._production_popup_rect.collidepoint(pygame.mouse.get_pos()):
+                    self._production_scroll = max(0, min(self._production_max_scroll, 
+                        self._production_scroll - int(event.y) * 40))
+                    return "production_scroll"
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if self._production_popup_back_rect.collidepoint(event.pos):
                     self.production_popup_open = False
                     return None
-                
-                for i in range(4):
-                    if self._production_selection_rects[i].collidepoint(event.pos):
-                        self.production_selected = i + 1
+                for idx, rect in self._production_item_rects.items():
+                    if rect.collidepoint(event.pos):
+                        self.production_selected = idx + 1
+                        self.ui_click_sound.play()
+                        # DO NOT close – keep popup open
+                        return f"production_select_{idx+1}"
+                # click outside = close
+                if not self._production_popup_rect.collidepoint(event.pos):
+                    self.production_popup_open = False
+                    return None
+                if self.warprogressopen:
+                    if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                        self._warprogress_dragging = False
+                        if self._warprogress_popup_rect.collidepoint(event.pos):
+                            return None
+                    if event.type == pygame.MOUSEMOTION and self._warprogress_dragging:
+                        target_x = int(event.pos[0] - self._warprogress_drag_offset[0])
+                        target_y = int(event.pos[1] - self._warprogress_drag_offset[1])
+                        popup = self._warprogress_popup_rect.copy()
+                        popup.topleft = (target_x, target_y)
+                        bounds = pygame.Rect(12, self.topbar_height + 8, self.window_size[0] - 24, self.window_size[1] - self.topbar_height - 20)
+                        popup.clamp_ip(bounds)
+                        self._warprogress_popup_pos = popup.topleft
                         return None
-                
-                self.production_popup_open = False
-                return None
-
-        if self.warprogressopen:
-            if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                self._warprogress_dragging = False
-                if self._warprogress_popup_rect.collidepoint(event.pos):
-                    return None
-            if event.type == pygame.MOUSEMOTION and self._warprogress_dragging:
-                target_x = int(event.pos[0] - self._warprogress_drag_offset[0])
-                target_y = int(event.pos[1] - self._warprogress_drag_offset[1])
-                popup = self._warprogress_popup_rect.copy()
-                popup.topleft = (target_x, target_y)
-                bounds = pygame.Rect(12, self.topbar_height + 8, self.window_size[0] - 24, self.window_size[1] - self.topbar_height - 20)
-                popup.clamp_ip(bounds)
-                self._warprogress_popup_pos = popup.topleft
-                return None
-            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                if self._warprogress_close_rect.collidepoint(event.pos):
-                    self.warprogressopen = False
-                    self._warprogress_dragging = False
-                    return None
-                for tab_index, tab_rect in enumerate(self._warprogress_tab_rects):
-                    if tab_rect.collidepoint(event.pos):
-                        self._warprogress_active_index = tab_index
-                        return None
-                if self._warprogress_header_rect.collidepoint(event.pos):
-                    self._warprogress_dragging = True
-                    self._warprogress_drag_offset = (
-                        event.pos[0] - self._warprogress_popup_rect.x,
-                        event.pos[1] - self._warprogress_popup_rect.y,
-                    )
-                    return None
-                if self._warprogress_popup_rect.collidepoint(event.pos):
-                    return None
+                    if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                        if self._warprogress_close_rect.collidepoint(event.pos):
+                            self.warprogressopen = False
+                            self._warprogress_dragging = False
+                            return None
+                        for tab_index, tab_rect in enumerate(self._warprogress_tab_rects):
+                            if tab_rect.collidepoint(event.pos):
+                                self._warprogress_active_index = tab_index
+                                return None
+                        if self._warprogress_header_rect.collidepoint(event.pos):
+                            self._warprogress_dragging = True
+                            self._warprogress_drag_offset = (
+                                event.pos[0] - self._warprogress_popup_rect.x,
+                                event.pos[1] - self._warprogress_popup_rect.y,
+                            )
+                            return None
+                        if self._warprogress_popup_rect.collidepoint(event.pos):
+                            return None
 
         if self.pausemenuopen:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -2093,6 +2105,9 @@ class InGameUI:
        
     def ispointeroverui(self, mouseposition):
         if self.warprogressopen and self._warprogress_popup_rect.collidepoint(mouseposition):
+            return True
+        
+        if self.production_popup_open and self._production_popup_rect.collidepoint(mouseposition):
             return True
        
         if self.focusview.pointerover(mouseposition):
@@ -2371,42 +2386,79 @@ class InGameUI:
 
         if self.production_popup_open:
             overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 120))
+            overlay.fill((0, 0, 0, 140))
             surface.blit(overlay, (0, 0))
-            popup_rect = pygame.Rect(0, 0, 600, 400)
+            popup_rect = pygame.Rect(0, 0, 640, 520)
             popup_rect.center = surface.get_rect().center
+            self._production_popup_rect = popup_rect
             self._draw_glass_panel(surface, popup_rect, radius=8, border=(72, 86, 108), glow=True)
+
             title = self.title_font.render("PRODUCTION", True, _C_GOLD_BRIGHT)
-            surface.blit(title, title.get_rect(center=(popup_rect.centerx, popup_rect.y + 40)))
+            surface.blit(title, title.get_rect(center=(popup_rect.centerx, popup_rect.y + 32)))
+            subtitle = self.small_font.render("Select production item", True, _C_TEXT_MUTED)
+            surface.blit(subtitle, subtitle.get_rect(center=(popup_rect.centerx, popup_rect.y + 58)))
 
-            btn_w, btn_h = 160, 50
-            btn_gap_x, btn_gap_y = 20, 15
-            start_x = popup_rect.centerx - btn_w - btn_gap_x // 2
-            start_y = popup_rect.y + 90
+            list_top = popup_rect.y + 80
+            list_bottom = popup_rect.bottom - 70
+            list_rect = pygame.Rect(popup_rect.x + 24, list_top, popup_rect.width - 48, list_bottom - list_top)
+            pygame.draw.rect(surface, (7, 12, 20), list_rect, border_radius=6)
+            pygame.draw.rect(surface, (43, 56, 73), list_rect, 1, border_radius=6)
 
-            for i in range(4):
-                col = i % 2
-                row = i // 2
-                x = start_x + col * (btn_w + btn_gap_x)
-                y = start_y + row * (btn_h + btn_gap_y)
-                self._production_selection_rects[i] = pygame.Rect(x, y, btn_w, btn_h)
-                selected = self.production_selected == (i + 1)
-                label = f"selection {i + 1}"
-                self._draw_glow_btn(
-                    surface,
-                    f"prod_sel_{i}",
-                    self._production_selection_rects[i],
-                    True,
-                    label,
-                    primary=selected,
-                    selected=selected,
-                    mouse=mouse,
-                )
+            row_h = 44
+            gap = 6
+            total_h = self._production_item_count * (row_h + gap)
+            visible_h = list_rect.height
+            self._production_max_scroll = max(0, total_h - visible_h + gap)
+            self._production_scroll = max(0, min(self._production_scroll, self._production_max_scroll))
+
+            self._production_item_rects = {}
+            y = list_rect.y + 6 - self._production_scroll
+            for i in range(self._production_item_count):
+                row_rect = pygame.Rect(list_rect.x + 8, y, list_rect.width - 16, row_h)
+                if row_rect.bottom >= list_rect.y and row_rect.top <= list_rect.bottom:
+                    self._production_item_rects[i] = row_rect
+                    selected = self.production_selected == (i + 1)
+
+                    
+                    researched = self._researched_weapon_nodes
+                    if i < len(researched):
+                        node = researched[i]
+                        label = node["label"]
+                        is_unlocked = True
+                 
+                        cat_tag = node.get("category", "")
+                        display_label = f"{label}  [{cat_tag}]" if cat_tag else label
+                    else:
+                        display_label = f"Production Item {i + 1}"
+                        is_unlocked = False
+
+                    self._draw_glow_btn(
+                        surface, f"prod_item_{i}", row_rect, True, display_label,
+                        primary=selected or is_unlocked, selected=selected, mouse=mouse,
+                        align='left'
+                    )
+
+                    
+                    if is_unlocked and row_rect.width >= 120:
+                        badge_text = self.small_font_bold.render("✓ RESEARCHED", True, (67, 181, 129))
+                        badge_x = row_rect.right - badge_text.get_width() - 12
+                        badge_y = row_rect.centery - badge_text.get_height() // 2
+                        if badge_x > row_rect.x + row_rect.width // 2:
+                            surface.blit(badge_text, (badge_x, badge_y))
+
+                y += row_h + gap
+
+            if self._production_max_scroll > 0:
+                track_rect = pygame.Rect(list_rect.right - 6, list_rect.y + 2, 4, list_rect.height - 4)
+                pygame.draw.rect(surface, (39, 51, 68), track_rect, border_radius=2)
+                thumb_h = max(28, int(list_rect.height * (visible_h / max(total_h, 1))))
+                thumb_y = track_rect.y + int((track_rect.height - thumb_h) * (self._production_scroll / self._production_max_scroll))
+                pygame.draw.rect(surface, _C_GOLD, pygame.Rect(track_rect.x, thumb_y, track_rect.width, thumb_h), border_radius=2)
 
             back_w, back_h = 140, 40
             self._production_popup_back_rect = pygame.Rect(0, 0, back_w, back_h)
             self._production_popup_back_rect.centerx = popup_rect.centerx
-            self._production_popup_back_rect.y = popup_rect.bottom - back_h - 20
+            self._production_popup_back_rect.y = popup_rect.bottom - back_h - 18
             self._draw_glow_btn(surface, "prod_back", self._production_popup_back_rect, True, "BACK", mouse=mouse)
 
         if self.focusview.isopen:
@@ -2453,7 +2505,7 @@ class InGameUI:
         content_rect = self.rightbar.rect.inflate(-24, -24)
         content_rect.topleft = (self.rightbar.rect.x + 12, self.rightbar.rect.y + 12)
 
-        # base panel — premium command drawer
+        
         self._draw_glass_panel(surface, self.rightbar.rect, radius=0, border=(44, 58, 76))
         pygame.draw.rect(surface, (10, 16, 25), content_rect, border_radius=6)
 
@@ -2463,7 +2515,7 @@ class InGameUI:
 
         y_cursor = content_rect.y + 24
 
-        # Country menu overrides all tabs (only shown when needed)
+       
         if self._countrymenutarget:
             alreadyatwar = self._countrymenutarget in self._countriesatwarset
             surface.blit(self.font.render("Country actions", True, (240, 240, 240)), (content_rect.x, y_cursor + 6))
@@ -2500,7 +2552,7 @@ class InGameUI:
 
             stats = self._selected_country_stats or {}
             lines = [
-                f"Population: {self._format_number(stats.get('population', 0))}",
+                f"Armies: {self._format_number(stats.get('population', 0))}",
                 f"Manpower:   {self._format_number(stats.get('manpower', 0))}",
                 f"Stability:  {self._format_decimal(stats.get('stability', 0))}%",
                 f"Leader:     {stats.get('leader', 'Unknown')}",
@@ -3064,7 +3116,7 @@ class InGameUI:
             accent=_C_DANGER,
         )
 
-    def _draw_glow_btn(self, surface, key, rect, enabled, label, primary=False, selected=False, mouse=None, icon_key=None):
+    def _draw_glow_btn(self, surface, key, rect, enabled, label, primary=False, selected=False, mouse=None, icon_key=None, align='center'):
         if mouse is None:
             mouse = pygame.mouse.get_pos()
         hovered = rect.collidepoint(mouse) and enabled
@@ -3121,22 +3173,29 @@ class InGameUI:
             fnt = self.font
         txt = fnt.render(label, True, text_color)
         icon = self._topbar_icons.get(icon_key) if icon_key else None
-        if icon is not None and drawrect.width >= 80:
-            gap = 6
-            total_width = icon.get_width() + gap + txt.get_width()
-            start_x = drawrect.centerx - total_width // 2
-            draw_animated_icon(
-                surface,
-                icon,
-                (start_x + icon.get_width() // 2, drawrect.centery),
-                self._motion_time,
-                hover=1.0 if (hovered or selected) else 0.0,
-                accent=_C_SUCCESS if primary else _C_GOLD,
-                phase=len(str(key)) * 0.21,
-            )
-            surface.blit(txt, (start_x + icon.get_width() + gap, drawrect.centery - txt.get_height() // 2))
-        else:
-            surface.blit(txt, txt.get_rect(center=drawrect.center))
+
+        if align == 'left':
+            text_x = drawrect.x + 16
+            if icon is not None and drawrect.width >= 80:
+                draw_animated_icon(
+                    surface, icon,
+                    (text_x + icon.get_width()//2, drawrect.centery),
+                    self._motion_time,
+                    hover=1.0 if (hovered or selected) else 0.0,
+                    accent=_C_SUCCESS if primary else _C_GOLD,
+                    phase=len(str(key)) * 0.21,
+                )
+                text_x += icon.get_width() + 8
+            surface.blit(txt, (text_x, drawrect.centery - txt.get_height() // 2))
+        else:  
+            if icon is not None and drawrect.width >= 80:
+                gap = 6
+                total_width = icon.get_width() + gap + txt.get_width()
+                start_x = drawrect.centerx - total_width // 2
+                draw_animated_icon(surface, icon, (start_x + icon.get_width() // 2, drawrect.centery), self._motion_time, hover=1.0 if (hovered or selected) else 0.0, accent=_C_SUCCESS if primary else _C_GOLD, phase=len(str(key)) * 0.21)
+                surface.blit(txt, (start_x + icon.get_width() + gap, drawrect.centery - txt.get_height() // 2))
+            else:
+                surface.blit(txt, txt.get_rect(center=drawrect.center))
 
     def _draw_pausemenu(self, surface: pygame.Surface):
         overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
