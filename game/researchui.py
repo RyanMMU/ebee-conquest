@@ -230,6 +230,21 @@ class ResearchTreeView:
 
         return None
 
+
+    def get_researched_nodes(self) -> list[dict]:
+    
+        result = []
+        for cat_data in self._categories.values():
+            for node in cat_data.get("nodes", []):
+                if node["id"] in self._researched:
+                    result.append({
+                        "id": node["id"],
+                        "label": node.get("label", node["id"]),
+                        "cost": node.get("cost", 0),
+                        "category": cat_data.get("label", cat_data.get("id", "")),
+                    })
+        return result
+
     def _begindrag(self, position, button):
         self.dragging = True
         self.dragbutton = button
