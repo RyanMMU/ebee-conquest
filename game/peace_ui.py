@@ -3,9 +3,7 @@ import sys
 import ctypes
 
 WIDTH, HEIGHT = 1280, 720
-STATUS_BAR_HEIGHT = 60  
-FPS = 60
-
+STATUS_BAR_HEIGHT = 60 
 LEFTBAR_WIDTH = 230
 RIGHTBAR_WIDTH = 250
 BOTTOMBAR_HEIGHT = 70
@@ -20,7 +18,13 @@ class PeaceTreatyScreen:
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         self.clock = pygame.time.Clock()
         self.title_font = pygame.font.SysFont("bahnschrift", 20, bold=True)  
+        self.mini_font= pygame.font.SysFont("bahnschrift", 12)  
         self.small_font = pygame.font.SysFont("bahnschrift", 15)
+        self.backspace_held = False
+        self.backspace_timer = 0
+        self.backspace_delay = 400 
+        self.backspace_interval = 50 
+                
         self.running = True
         
         self.exit_btn_rect = pygame.Rect(20, HEIGHT - BOTTOMBAR_HEIGHT + 15, 180, 40)
@@ -77,13 +81,19 @@ class PeaceTreatyScreen:
         title_rect = title_surf.get_rect(center=(WIDTH // 2, STATUS_BAR_HEIGHT // 2))
         self.screen.blit(title_surf, title_rect)
 
+
+
+        points_surf = self.mini_font.render("CONFERENCE POINTS:", True, (255,255,255))
+        points_rect = points_surf.get_rect(midright=(WIDTH - 16, STATUS_BAR_HEIGHT // 2))
+        self.screen.blit(points_surf, points_rect)
+
     def draw_left_bar(self):
         leftbar_rect = pygame.Rect(0, STATUS_BAR_HEIGHT, LEFTBAR_WIDTH, HEIGHT - STATUS_BAR_HEIGHT - BOTTOMBAR_HEIGHT)
         pygame.draw.rect(self.screen, (12, 18, 29), leftbar_rect)
         pygame.draw.rect(self.screen, (28, 38, 52), leftbar_rect, 1)
         pygame.draw.line(self.screen, (76, 64, 38), leftbar_rect.topright, leftbar_rect.bottomright, 1)
         
-        left_title = self.title_font.render("PARTICIPANTS", True, (240, 198, 116))
+        left_title = self.small_font.render("PARTICIPANTS", True, (240, 198, 116))
         left_rect = left_title.get_rect(centerx=leftbar_rect.centerx, y=leftbar_rect.y + 16)
         self.screen.blit(left_title, left_rect)
 
@@ -117,8 +127,8 @@ class PeaceTreatyScreen:
         pygame.draw.rect(self.screen, (28, 38, 52), rightbar_rect, 1)
         pygame.draw.line(self.screen, (76, 64, 38), rightbar_rect.topleft, rightbar_rect.bottomleft, 1)
         
-        sidebar_title_font = pygame.font.SysFont("bahnschrift", 16, bold=True)
-        right_title = sidebar_title_font.render("DEMANDS", True, (240, 198, 116))
+         
+        right_title = self.small_font.render("                 DEMANDS", True, (240, 198, 116))
         right_rect = right_title.get_rect(left=rightbar_rect.left + 20, y=rightbar_rect.y + 16)
         self.screen.blit(right_title, right_rect)
 
@@ -151,20 +161,17 @@ class PeaceTreatyScreen:
         count_rect = count_surf.get_rect(centerx=rightbar_rect.centerx, bottom=self.clear_btn_rect.top - 12)
         self.screen.blit(count_surf, count_rect)
 
-        if self.clear_btn_rect.collidepoint(mouse_pos):
-            clear_btn_color = (40, 52, 72)
-            clear_text_color = (255, 220, 150)
-        else:
-            clear_btn_color = (24, 33, 46)
-            clear_text_color = (240, 198, 116)
+       
+        clear_hovered = self.clear_btn_rect.collidepoint(mouse_pos)
+        clear_glow = self._hover_glow.get("b_clear", 0.0)
+        clear_glow = min(1.0, clear_glow + 0.16) if clear_hovered else max(0.0, clear_glow - 0.10)
+        self._hover_glow["b_clear"] = clear_glow
 
-        pygame.draw.rect(self.screen, clear_btn_color, self.clear_btn_rect)
-        pygame.draw.rect(self.screen, clear_text_color, self.clear_btn_rect, 1)
-        
-        clear_font = pygame.font.SysFont("bahnschrift", 11, bold=True)
-        clear_surf = clear_font.render("CLEAR ALL", True, clear_text_color)
-        clear_rect = clear_surf.get_rect(center=self.clear_btn_rect.center)
-        self.screen.blit(clear_surf, clear_rect)
+        self.draw_interactive_panel(self.screen, self.clear_btn_rect, clear_hovered, False, clear_glow, motion_time)
+
+        clear_text_color = (239, 224, 185) if clear_hovered else (202, 207, 211)
+        clear_surf = self.small_font.render("CLEAR ALL", True, clear_text_color)
+        self.screen.blit(clear_surf, clear_surf.get_rect(center=self.clear_btn_rect.center))
 
 
     def draw_bottom_bar(self):
@@ -227,14 +234,14 @@ class PeaceTreatyScreen:
         if not self.chat_open:
             return
             
-        pygame.draw.rect(self.screen, (16, 24, 38), self.chat_panel_rect)
-        pygame.draw.rect(self.screen, (240, 198, 116), self.chat_panel_rect, 2)
+        pygame.draw.rect(self.screen, (16, 24, 38), self.chat_panel_rect,border_radius=10)
+        pygame.draw.rect(self.screen, (240, 198, 116), self.chat_panel_rect, 2,border_radius=10)
         
         header_surf = self.title_font.render("NEGOTIATE PLACE", True, (240, 198, 116))
         self.screen.blit(header_surf, (self.chat_panel_rect.x + 20, self.chat_panel_rect.y + 15))
         pygame.draw.line(self.screen, (40, 52, 72), 
-                         (self.chat_panel_rect.x, self.chat_panel_rect.y + 50), 
-                         (self.chat_panel_rect.right, self.chat_panel_rect.y + 50), 2)
+                         (self.chat_panel_rect.x+10, self.chat_panel_rect.y + 50), 
+                         (self.chat_panel_rect.right-10, self.chat_panel_rect.y + 50), 2)
         
         start_y = self.chat_panel_rect.y + 70
         for sender, msg in self.chat_history[-8:]:
@@ -244,8 +251,8 @@ class PeaceTreatyScreen:
             self.screen.blit(msg_surf, (self.chat_panel_rect.x + 20, start_y))
             start_y += 30
 
-        pygame.draw.rect(self.screen, (24, 33, 46), self.chat_input_rect)
-        pygame.draw.rect(self.screen, (76, 64, 38), self.chat_input_rect, 1)
+        pygame.draw.rect(self.screen, (24, 33, 46), self.chat_input_rect,border_radius=8)
+        pygame.draw.rect(self.screen, (76, 64, 38), self.chat_input_rect, 1,border_radius=8)
         
         text_to_render = self.chat_input_text + ("|" if pygame.time.get_ticks() % 1000 < 500 else "")
         input_surf = self.small_font.render(text_to_render, True, (255, 255, 255))
@@ -270,9 +277,24 @@ class PeaceTreatyScreen:
                             self.chat_input_text = ""
                     elif event.key == pygame.K_BACKSPACE:
                         self.chat_input_text = self.chat_input_text[:-1]
+
+
+                    
+                        self.backspace_held = True
+                        self.backspace_timer = pygame.time.get_ticks()
+
+                   
                     else:
                         if event.unicode.isprintable():
                             self.chat_input_text += event.unicode
+
+
+            if event.type == pygame.KEYUP:
+                        if event.key == pygame.K_BACKSPACE:
+                            self.backspace_held = False
+
+
+                
 
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
@@ -281,8 +303,17 @@ class PeaceTreatyScreen:
                             self.active_popup = None
                         return
                     elif self.active_popup == "submit":
+                        
                         if self.popup_confirm_btn.collidepoint(event.pos):
                             print("Demands Submitted!")
+                            self.active_popup = None
+                        elif self.popup_cancel_btn.collidepoint(event.pos):
+                            self.active_popup = None
+                        return
+                    
+                    elif self.active_popup == "remove_demand":
+                        if self.popup_confirm_btn.collidepoint(event.pos):
+                            self.selected_demands_set.discard(self.selected_demand)
                             self.active_popup = None
                         elif self.popup_cancel_btn.collidepoint(event.pos):
                             self.active_popup = None
@@ -309,10 +340,10 @@ class PeaceTreatyScreen:
                             label = self.demands[i]
                             self.selected_demand = label
                             if label in self.selected_demands_set:
-                                self.selected_demands_set.remove(label)
+                                self.active_popup = "remove_demand"
                             else:
                                 self.selected_demands_set.add(label)
-                            self.active_popup = "demand"
+                                self.active_popup = "demand"
                     
 
     def draw_interactive_panel(self, surface, rect, is_hovered, is_selected, glow_strength, motion_time, radius=6, custom_colors=None):
@@ -378,8 +409,8 @@ class PeaceTreatyScreen:
         surf.fill((0, 0, 0, 150))
         self.screen.blit(surf, (0, 0))
 
-        pygame.draw.rect(self.screen, (16, 24, 38), self.popup_rect)
-        pygame.draw.rect(self.screen, (240, 198, 116), self.popup_rect, 2)
+        pygame.draw.rect(self.screen, (16, 24, 38), self.popup_rect,border_radius=10)
+        pygame.draw.rect(self.screen, (240, 198, 116), self.popup_rect, 2,border_radius=10)
         mouse_pos = pygame.mouse.get_pos()
 
         if self.active_popup == "demand":
@@ -390,8 +421,8 @@ class PeaceTreatyScreen:
             self.screen.blit(p_msg, p_msg.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 75))
 
             b_color = (40, 52, 72) if self.popup_close_btn.collidepoint(mouse_pos) else (24, 33, 46)
-            pygame.draw.rect(self.screen, b_color, self.popup_close_btn)
-            pygame.draw.rect(self.screen, (240, 198, 116), self.popup_close_btn, 1)
+            pygame.draw.rect(self.screen, b_color, self.popup_close_btn,border_radius=6)
+            pygame.draw.rect(self.screen, (240, 198, 116), self.popup_close_btn, 1, border_radius=6)
             
             btn_txt = self.small_font.render("CLOSE", True, (240, 198, 116))
             self.screen.blit(btn_txt, btn_txt.get_rect(center=self.popup_close_btn.center))
@@ -432,6 +463,26 @@ class PeaceTreatyScreen:
             
             btn_txt = self.small_font.render("CLOSE", True, (240, 198, 116))
             self.screen.blit(btn_txt, btn_txt.get_rect(center=self.popup_close_btn.center))
+
+
+        elif self.active_popup == "remove_demand":
+            p_title = self.title_font.render("REMOVE DEMAND", True, (240, 198, 116))
+            self.screen.blit(p_title, p_title.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 25))
+
+            p_msg = self.small_font.render(f"Remove demand: {self.selected_demand}?", True, (255, 255, 255))
+            self.screen.blit(p_msg, p_msg.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 75))
+
+            confirm_color = (40, 120, 40) if self.popup_confirm_btn.collidepoint(mouse_pos) else (30, 90, 30)
+            pygame.draw.rect(self.screen, confirm_color, self.popup_confirm_btn, border_radius=6)
+            pygame.draw.rect(self.screen, (255, 255, 255), self.popup_confirm_btn, 1, border_radius=6)
+            confirm_txt = self.small_font.render("CONFIRM", True, (255, 255, 255))
+            self.screen.blit(confirm_txt, confirm_txt.get_rect(center=self.popup_confirm_btn.center))
+
+            cancel_color = (120, 40, 40) if self.popup_cancel_btn.collidepoint(mouse_pos) else (90, 30, 30)
+            pygame.draw.rect(self.screen, cancel_color, self.popup_cancel_btn, border_radius=6)
+            pygame.draw.rect(self.screen, (255, 255, 255), self.popup_cancel_btn, 1, border_radius=6)
+            cancel_txt = self.small_font.render("CANCEL", True, (255, 255, 255))
+            self.screen.blit(cancel_txt, cancel_txt.get_rect(center=self.popup_cancel_btn.center))
             
     def draw(self):
         self.screen.fill((11, 18, 32))
@@ -448,8 +499,13 @@ class PeaceTreatyScreen:
     def run(self):
         while self.running:
             self.handle_events()
+            now = pygame.time.get_ticks()
+            if self.backspace_held and self.chat_open and not self.active_popup:
+                if now - self.backspace_timer > self.backspace_delay:
+                    if (now - self.backspace_timer - self.backspace_delay) % self.backspace_interval < 20:
+                        self.chat_input_text = self.chat_input_text[:-1]
             self.draw()
-            self.clock.tick(FPS)
+            self.clock.tick(60)
         pygame.quit()
         sys.exit()
 
