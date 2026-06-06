@@ -1247,7 +1247,35 @@ def _economy_effects(countrydata):
         "budget_passing": budget,
         "project_speed": "Faster" if stability > 70 else ("Slower" if stability < 40 else "Normal"),
     }
+    
+def _health_effects(countrydata):
+    population_health = clamp(countrydata.get("population_health", 70))
+    healthcare_capacity = clamp(countrydata.get("healthcare_capacity", 70))
+    disease_risk = clamp(countrydata.get("disease_risk", 20))
 
+    if disease_risk > 70:
+        risk_level = "High"
+        active_epidemic = "Ongoing Outbreak"
+    elif disease_risk > 40:
+        risk_level = "Medium"
+        active_epidemic = "Localized Cases"
+    else:
+        risk_level = "Low"
+        active_epidemic = "None"
+
+    current_cases = int((disease_risk * 1000) / max(1, healthcare_capacity))
+    hospitalisation = int(current_cases * (disease_risk / 100) * 0.3)
+    mortality = round(disease_risk * 0.05, 2)
+
+    return {
+        "active_epidemic": active_epidemic,
+        "current_cases": current_cases,
+        "mortality": mortality,
+        "hospitalisation": hospitalisation,
+        "risk_level": risk_level,
+        "healthcare_capacity": healthcare_capacity,
+        "healthcare_load": "Overloaded" if hospitalisation > 500 else "Normal",
+    }
 
 def _internal_policy_effects(countrydata):
     approval = clamp(countrydata.get("public_approval", 50))
