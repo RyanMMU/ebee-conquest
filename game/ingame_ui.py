@@ -3496,19 +3496,118 @@ class InGameUI:
             
     def _draw_domestic_health_tab(self, surface, rect, data, mouse):
 
-        lines = [
-            "Active Epidemic Status: None",
-            "Current Cases: 0",
-            "Mortality: 0%",
-            "Hospitalisation: 0"
+       health = data.get("health", {}) if isinstance(data.get("health", {}), dict) else {}
+
+       chip_gap = 10
+       chip_w = (rect.width - chip_gap * 2) // 3
+
+       # Top chips (summary)
+       self._draw_metric_chip(
+           surface,
+           pygame.Rect(rect.x, rect.y, chip_w, 58),
+           "Active Epidemic",
+           str(health.get("active_epidemic", "None")),
+           icon_key="warning",
+           accent=(200, 80, 80)
+        )
+
+       self._draw_metric_chip(
+           surface,
+           pygame.Rect(rect.x + chip_w + chip_gap, rect.y, chip_w, 58),
+           "Current Cases",
+           f"{int(health.get('current_cases', 0) or 0)}",
+           icon_key="health",
+           accent=_C_INFO
+        )
+
+       self._draw_metric_chip(
+           surface,
+           pygame.Rect(rect.x + (chip_w + chip_gap) * 2, rect.y, chip_w, 58),
+           "Mortality Rate",
+           f"{float(health.get('mortality', 0) or 0):.2f}%",
+           icon_key="skull",
+           accent=_C_GOLD
+        )
+
+       body_y = rect.y + 78
+       left_rect = pygame.Rect(rect.x, body_y, rect.width // 2 - 7, rect.bottom - body_y)
+       right_rect = pygame.Rect(left_rect.right + 14, body_y, rect.width - left_rect.width - 14, rect.bottom - body_y)
+
+       # LEFT PANEL
+       self._draw_vertical_gradient_rect(surface, left_rect, (15, 24, 38), (8, 13, 22), radius=6)
+       pygame.draw.rect(surface, (52, 65, 82), left_rect, 1, border_radius=6)
+
+       self._draw_text_fit(
+           surface,
+           "HEALTH STATUS",
+           _C_GOLD_BRIGHT,
+           left_rect.x + 14,
+           left_rect.y + 12,
+           left_rect.width - 28,
+           self.font_bold
+        )
+
+       y = left_rect.y + 44
+       rows = (
+           ("Hospitalisation", f"{int(health.get('hospitalisation', 0) or 0)}"),
+           ("Mortality Rate", f"{float(health.get('mortality', 0) or 0):.2f}%"),
+           ("Healthcare Load", health.get("healthcare_load", "Normal")),
+           ("Risk Level", health.get("risk_level", "Low")),
+        )
+
+       for label, value in rows:
+           self._draw_domestic_info_row(
+               surface,
+               left_rect.x + 14,
+               y,
+               label,
+               value,
+               left_rect.width - 28
+            )
+           y += 28
+
+       # RIGHT PANEL
+       self._draw_vertical_gradient_rect(surface, right_rect, (15, 24, 38), (8, 13, 22), radius=6)
+       pygame.draw.rect(surface, (52, 65, 82), right_rect, 1, border_radius=6)
+
+       self._draw_text_fit(
+           surface,
+           "EPIDEMIC NOTES",
+           _C_GOLD_BRIGHT,
+           right_rect.x + 14,
+           right_rect.y + 12,
+           right_rect.width - 28,
+           self.font_bold
+        )
+
+       notes = [
+           "Epidemics reduce population growth and stability.",
+           "High hospitalisation increases economic pressure.",
+           "Outbreak severity depends on healthcare capacity.",
+           "Government response can reduce spread rate.",
         ]
 
-        y = rect.y + 20
+       y = right_rect.y + 44
+       for line in notes:
+           self._draw_text_fit(
+               surface,
+               line,
+               _C_TEXT,
+               right_rect.x + 14,
+               y,
+               right_rect.width - 28,
+               self.small_font
+           )
+           y += 25
 
-        for line in lines:
-            text = self.font.render(line, True, (255, 255, 255))
-            surface.blit(text, (rect.x + 20, y))
-            y += 40
+       # Optional bar 
+       self._draw_value_bar(
+           surface,
+           pygame.Rect(right_rect.x + 14, right_rect.bottom - 48, right_rect.width - 28, 32),
+           "Healthcare Capacity",
+           health.get("healthcare_capacity", 0),
+           _C_INFO
+        )
         
 
     def _draw_war_progress_popup(self, surface, mouse):
