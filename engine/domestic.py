@@ -1212,6 +1212,7 @@ def build_domestic_affairs_view(state, country, currentturnnumber, player_metric
     view["policy_passing_chance"] = policy_chance
     view["legislature_status"] = _legislature_status_label(totals)
     view["economy_effects"] = _economy_effects(countrydata)
+    view["health"] = _health_effects(countrydata)
     view["internal_policy_effects"] = _internal_policy_effects(countrydata)
     if player_metrics:
         view["player_metrics"] = dict(player_metrics)
