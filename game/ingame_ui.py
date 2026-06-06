@@ -3043,7 +3043,7 @@ class InGameUI:
 
         content_rect = pygame.Rect(popup_rect.x + 28, popup_rect.y + header_h + 18, popup_rect.width - 56, popup_rect.height - header_h - 38)
         self._domestic_tab_rects = {}
-        tabs = ("Executive", "Economy", "Internal Policies")
+        tabs = ("Executive", "Economy", "Internal Policies", "Health")
         gap = 8
         tab_w = min(190, max(132, (content_rect.width - gap * (len(tabs) - 1)) // len(tabs)))
         tab_y = content_rect.y
