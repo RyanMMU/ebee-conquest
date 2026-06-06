@@ -3071,6 +3071,8 @@ class InGameUI:
             self._draw_domestic_economy_tab(surface, body_rect, data, mouse)
         elif self._domestic_active_tab == "Internal Policies":
             self._draw_domestic_internal_policies_tab(surface, body_rect, data, mouse)
+        elif self._domestic_active_tab == "Health":
+            self._draw_domestic_health_tab(surface, body_rect, data, mouse)
         else:
             self._draw_domestic_executive_tab(surface, body_rect, data, mouse)
 
