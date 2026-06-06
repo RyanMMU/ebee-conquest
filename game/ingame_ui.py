@@ -3493,6 +3493,23 @@ class InGameUI:
         for label, value in rule_rows:
             self._draw_domestic_info_row(surface, right_rect.x + 14, y, label, value, right_rect.width - 28)
             y += 24
+            
+    def _draw_domestic_health_tab(self, surface, rect, data, mouse):
+
+        lines = [
+            "Active Epidemic Status: None",
+            "Current Cases: 0",
+            "Mortality: 0%",
+            "Hospitalisation: 0"
+        ]
+
+        y = rect.y + 20
+
+        for line in lines:
+            text = self.font.render(line, True, (255, 255, 255))
+            surface.blit(text, (rect.x + 20, y))
+            y += 40
+        
 
     def _draw_war_progress_popup(self, surface, mouse):
         popup_w = min(900, max(640, self.map_rect.width - 72))
