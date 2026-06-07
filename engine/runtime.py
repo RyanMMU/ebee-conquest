@@ -4224,6 +4224,9 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                             "appliedEffects": [dict(effect) for effect in focusturnresult.appliedeffects],
                         },
                     )
+                
+                countrydata = domesticaffairsstate.get(playercountry, {})
+                
                 playergold, playerpopulation, playerstability, playerpp, playerap = applyendturneconomy(
                     playercountry,
                     provincemap,
@@ -4232,6 +4235,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                     playerstability,
                     playerpp,
                     playerap,
+                    mco_enabled=countrydata.get("mco_enabled", False),
                 )
                 npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
                 npcdirector.executeturn(
