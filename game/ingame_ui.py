@@ -1944,6 +1944,12 @@ class InGameUI:
                     if tab_rect.collidepoint(event.pos):
                         self._domestic_active_tab = tab_name
                         return None
+                if (
+                    self._domestic_active_tab == "Health"
+                    and hasattr(self, "_mco_button_rect")
+                    and self._mco_button_rect.collidepoint(event.pos)
+                ):
+                    return self.actiontogglemco
                 segment = self._get_domestic_segment_at_pos(event.pos)
                 if segment is not None:
                     self._domestic_selected_party_id = segment.get("party_id")
