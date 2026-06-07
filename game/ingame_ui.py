@@ -394,7 +394,7 @@ class InGameUI:
     actiontogglefocuspanel = "togglefocuspanel"
     actionstartfocus = "startfocus"
     actiondomesticaffairs = "domesticaffairs"
-    actiontooglemco = "tooglemco"
+    actiontogglemco = "togglemco"
     actionpausemenu = "pausemenu"
     actionquitgame = "quitgame"
     actionweapon1 = "weapon_1"
