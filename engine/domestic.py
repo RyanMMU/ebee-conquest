@@ -1272,31 +1272,38 @@ def _economy_effects(countrydata):
     }
     
 def _health_effects(countrydata):
-    stability = clamp(countrydata.get("government_stability", 50))
-    approval = clamp(countrydata.get("public_approval", 50))
-    corruption = clamp(countrydata.get("corruption_level", 45))
-
-    disease_risk = clamp(
-        (100 - stability) * 0.4 +
-        (100 - approval) * 0.4 +
-        corruption * 0.2
+    current_cases = safeint(
+        countrydata.get("covid_cases", 100),
+        100
     )
 
-    healthcare_capacity = stability
+    hospitalisation = safeint(
+        countrydata.get("hospitalisation", 0),
+        0
+    )
 
-    if disease_risk > 70:
+    mortality = float(
+        countrydata.get("mortality", 0)
+    )
+
+    active_epidemic = countrydata.get(
+        "active_epidemic",
+        "None"
+    )
+
+    healthcare_capacity = clamp(
+        countrydata.get(
+            "government_stability",
+            50
+        )
+    )
+
+    if current_cases > 500:
         risk_level = "High"
-        active_epidemic = "Ongoing Outbreak"
-    elif disease_risk > 40:
+    elif current_cases > 200:
         risk_level = "Medium"
-        active_epidemic = "Localized Cases"
     else:
         risk_level = "Low"
-        active_epidemic = "None"
-
-    current_cases = int((disease_risk * 1000) / max(1, healthcare_capacity))
-    hospitalisation = int(current_cases * (disease_risk / 100) * 0.3)
-    mortality = round(disease_risk * 0.05, 2)
 
     return {
         "active_epidemic": active_epidemic,
@@ -1305,7 +1312,11 @@ def _health_effects(countrydata):
         "hospitalisation": hospitalisation,
         "risk_level": risk_level,
         "healthcare_capacity": healthcare_capacity,
-        "healthcare_load": "Overloaded" if hospitalisation > 500 else "Normal",
+        "healthcare_load": (
+            "Overloaded"
+            if hospitalisation > 500
+            else "Normal"
+        ),
     }
     
 def _internal_policy_effects(countrydata):
