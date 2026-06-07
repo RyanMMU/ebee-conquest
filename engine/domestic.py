@@ -1095,6 +1095,28 @@ def advance_domestic_affairs_turn(
 
     for countryid, countrydata in (state or {}).items():
         countrydata["_domestic_turns_seen"] = safeint(countrydata.get("_domestic_turns_seen", 0), 0) + 1
+        
+        covid_cases = safeint(
+            countrydata.get("covid_cases", 100),
+            100
+        )
+
+        if countrydata.get("mco_enabled", False):
+            covid_cases = max(0, covid_cases - 15)
+        else:
+            covid_cases += 15
+
+        countrydata["covid_cases"] = covid_cases
+        countrydata["hospitalisation"] = int(covid_cases * 0.12)
+        countrydata["mortality"] = round(covid_cases * 0.002, 2)
+
+        if covid_cases > 500:
+            countrydata["active_epidemic"] = "Ongoing Outbreak"
+        elif covid_cases > 200:
+            countrydata["active_epidemic"] = "Localized Cases"
+        else:
+            countrydata["active_epidemic"] = "None"
+            
         is_player = playerkey and countrykey(countryid) == playerkey
         atwar = countryid in countriesatwarset or countrydata.get("country_name") in countriesatwarset
         mood = build_political_mood(countrydata, player_metrics if is_player else None, atwar=atwar)
