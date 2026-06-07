@@ -1972,11 +1972,13 @@ class InGameUI:
                     return None
                 for idx, rect in self._production_item_rects.items():
                     if rect.collidepoint(event.pos):
+                        researched = self._researched_weapon_nodes
+                        if idx >= len(researched):
+                            return None  
                         self.production_selected = idx + 1
                         self.ui_click_sound.play()
-                        # DO NOT close – keep popup open
                         return f"production_select_{idx+1}"
-                # click outside = close
+               
                 if not self._production_popup_rect.collidepoint(event.pos):
                     self.production_popup_open = False
                     return None
@@ -2534,190 +2536,7 @@ class InGameUI:
             surface.blit(subtitle, subtitle.get_rect(center=(popup_rect.centerx, popup_rect.y + 58)))
 
             list_top = popup_rect.y + 80
-            list_bottom = popup_rect.bottom - 76
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+            list_bottom = popup_rect.bottom - 80
 
             list_rect = pygame.Rect(popup_rect.x + 24, list_top, popup_rect.width - 48, list_bottom - list_top)
             pygame.draw.rect(surface, (7, 12, 20), list_rect, border_radius=6)
@@ -2752,10 +2571,21 @@ class InGameUI:
                         is_unlocked = False
 
                     self._draw_glow_btn(
-                        surface, f"prod_item_{i}", row_rect, True, display_label,
-                        primary=selected or is_unlocked, selected=selected, mouse=mouse,
+                        surface, f"prod_item_{i}", row_rect, is_unlocked or selected, display_label,
+                        primary=is_unlocked and not selected, selected=selected, mouse=mouse,
                         align='left'
                     )
+
+
+
+
+
+
+
+
+
+
+                    
 
                     
                     if is_unlocked and row_rect.width >= 120:
@@ -2777,7 +2607,7 @@ class InGameUI:
             back_w, back_h = 140, 40
             self._production_popup_back_rect = pygame.Rect(0, 0, back_w, back_h)
             self._production_popup_back_rect.centerx = popup_rect.centerx
-            self._production_popup_back_rect.y = popup_rect.bottom - back_h - 14
+            self._production_popup_back_rect.y = popup_rect.bottom - back_h - 20
             self._draw_glow_btn(surface, "prod_back", self._production_popup_back_rect, True, "BACK", mouse=mouse)
 
         if self.focusview.isopen:
@@ -2794,63 +2624,6 @@ class InGameUI:
                 self._draw_pausemenu(surface)
             self._ui_pulses.draw(surface)
             return
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
         if self.researchview.isopen:
