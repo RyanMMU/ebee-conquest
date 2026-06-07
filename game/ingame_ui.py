@@ -2574,7 +2574,7 @@ class InGameUI:
                         cat_tag = node.get("category", "")
                         display_label = f"{label}  [{cat_tag}]" if cat_tag else label
                     else:
-                        display_label = f"Production Item {i + 1}"
+                        display_label = f"Production Item {i + 1}                                                                                                                  ✓s LOCKED"
                         is_unlocked = False
 
                     if is_unlocked and selected:
@@ -2596,7 +2596,7 @@ class InGameUI:
 
                     
                     if is_unlocked and row_rect.width >= 120:
-                        badge_text = self.small_font_bold.render("✓ RESEARCHED", True, (67, 181, 129))
+                        badge_text = self.small_font_bold.render("✓ UNLOCKED", True, (67, 181, 129))
                         badge_x = row_rect.right - badge_text.get_width() - 12
                         badge_y = row_rect.centery - badge_text.get_height() // 2
                         if badge_x > row_rect.x + row_rect.width // 2:
