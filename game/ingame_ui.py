@@ -2142,6 +2142,15 @@ class InGameUI:
                 if item == "RESEARCH":
                     self.researchview.toggleview()
                 return None
+            
+        if (
+            self.domesticaffairsopen
+            and self._domestic_active_tab == "Health"
+            and hasattr(self, "_mco_button_rect")
+            and self._mco_button_rect.collidepoint(pos)
+        ):
+            self.ui_click_sound.play()
+            return self.actiontogglemco
 
       
         if self._endturn_rect.collidepoint(pos):
