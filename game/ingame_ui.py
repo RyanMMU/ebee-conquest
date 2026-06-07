@@ -2572,7 +2572,7 @@ class InGameUI:
 
                     self._draw_glow_btn(
                         surface, f"prod_item_{i}", row_rect, is_unlocked or selected, display_label,
-                        primary=is_unlocked and not selected, selected=selected, mouse=mouse,
+                        primary=is_unlocked, selected=is_unlocked and selected, mouse=mouse,
                         align='left'
                     )
 
@@ -2585,7 +2585,7 @@ class InGameUI:
 
 
 
-                    
+
 
                     
                     if is_unlocked and row_rect.width >= 120:
