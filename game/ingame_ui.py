@@ -2523,7 +2523,7 @@ class InGameUI:
             overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 140))
             surface.blit(overlay, (0, 0))
-            popup_rect = pygame.Rect(0, 0, 640, 520)
+            popup_rect = pygame.Rect(0, 0, 720, 620)
             popup_rect.center = surface.get_rect().center
             self._production_popup_rect = popup_rect
             self._draw_glass_panel(surface, popup_rect, radius=8, border=(72, 86, 108), glow=True)
@@ -2534,13 +2534,197 @@ class InGameUI:
             surface.blit(subtitle, subtitle.get_rect(center=(popup_rect.centerx, popup_rect.y + 58)))
 
             list_top = popup_rect.y + 80
-            list_bottom = popup_rect.bottom - 70
+            list_bottom = popup_rect.bottom - 76
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             list_rect = pygame.Rect(popup_rect.x + 24, list_top, popup_rect.width - 48, list_bottom - list_top)
             pygame.draw.rect(surface, (7, 12, 20), list_rect, border_radius=6)
             pygame.draw.rect(surface, (43, 56, 73), list_rect, 1, border_radius=6)
 
-            row_h = 44
-            gap = 6
+            row_h =52
+            gap = 10
             total_h = self._production_item_count * (row_h + gap)
             visible_h = list_rect.height
             self._production_max_scroll = max(0, total_h - visible_h + gap)
@@ -2593,7 +2777,7 @@ class InGameUI:
             back_w, back_h = 140, 40
             self._production_popup_back_rect = pygame.Rect(0, 0, back_w, back_h)
             self._production_popup_back_rect.centerx = popup_rect.centerx
-            self._production_popup_back_rect.y = popup_rect.bottom - back_h - 18
+            self._production_popup_back_rect.y = popup_rect.bottom - back_h - 14
             self._draw_glow_btn(surface, "prod_back", self._production_popup_back_rect, True, "BACK", mouse=mouse)
 
         if self.focusview.isopen:
@@ -2610,6 +2794,64 @@ class InGameUI:
                 self._draw_pausemenu(surface)
             self._ui_pulses.draw(surface)
             return
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         if self.researchview.isopen:
             self.researchview.draw(surface, self.title_font, self.font, mouse)
