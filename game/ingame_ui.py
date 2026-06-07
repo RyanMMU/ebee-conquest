@@ -58,7 +58,7 @@ class LeftBar:
         self.items: list[str] = []
         self.item_rects: dict[str, pygame.Rect] = {}
         self._hover_glow = {}
-        # rolling FPS history for status graph (42 samples)
+       
         self._fps_history: list[float] = [0.0] * 42
 
     def set_items(self, items: list[str]):
@@ -246,7 +246,7 @@ class LeftBar:
             for offset in range(1, 4):
                 gy = graph_rect.y + offset * graph_rect.height // 4
                 pygame.draw.line(surface, (26, 37, 51), (graph_rect.x, gy), (graph_rect.right, gy), 1)
-            # update fps history from statusdata then draw graph from samples
+           
             try:
                 fps_sample = float(statusdata.get("fps", 0.0) or 0.0)
             except Exception:
@@ -258,14 +258,14 @@ class LeftBar:
             samples = list(self._fps_history or [])
             if not samples:
                 samples = [0.0] * 42
-            # autoscale: at least 60 FPS range so small variations are visible
+         
             max_scale = max(60.0, max(samples) if samples else 60.0)
             points = []
             sample_count = max(2, len(samples))
             for idx, sample in enumerate(samples):
                 px = graph_rect.x + int(idx * graph_rect.width / (sample_count - 1))
                 normalized = min(1.0, max(0.0, float(sample) / max_scale))
-                # map normalized (0..1) so 0 is bottom, 1 is top of graph rect
+               
                 py = graph_rect.bottom - int(normalized * graph_rect.height)
                 points.append((px, py))
             if len(points) >= 2:
@@ -415,7 +415,7 @@ class InGameUI:
 
         self.leftbar_width = 256
         self.topbar_height = 80
-        # widened so troop/country panels fit "seamlessly" in the right tab
+       
         self.rightbar_width = 380
         self.bottombar_height = 104
 
@@ -489,7 +489,7 @@ class InGameUI:
         self._daysperturn = 5
         
 
-        # rolling FPS history for status graph (42 samples)
+       
         self._fps_history: list[float] = [0.0] * 42
 
         self._flags = self._load_flags()
@@ -501,7 +501,7 @@ class InGameUI:
         self._topbar_icons = self._load_topbar_icons()
 
         self._choose_rect = pygame.Rect(0, 0, 160, 34)
-        self._endturn_rect = pygame.Rect(0, 0, 10, 10)  # placed near map bottom-right
+        self._endturn_rect = pygame.Rect(0, 0, 10, 10)  
         self._endturn_glow = 0.0
         self._button_glows: dict[str, float] = {}
         self._topbar_metric_rects = {}
@@ -513,7 +513,7 @@ class InGameUI:
         self._topbar_metric_rates = {}
         self._topbar_metric_rate_turn = None
 
-        # right panel interactive rects (computed in applylayout)
+   
         self._recruit_action_rect = pygame.Rect(0, 0, 10, 10)
         self._declarewar_rect = pygame.Rect(0, 0, 10, 10)
         self._split_rect = pygame.Rect(0, 0, 10, 10)
@@ -540,6 +540,7 @@ class InGameUI:
         self._domestic_drag_offset = (0, 0)
         self.production_popup_open = False
         self._production_popup_back_rect = pygame.Rect(0, 0, 10, 10)
+        self._production_popup_select_rect = pygame.Rect(0, 0, 10, 10)
         self._production_popup_rect = pygame.Rect(0, 0, 10, 10)
         self._production_item_rects = {}
         self._production_scroll = 0
@@ -619,7 +620,7 @@ class InGameUI:
             try:
                 img = pygame.image.load(filepath).convert_alpha()
 
-                # Store ORIGINAL high-resolution image
+              
                 flags[country_key] = img
 
             except pygame.error:
@@ -770,7 +771,7 @@ class InGameUI:
 
     @staticmethod
     def _fit_text(font, text, max_width):
-        # trim long labels before they enter fixed-width war columns.
+      
         text = str(text)
         if font.size(text)[0] <= max_width:
             return text
@@ -919,7 +920,7 @@ class InGameUI:
         surface.blit(shadow, rect.topleft)
         surface.blit(right_shadow, (rect.right - edge_w, rect.y))
 
-        # A narrow contact shadow under fixed panels gives depth without a boxed vignette.
+       
         surface.blit(contact, rect.topleft)
 
     def _draw_resource_chip(
@@ -1600,7 +1601,7 @@ class InGameUI:
         center_h = max(1, window_height - self.topbar_height)
         self.map_rect = pygame.Rect(center_x, center_y, center_w, center_h)
 
-        # End turn sits above the command dock while the map renders beneath it.
+        
         end_w = 196
         end_h = 74
         end_x = self.map_rect.right - end_w - 18
@@ -1608,9 +1609,9 @@ class InGameUI:
         end_y = max(self.map_rect.y + 12, end_limit_y - end_h - 16)
         self._endturn_rect = pygame.Rect(end_x, end_y, end_w, end_h)
 
-        # choose button near bottom-right of map in choosecountry (draw will override)
+        
 
-        # right panel content layout (play phase; safe even if right panel hidden)
+       
         content_x = self.rightbar.rect.x + 12
         content_y = self.rightbar.rect.y + 12
         content_w = max(1, self.rightbar.rect.width - 24)
@@ -1618,7 +1619,7 @@ class InGameUI:
         self._declarewar_rect = pygame.Rect(content_x, content_y + 82, content_w, 34)
         self._production_blank_rect = pygame.Rect(content_x, content_y + 40, content_w, 90)
 
-        # troop decision buttons at the bottom of right panel
+        
         btn_w = max(1, (content_w - 30) // 4)
         btn_h = 50
         btn_y = (self.rightbar.rect.bottom - 12 - btn_h) if self.rightbar.rect.width else (self.map_rect.bottom - 12 - btn_h)
@@ -1822,7 +1823,7 @@ class InGameUI:
 
         self.applylayout()
 
-        # cache active manpower (sum troops controlled by player) only when inputs change
+        
         cache_key = (id(provincemap), self.playercountry, int(currentturnnumber or 0))
         if cache_key != self._manpower_cache_key:
             self._manpower_cache_key = cache_key
@@ -1969,6 +1970,12 @@ class InGameUI:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 if self._production_popup_back_rect.collidepoint(event.pos):
                     self.production_popup_open = False
+                    return None
+                if self._production_popup_select_rect.collidepoint(event.pos):  
+                    if self.production_selected:
+                        self.ui_click_sound.play()
+                        self.production_popup_open = False
+                        return f"production_confirm_{self.production_selected}"
                     return None
                 for idx, rect in self._production_item_rects.items():
                     if rect.collidepoint(event.pos):
@@ -2277,14 +2284,14 @@ class InGameUI:
 
         if self.gamephase == "choosecountry":
             self._draw_command_atmosphere(surface)
-            # minimal UI only during choosecountry
+           
             self._draw_topbar_background(surface)
             title = self.title_font.render("EBEE COMMAND", True, _C_GOLD_BRIGHT)
             subtitle = self.small_font.render("SELECT THEATER COMMAND", True, _C_TEXT_MUTED)
             surface.blit(title, (20, 16))
             surface.blit(subtitle, (20, 45))
 
-            # clear non-map areas so the screen doesn't keep old UI pixels
+            
             bg = (10, 10, 10)
             if self.map_rect.x > 0:
                 pygame.draw.rect(surface, bg, pygame.Rect(0, self.topbar_height, self.map_rect.x, surface.get_height() - self.topbar_height))
@@ -2293,7 +2300,7 @@ class InGameUI:
             if self.map_rect.bottom < surface.get_height():
                 pygame.draw.rect(surface, bg, pygame.Rect(0, self.map_rect.bottom, surface.get_width(), surface.get_height() - self.map_rect.bottom))
 
-            # place choose button near bottom-right of the map viewport
+            
             bw = 220
             bh = 34
             bx = self.map_rect.right - bw - 12
@@ -2319,7 +2326,7 @@ class InGameUI:
 
                 
 
-        # full UI chrome (play)
+       
         self._draw_map_edge_shadows(surface)
         self._draw_command_atmosphere(surface)
         if self.leftbar.rect.width:
@@ -2338,7 +2345,7 @@ class InGameUI:
         self.bottom_buttons.draw(surface, self.font, mouse, font_bold=self.font_bold, icons=self._topbar_icons)
         self._draw_topbar_background(surface)
 
-        # end turn button (bottom-right of map)
+        
         hovered = self._endturn_rect.collidepoint(mouse)
         if hovered:
             self._endturn_glow = min(1.0, self._endturn_glow + 0.12)
@@ -2376,7 +2383,7 @@ class InGameUI:
         arrow = self.title_font.render(">", True, (200, 244, 221))
         surface.blit(arrow, arrow.get_rect(center=(self._endturn_rect.right - 26, self._endturn_rect.centery)))
 
-        # top title + stats line (with mini flag)
+        
         base_title = "EBEE COMMAND"
         info_x = 18
         info_y = 12
@@ -2431,7 +2438,7 @@ class InGameUI:
             if not did_draw:
                 break
 
-        # troop badges on top of the map (map-local centers need viewport offset)
+        
         visiblebadgelist = self._get_visible_troop_badges()
         for entry in visiblebadgelist:
             if not isinstance(entry, dict):
@@ -2467,7 +2474,7 @@ class InGameUI:
                 rows=entry.get("rows"),
             )
 
-        # hover tooltip (full-window coords) must be on top of badges
+       
         if self._hovertext:
             tooltip_lines = []
             if isinstance(self._hovertext, dict):
@@ -2571,7 +2578,7 @@ class InGameUI:
                         is_unlocked = False
 
                     if is_unlocked and selected:
-                            # bright selected state — draw manually for max contrast
+                            
                             pygame.draw.rect(surface, (18, 120, 65), row_rect, border_radius=8)
                             pygame.draw.rect(surface, (100, 255, 160), row_rect, 2, border_radius=8)
                             draw_soft_glow(surface, row_rect, (100, 255, 160), 0.85, radius=8, rings=4)
@@ -2584,15 +2591,6 @@ class InGameUI:
                                 primary=is_unlocked, selected=False, mouse=mouse,
                                 align='left'
                             )
-
-
-
-
-
-
-
-
-
 
 
 
@@ -2614,11 +2612,19 @@ class InGameUI:
                 pygame.draw.rect(surface, _C_GOLD, pygame.Rect(track_rect.x, thumb_y, track_rect.width, thumb_h), border_radius=2)
 
             back_w, back_h = 140, 40
-            self._production_popup_back_rect = pygame.Rect(0, 0, back_w, back_h)
-            self._production_popup_back_rect.centerx = popup_rect.centerx
-            self._production_popup_back_rect.y = popup_rect.bottom - back_h - 20
+            gap = 20
+            total_w = back_w * 2 + gap
+            start_x = popup_rect.centerx - total_w // 2
+            y_pos = popup_rect.bottom - back_h - 20
+
+            self._production_popup_back_rect = pygame.Rect(start_x, y_pos, back_w, back_h)
+            self._production_popup_select_rect = pygame.Rect(start_x + back_w + gap, y_pos, back_w, back_h)
+
             self._draw_glow_btn(surface, "prod_back", self._production_popup_back_rect, True, "BACK", mouse=mouse)
 
+            
+            select_enabled = self.production_selected is not None
+            self._draw_glow_btn(surface, "prod_select", self._production_popup_select_rect, select_enabled, "SELECT", mouse=mouse)
         if self.focusview.isopen:
             self.focusview.draw(surface, self.title_font, self.font, mouse)
             self._draw_topbar_metric_popup(surface, mouse)
@@ -2766,7 +2772,7 @@ class InGameUI:
             )
             y_cursor += 100
 
-        # Troop info + decision buttons only show in TROOPS tab, and only when troops > 0
+       
         if selected_tab == "TROOPS" and not self._countrymenutarget and self.active_left_tab != "COMBAT" and not self._selectedmapcountry:
             self._detach_regiment_rects = {}
             selected = [e for e in (self._selectedtroopentries or []) if isinstance(e, dict)]
