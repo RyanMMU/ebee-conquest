@@ -2570,11 +2570,20 @@ class InGameUI:
                         display_label = f"Production Item {i + 1}"
                         is_unlocked = False
 
-                    self._draw_glow_btn(
-                        surface, f"prod_item_{i}", row_rect, is_unlocked or selected, display_label,
-                        primary=is_unlocked, selected=is_unlocked and selected, mouse=mouse,
-                        align='left'
-                    )
+                    if is_unlocked and selected:
+                            # bright selected state — draw manually for max contrast
+                            pygame.draw.rect(surface, (18, 120, 65), row_rect, border_radius=8)
+                            pygame.draw.rect(surface, (100, 255, 160), row_rect, 2, border_radius=8)
+                            draw_soft_glow(surface, row_rect, (100, 255, 160), 0.85, radius=8, rings=4)
+                            pygame.draw.line(surface, (140, 255, 190), (row_rect.x + 10, row_rect.y + 2), (row_rect.right - 10, row_rect.y + 2), 2)
+                            txt = self.font_bold.render(display_label, True, (210, 255, 225))
+                            surface.blit(txt, (row_rect.x + 16, row_rect.centery - txt.get_height() // 2))
+                    else:
+                            self._draw_glow_btn(
+                                surface, f"prod_item_{i}", row_rect, is_unlocked or selected, display_label,
+                                primary=is_unlocked, selected=False, mouse=mouse,
+                                align='left'
+                            )
 
 
 
