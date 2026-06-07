@@ -3609,6 +3609,32 @@ class InGameUI:
            health.get("healthcare_capacity", 0),
            _C_INFO
         )
+       
+       mco_enabled = bool(data.get("mco_enabled", False))
+
+       self._mco_button_rect = pygame.Rect(
+           right_rect.x + 14,
+           right_rect.bottom - 95,
+           180,
+           36
+        )
+
+       pygame.draw.rect(
+           surface,
+           (60, 160, 80) if mco_enabled else (180, 70, 70),
+           self._mco_button_rect,
+           border_radius=6
+        )
+
+       self._draw_text_fit(
+           surface,
+           f"MCO: {'ON' if mco_enabled else 'OFF'}",
+           (255,255,255),
+           self._mco_button_rect.x,
+           self._mco_button_rect.y + 8,
+           self._mco_button_rect.width,
+           self.small_font
+        )
         
 
     def _draw_war_progress_popup(self, surface, mouse):
