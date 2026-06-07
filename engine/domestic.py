@@ -1250,34 +1250,37 @@ def _economy_effects(countrydata):
     }
     
 def _health_effects(countrydata):
-    population_health = clamp(countrydata.get("population_health", 70))
-    healthcare_capacity = clamp(countrydata.get("healthcare_capacity", 70))
-    disease_risk = clamp(countrydata.get("disease_risk", 20))
+    stability = clamp(countrydata.get("government_stability", 50))
+    approval = clamp(countrydata.get("public_approval", 50))
+    corruption = clamp(countrydata.get("corruption_level", 45))
 
-    if disease_risk > 70:
-        risk_level = "High"
-        active_epidemic = "Ongoing Outbreak"
-    elif disease_risk > 40:
-        risk_level = "Medium"
-        active_epidemic = "Localized Cases"
+    disease_risk = clamp(
+        (100 - stability) * 0.4 +
+        (100 - approval) * 0.4 +
+        corruption * 0.2
+    )
+
+    current_cases = int(disease_risk * 20)
+    hospitalisation = int(current_cases * 0.15)
+    mortality = round(disease_risk * 0.03, 2)
+
+    if disease_risk >= 60:
+        epidemic_status = "Active Outbreak"
+    elif disease_risk >= 30:
+        epidemic_status = "Localized Cases"
     else:
-        risk_level = "Low"
-        active_epidemic = "None"
-
-    current_cases = int((disease_risk * 1000) / max(1, healthcare_capacity))
-    hospitalisation = int(current_cases * (disease_risk / 100) * 0.3)
-    mortality = round(disease_risk * 0.05, 2)
+        epidemic_status = "None"
 
     return {
-        "active_epidemic": active_epidemic,
+        "active_epidemic": epidemic_status,
         "current_cases": current_cases,
         "mortality": mortality,
         "hospitalisation": hospitalisation,
-        "risk_level": risk_level,
-        "healthcare_capacity": healthcare_capacity,
-        "healthcare_load": "Overloaded" if hospitalisation > 500 else "Normal",
+        "healthcare_load": "High" if hospitalisation > 200 else "Normal",
+        "risk_level": "High" if disease_risk >= 60 else ("Medium" if disease_risk >= 30 else "Low"),
+        "healthcare_capacity": stability,
     }
-
+    
 def _internal_policy_effects(countrydata):
     approval = clamp(countrydata.get("public_approval", 50))
     corruption = clamp(countrydata.get("corruption_level", 45))
