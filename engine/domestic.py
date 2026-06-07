@@ -1260,25 +1260,30 @@ def _health_effects(countrydata):
         corruption * 0.2
     )
 
-    current_cases = int(disease_risk * 20)
-    hospitalisation = int(current_cases * 0.15)
-    mortality = round(disease_risk * 0.03, 2)
+    healthcare_capacity = stability
 
-    if disease_risk >= 60:
-        epidemic_status = "Active Outbreak"
-    elif disease_risk >= 30:
-        epidemic_status = "Localized Cases"
+    if disease_risk > 70:
+        risk_level = "High"
+        active_epidemic = "Ongoing Outbreak"
+    elif disease_risk > 40:
+        risk_level = "Medium"
+        active_epidemic = "Localized Cases"
     else:
-        epidemic_status = "None"
+        risk_level = "Low"
+        active_epidemic = "None"
+
+    current_cases = int((disease_risk * 1000) / max(1, healthcare_capacity))
+    hospitalisation = int(current_cases * (disease_risk / 100) * 0.3)
+    mortality = round(disease_risk * 0.05, 2)
 
     return {
-        "active_epidemic": epidemic_status,
+        "active_epidemic": active_epidemic,
         "current_cases": current_cases,
         "mortality": mortality,
         "hospitalisation": hospitalisation,
-        "healthcare_load": "High" if hospitalisation > 200 else "Normal",
-        "risk_level": "High" if disease_risk >= 60 else ("Medium" if disease_risk >= 30 else "Low"),
-        "healthcare_capacity": stability,
+        "risk_level": risk_level,
+        "healthcare_capacity": healthcare_capacity,
+        "healthcare_load": "Overloaded" if hospitalisation > 500 else "Normal",
     }
     
 def _internal_policy_effects(countrydata):
