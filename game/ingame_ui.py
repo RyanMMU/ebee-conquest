@@ -2180,6 +2180,10 @@ class InGameUI:
             for label, rect in (self._construction_btn_rects or {}).items():
                 if rect.collidepoint(pos):
                     self.ui_click_sound.play()
+                    if label == "construct":
+                        if self._construction_target and self._selected_construction:
+                            return f"construction_build_{self._selected_construction}_{self._construction_target}"
+                        return None
                     self._selected_construction = label
                     return f"construction_select_{label}"
 
@@ -2830,9 +2834,7 @@ class InGameUI:
             
             if self._selected_construction:
                 prompt_y = btn_y + len(labels) * (btn_h + gap) + 16
-                prompt_text = 'RIGHT CLICK A STATE TO CONSTRUCT'
-                prompt_surf = self.font_bold.render(prompt_text, True, _C_GOLD_BRIGHT)
-            
+                prompt_surf = self.font_bold.render('RIGHT CLICK A STATE TO CONSTRUCT', True, _C_GOLD_BRIGHT)
                 prompt_bg = pygame.Rect(content_rect.x, prompt_y - 4, content_rect.width, prompt_surf.get_height() + 8)
                 self._draw_vertical_gradient_rect(surface, prompt_bg, (28, 38, 20), (12, 18, 10), radius=4)
                 pygame.draw.rect(surface, _C_GOLD, prompt_bg, 1, border_radius=4)
@@ -2840,30 +2842,23 @@ class InGameUI:
 
                 target_y = prompt_y + prompt_surf.get_height() + 12
                 selection_name = self._construction_target or "None"
-                target_text = f"SELECTED: {selection_name}"
-                target_color = _C_TEXT if self._construction_target else _C_TEXT_MUTED
-                target_surf = self.font.render(target_text, True, target_color)
+                target_surf = self.font.render(f"SELECTED: {selection_name}", True, _C_TEXT if self._construction_target else _C_TEXT_MUTED)
                 surface.blit(target_surf, (content_rect.x + 8, target_y))
 
-               
                 btn_y2 = target_y + target_surf.get_height() + 14
                 construct_rect = pygame.Rect(content_rect.x, btn_y2, content_rect.width, 44)
-                self._construction_btn_rects = {"construct": construct_rect}
+
+                self._construction_btn_rects["construct"] = construct_rect
                 enabled = bool(self._construction_target)
 
-
-                self._draw_glow_btn(
-                        surface, "construct", construct_rect, enabled,
-                        "CONSTRUCT",
-                        primary=True, mouse=mouse
-                    )
+                self._draw_glow_btn(surface, "construct", construct_rect, enabled, "CONSTRUCT", primary=True, mouse=mouse)
 
                 text_y = construct_rect.bottom + 10
                 max_w = content_rect.width - 16
                 for desc in (
-                    "Factory: Boost of 1+ gold per constructed factory.",
-                    "Infrastructure: Make troop move faster.",
-                    "Port: ",
+                    "FACTORY: Boost of 1+ gold per constructed factory",
+                    "INFRASTRUCTURE: Make troop move faster",
+                    "PORT: Enables naval supply and trade",
                 ):
                     words = desc.split(" ")
                     line = ""
