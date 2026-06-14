@@ -2834,8 +2834,8 @@ class InGameUI:
                 surface.blit(prompt_surf, (content_rect.x + 8, prompt_y))
 
                 target_y = prompt_y + prompt_surf.get_height() + 12
-                target_name = self._construction_target or "None"
-                target_text = f"Target: {target_name}"
+                selection_name = self._construction_target or "None"
+                target_text = f"SELECTED: {selection_name}"
                 target_color = _C_TEXT if self._construction_target else _C_TEXT_MUTED
                 target_surf = self.font.render(target_text, True, target_color)
                 surface.blit(target_surf, (content_rect.x + 8, target_y))
