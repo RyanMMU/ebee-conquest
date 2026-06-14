@@ -2827,56 +2827,6 @@ class InGameUI:
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
             
             if self._selected_construction:
                 prompt_y = btn_y + len(labels) * (btn_h + gap) + 16
@@ -2902,16 +2852,10 @@ class InGameUI:
                 enabled = bool(self._construction_target)
                 self._draw_glow_btn(
                     surface, "construct", construct_rect, enabled,
-                    f"CONSTRUCT {self._selected_construction.upper()}",
+                    "CONSTRUCT",
                     primary=True, mouse=mouse
                 )
-
-
-
-
-
-
-              
+                            
            
 
        
