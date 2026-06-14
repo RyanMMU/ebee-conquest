@@ -3585,6 +3585,14 @@ class InGameUI:
            left_rect.width - 28,
            self.small_font
        )
+       
+       pygame.draw.line(
+           surface,
+           (80. 90, 110)
+           (left_rect.x + 14, left_rect.y + 52)
+           (left_rect.right - 14, left_rect.y + 52),
+           1
+       )
 
        # ===== HEALTH ROWS =====
        y = left_rect.y + 60
