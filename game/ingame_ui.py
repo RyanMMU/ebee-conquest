@@ -2806,12 +2806,14 @@ class InGameUI:
             btn_h = 52
             gap = 12
             labels = ("FACTORY", "INFRASTRUCTURE", "PORT")
-            
+
             self._construction_btn_rects = {}
             for i, label in enumerate(labels):
                 btn_rect = pygame.Rect(content_rect.x, btn_y + i * (btn_h + gap), content_rect.width, btn_h)
                 self._construction_btn_rects[label.lower()] = btn_rect
                 is_selected = self._selected_construction == label.lower()
+                if is_selected:
+                    self._button_glows[f"construction_{label.lower()}"] = 1.0
                 self._draw_glow_btn(
                     surface,
                     f"construction_{label.lower()}",
@@ -2822,6 +2824,59 @@ class InGameUI:
                     mouse=mouse,
                 )
             
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
             
             if self._selected_construction:
                 prompt_y = btn_y + len(labels) * (btn_h + gap) + 16
@@ -2850,6 +2905,11 @@ class InGameUI:
                     f"CONSTRUCT {self._selected_construction.upper()}",
                     primary=True, mouse=mouse
                 )
+
+
+
+
+
 
               
            
