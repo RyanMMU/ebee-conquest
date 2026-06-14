@@ -394,6 +394,7 @@ class InGameUI:
     actiontogglefocuspanel = "togglefocuspanel"
     actionstartfocus = "startfocus"
     actiondomesticaffairs = "domesticaffairs"
+    actiontogglemco = "togglemco"
     actionpausemenu = "pausemenu"
     actionquitgame = "quitgame"
     actionweapon1 = "weapon_1"
@@ -1952,6 +1953,12 @@ class InGameUI:
                     if tab_rect.collidepoint(event.pos):
                         self._domestic_active_tab = tab_name
                         return None
+                if (
+                    self._domestic_active_tab == "Health"
+                    and hasattr(self, "_mco_button_rect")
+                    and self._mco_button_rect.collidepoint(event.pos)
+                ):
+                    return self.actiontogglemco
                 segment = self._get_domestic_segment_at_pos(event.pos)
                 if segment is not None:
                     self._domestic_selected_party_id = segment.get("party_id")
@@ -2168,6 +2175,15 @@ class InGameUI:
                 if item == "CONSTRUCTION":
                     self.production_popup_open = False 
                 return None
+            
+        if (
+            self.domesticaffairsopen
+            and self._domestic_active_tab == "Health"
+            and hasattr(self, "_mco_button_rect")
+            and self._mco_button_rect.collidepoint(pos)
+        ):
+            self.ui_click_sound.play()
+            return self.actiontogglemco
 
       
         if self._endturn_rect.collidepoint(pos):
@@ -3178,7 +3194,7 @@ class InGameUI:
 
         content_rect = pygame.Rect(popup_rect.x + 28, popup_rect.y + header_h + 18, popup_rect.width - 56, popup_rect.height - header_h - 38)
         self._domestic_tab_rects = {}
-        tabs = ("Executive", "Economy", "Internal Policies")
+        tabs = ("Executive", "Economy", "Internal Policies", "Health")
         gap = 8
         tab_w = min(190, max(132, (content_rect.width - gap * (len(tabs) - 1)) // len(tabs)))
         tab_y = content_rect.y
@@ -3206,6 +3222,8 @@ class InGameUI:
             self._draw_domestic_economy_tab(surface, body_rect, data, mouse)
         elif self._domestic_active_tab == "Internal Policies":
             self._draw_domestic_internal_policies_tab(surface, body_rect, data, mouse)
+        elif self._domestic_active_tab == "Health":
+            self._draw_domestic_health_tab(surface, body_rect, data, mouse)
         else:
             self._draw_domestic_executive_tab(surface, body_rect, data, mouse)
 
@@ -3626,6 +3644,148 @@ class InGameUI:
         for label, value in rule_rows:
             self._draw_domestic_info_row(surface, right_rect.x + 14, y, label, value, right_rect.width - 28)
             y += 24
+            
+    def _draw_domestic_health_tab(self, surface, rect, data, mouse):
+
+       health = data.get("health", {}) if isinstance(data.get("health", {}), dict) else {}
+
+       chip_gap = 10
+       chip_w = (rect.width - chip_gap * 2) // 3
+
+       # Top chips (summary)
+       self._draw_metric_chip(
+           surface,
+           pygame.Rect(rect.x, rect.y, chip_w, 58),
+           "Active Epidemic",
+           str(health.get("active_epidemic", "None")),
+           icon_key="warning",
+           accent=(200, 80, 80)
+        )
+
+       self._draw_metric_chip(
+           surface,
+           pygame.Rect(rect.x + chip_w + chip_gap, rect.y, chip_w, 58),
+           "Current Cases",
+           f"{int(health.get('current_cases', 0) or 0)}",
+           icon_key="health",
+           accent=_C_INFO
+        )
+
+       self._draw_metric_chip(
+           surface,
+           pygame.Rect(rect.x + (chip_w + chip_gap) * 2, rect.y, chip_w, 58),
+           "Mortality Rate",
+           f"{float(health.get('mortality', 0) or 0):.2f}%",
+           icon_key="skull",
+           accent=_C_GOLD
+        )
+
+       body_y = rect.y + 78
+       left_rect = pygame.Rect(rect.x, body_y, rect.width // 2 - 7, rect.bottom - body_y)
+       right_rect = pygame.Rect(left_rect.right + 14, body_y, rect.width - left_rect.width - 14, rect.bottom - body_y)
+
+       # LEFT PANEL
+       self._draw_vertical_gradient_rect(surface, left_rect, (15, 24, 38), (8, 13, 22), radius=6)
+       pygame.draw.rect(surface, (52, 65, 82), left_rect, 1, border_radius=6)
+
+       self._draw_text_fit(
+           surface,
+           "HEALTH STATUS",
+           _C_GOLD_BRIGHT,
+           left_rect.x + 14,
+           left_rect.y + 12,
+           left_rect.width - 28,
+           self.font_bold
+        )
+
+       y = left_rect.y + 44
+       rows = (
+           ("Hospitalisation", f"{int(health.get('hospitalisation', 0) or 0)}"),
+           ("Mortality Rate", f"{float(health.get('mortality', 0) or 0):.2f}%"),
+           ("Healthcare Load", health.get("healthcare_load", "Normal")),
+           ("Risk Level", health.get("risk_level", "Low")),
+        )
+
+       for label, value in rows:
+           self._draw_domestic_info_row(
+               surface,
+               left_rect.x + 14,
+               y,
+               label,
+               value,
+               left_rect.width - 28
+            )
+           y += 28
+
+       # RIGHT PANEL
+       self._draw_vertical_gradient_rect(surface, right_rect, (15, 24, 38), (8, 13, 22), radius=6)
+       pygame.draw.rect(surface, (52, 65, 82), right_rect, 1, border_radius=6)
+
+       self._draw_text_fit(
+           surface,
+           "EPIDEMIC NOTES",
+           _C_GOLD_BRIGHT,
+           right_rect.x + 14,
+           right_rect.y + 12,
+           right_rect.width - 28,
+           self.font_bold
+        )
+
+       notes = [
+           "Epidemics reduce population growth and stability.",
+           "High hospitalisation increases economic pressure.",
+           "Outbreak severity depends on healthcare capacity.",
+           "Government response can reduce spread rate.",
+        ]
+
+       y = right_rect.y + 44
+       for line in notes:
+           self._draw_text_fit(
+               surface,
+               line,
+               _C_TEXT,
+               right_rect.x + 14,
+               y,
+               right_rect.width - 28,
+               self.small_font
+           )
+           y += 25
+
+       # Optional bar 
+       self._draw_value_bar(
+           surface,
+           pygame.Rect(right_rect.x + 14, right_rect.bottom - 48, right_rect.width - 28, 32),
+           "Healthcare Capacity",
+           health.get("healthcare_capacity", 0),
+           _C_INFO
+        )
+       
+       mco_enabled = bool(data.get("mco_enabled", False))
+
+       self._mco_button_rect = pygame.Rect(
+           right_rect.x + 14,
+           right_rect.bottom - 95,
+           180,
+           36
+        )
+
+       pygame.draw.rect(
+           surface,
+           (60, 160, 80) if mco_enabled else (180, 70, 70),
+           self._mco_button_rect,
+           border_radius=6
+        )
+
+       self._draw_text_fit(
+           surface,
+           f"MCO: {'ON' if mco_enabled else 'OFF'}",
+           (255,255,255),
+           self._mco_button_rect.x,
+           self._mco_button_rect.y + 8,
+           self._mco_button_rect.width,
+           self.small_font
+        )
+        
 
     def _draw_war_progress_popup(self, surface, mouse):
         popup_w = min(900, max(640, self.map_rect.width - 72))

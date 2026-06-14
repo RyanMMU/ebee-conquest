@@ -1095,6 +1095,28 @@ def advance_domestic_affairs_turn(
 
     for countryid, countrydata in (state or {}).items():
         countrydata["_domestic_turns_seen"] = safeint(countrydata.get("_domestic_turns_seen", 0), 0) + 1
+        
+        covid_cases = safeint(
+            countrydata.get("covid_cases", 100),
+            100
+        )
+
+        if countrydata.get("mco_enabled", False):
+            covid_cases = max(0, covid_cases - 15)
+        else:
+            covid_cases += 15
+
+        countrydata["covid_cases"] = covid_cases
+        countrydata["hospitalisation"] = int(covid_cases * 0.12)
+        countrydata["mortality"] = round(covid_cases * 0.002, 2)
+
+        if covid_cases > 500:
+            countrydata["active_epidemic"] = "Ongoing Outbreak"
+        elif covid_cases > 200:
+            countrydata["active_epidemic"] = "Localized Cases"
+        else:
+            countrydata["active_epidemic"] = "None"
+            
         is_player = playerkey and countrykey(countryid) == playerkey
         atwar = countryid in countriesatwarset or countrydata.get("country_name") in countriesatwarset
         mood = build_political_mood(countrydata, player_metrics if is_player else None, atwar=atwar)
@@ -1212,6 +1234,7 @@ def build_domestic_affairs_view(state, country, currentturnnumber, player_metric
     view["policy_passing_chance"] = policy_chance
     view["legislature_status"] = _legislature_status_label(totals)
     view["economy_effects"] = _economy_effects(countrydata)
+    view["health"] = _health_effects(countrydata)
     view["internal_policy_effects"] = _internal_policy_effects(countrydata)
     if player_metrics:
         view["player_metrics"] = dict(player_metrics)
@@ -1247,8 +1270,55 @@ def _economy_effects(countrydata):
         "budget_passing": budget,
         "project_speed": "Faster" if stability > 70 else ("Slower" if stability < 40 else "Normal"),
     }
+    
+def _health_effects(countrydata):
+    current_cases = safeint(
+        countrydata.get("covid_cases", 100),
+        100
+    )
 
+    hospitalisation = safeint(
+        countrydata.get("hospitalisation", 0),
+        0
+    )
 
+    mortality = float(
+        countrydata.get("mortality", 0)
+    )
+
+    active_epidemic = countrydata.get(
+        "active_epidemic",
+        "None"
+    )
+
+    healthcare_capacity = clamp(
+        countrydata.get(
+            "government_stability",
+            50
+        )
+    )
+
+    if current_cases > 500:
+        risk_level = "High"
+    elif current_cases > 200:
+        risk_level = "Medium"
+    else:
+        risk_level = "Low"
+
+    return {
+        "active_epidemic": active_epidemic,
+        "current_cases": current_cases,
+        "mortality": mortality,
+        "hospitalisation": hospitalisation,
+        "risk_level": risk_level,
+        "healthcare_capacity": healthcare_capacity,
+        "healthcare_load": (
+            "Overloaded"
+            if hospitalisation > 500
+            else "Normal"
+        ),
+    }
+    
 def _internal_policy_effects(countrydata):
     approval = clamp(countrydata.get("public_approval", 50))
     corruption = clamp(countrydata.get("corruption_level", 45))
