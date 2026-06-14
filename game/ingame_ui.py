@@ -2850,13 +2850,37 @@ class InGameUI:
                 construct_rect = pygame.Rect(content_rect.x, btn_y2, content_rect.width, 44)
                 self._construction_btn_rects = {"construct": construct_rect}
                 enabled = bool(self._construction_target)
+
+
                 self._draw_glow_btn(
-                    surface, "construct", construct_rect, enabled,
-                    "CONSTRUCT",
-                    primary=True, mouse=mouse
-                )
+                        surface, "construct", construct_rect, enabled,
+                        "CONSTRUCT",
+                        primary=True, mouse=mouse
+                    )
+
+                text_y = construct_rect.bottom + 10
+                max_w = content_rect.width - 16
+                for desc in (
+                    "Factory: Boost of 1+ gold per constructed factory.",
+                    "Infrastructure: Make troop move faster.",
+                    "Port: ",
+                ):
+                    words = desc.split(" ")
+                    line = ""
+                    for word in words:
+                        test = f"{line} {word}".strip()
+                        if self.font.size(test)[0] <= max_w:
+                            line = test
+                        else:
+                            surf = self.font.render(line, True, _C_TEXT)
+                            surface.blit(surf, (content_rect.x + 8, text_y))
+                            text_y += surf.get_height() + 4
+                            line = word
+                    if line:
+                        surf = self.font.render(line, True, _C_TEXT)
+                        surface.blit(surf, (content_rect.x + 8, text_y))
+                        text_y += surf.get_height() + 6
                             
-           
 
        
         if selected_tab == "TROOPS" and not self._countrymenutarget and self.active_left_tab != "COMBAT" and not self._selectedmapcountry:
