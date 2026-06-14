@@ -3626,10 +3626,10 @@ class InGameUI:
        )
 
        # RIGHT PANEL
-     self._draw_vertical_gradient_rect(surface, right_rect, (15, 24, 38), (8, 13, 22), radius=6)
+       self._draw_vertical_gradient_rect(surface, right_rect, (15, 24, 38), (8, 13, 22), radius=6)
        pygame.draw.rect(surface, (52, 65, 82), right_rect, 1, border_radius=6)
 
-     self._draw_text_fit(
+       self._draw_text_fit(
            surface,
            "EPIDEMIC NOTES",
            _C_GOLD_BRIGHT,
