@@ -401,6 +401,11 @@ class InGameUI:
     actionweapon3 = "weapon_3"
     actionweapon4 = "weapon_4"
 
+
+
+    def set_construction_target(self, country_name: str | None):
+        self._construction_target = country_name
+
     def __init__(self, window_size):
         self.window_size = window_size
         self.title_font = pygame.font.SysFont("bahnschrift", 22, bold=True)
@@ -512,7 +517,10 @@ class InGameUI:
         self._topbar_metric_snapshot = {}
         self._topbar_metric_rates = {}
         self._topbar_metric_rate_turn = None
-
+        self._selected_construction = None
+        self._construction_target = None
+        self._construction_target = None
+        self._construction_btn_rects = {}
    
         self._recruit_action_rect = pygame.Rect(0, 0, 10, 10)
         self._declarewar_rect = pygame.Rect(0, 0, 10, 10)
@@ -592,7 +600,8 @@ class InGameUI:
         self.applylayout()
 
 
-    
+    def set_construction_target(self, country_name: str | None):
+        self._construction_target = country_name
 
     def _load_flags(self):
         flags = {}
@@ -1571,11 +1580,10 @@ class InGameUI:
             show_left = True
             show_bottom = True
             show_right = bool(
-                self._countrymenutarget
-                or self.bottom_buttons.selected == "PRODUCTION"
-                or self.bottom_buttons.selected == "TROOPS"
-                or self._selectedmapcountry
-            )
+            self._countrymenutarget
+            or self.bottom_buttons.selected in ("PRODUCTION", "TROOPS", "CONSTRUCTION")
+            or self._selectedmapcountry
+        )
 
         left_w = self.leftbar_width if show_left else 0
         bottom_h = self.bottombar_height if show_bottom else 0
@@ -2146,9 +2154,19 @@ class InGameUI:
                 if self.active_left_tab == "DOMESTIC AFFAIRS":
                     self.active_left_tab = None
                 self.bottom_buttons.set_selected(item)
+                if item != "CONSTRUCTION":
+                    self._selected_construction = None
+                    self._construction_target = None
                 self.applylayout()
+
+                if item != "CONSTRUCTION":
+                    self._selected_construction = None
+                    self._construction_target = None
                 if item == "RESEARCH":
                     self.researchview.toggleview()
+
+                if item == "CONSTRUCTION":
+                    self.production_popup_open = False 
                 return None
 
       
@@ -2157,6 +2175,17 @@ class InGameUI:
             return self.actionendturn
 
         selected_tab = self.bottom_buttons.selected
+
+        if selected_tab == "CONSTRUCTION" and not self._countrymenutarget:
+            for label, rect in (self._construction_btn_rects or {}).items():
+                if rect.collidepoint(pos):
+                    self.ui_click_sound.play()
+                    if label == "construct":
+                        if self._construction_target and self._selected_construction:
+                            return f"construction_build_{self._selected_construction}_{self._construction_target}"
+                        return None
+                    self._selected_construction = label
+                    return f"construction_select_{label}"
 
         if selected_tab == "PRODUCTION" and not self._countrymenutarget:
             if self._production_blank_rect.collidepoint(pos):
@@ -2771,6 +2800,82 @@ class InGameUI:
                 True, "     +      ", mouse=mouse,
             )
             y_cursor += 100
+
+
+        elif selected_tab == "CONSTRUCTION" and not self._countrymenutarget:
+            surface.blit(self.font.render("Select ", True, _C_TEXT_MUTED), 
+                        (content_rect.x, content_rect.y + 26))
+
+            btn_y = content_rect.y + 60
+            btn_h = 52
+            gap = 12
+            labels = ("FACTORY", "INFRASTRUCTURE", "PORT")
+
+            self._construction_btn_rects = {}
+            for i, label in enumerate(labels):
+                btn_rect = pygame.Rect(content_rect.x, btn_y + i * (btn_h + gap), content_rect.width, btn_h)
+                self._construction_btn_rects[label.lower()] = btn_rect
+                is_selected = self._selected_construction == label.lower()
+                if is_selected:
+                    self._button_glows[f"construction_{label.lower()}"] = 1.0
+                self._draw_glow_btn(
+                    surface,
+                    f"construction_{label.lower()}",
+                    btn_rect,
+                    True,
+                    label,
+                    selected=is_selected,
+                    mouse=mouse,
+                )
+            
+
+
+
+            
+            if self._selected_construction:
+                prompt_y = btn_y + len(labels) * (btn_h + gap) + 16
+                prompt_surf = self.font_bold.render('RIGHT CLICK A STATE TO CONSTRUCT', True, _C_GOLD_BRIGHT)
+                prompt_bg = pygame.Rect(content_rect.x, prompt_y - 4, content_rect.width, prompt_surf.get_height() + 8)
+                self._draw_vertical_gradient_rect(surface, prompt_bg, (28, 38, 20), (12, 18, 10), radius=4)
+                pygame.draw.rect(surface, _C_GOLD, prompt_bg, 1, border_radius=4)
+                surface.blit(prompt_surf, (content_rect.x + 8, prompt_y))
+
+                target_y = prompt_y + prompt_surf.get_height() + 12
+                selection_name = self._construction_target or "None"
+                target_surf = self.font.render(f"SELECTED: {selection_name}", True, _C_TEXT if self._construction_target else _C_TEXT_MUTED)
+                surface.blit(target_surf, (content_rect.x + 8, target_y))
+
+                btn_y2 = target_y + target_surf.get_height() + 14
+                construct_rect = pygame.Rect(content_rect.x, btn_y2, content_rect.width, 44)
+
+                self._construction_btn_rects["construct"] = construct_rect
+                enabled = bool(self._construction_target)
+
+                self._draw_glow_btn(surface, "construct", construct_rect, enabled, "CONSTRUCT", primary=True, mouse=mouse)
+
+                text_y = construct_rect.bottom + 10
+                max_w = content_rect.width - 16
+                for desc in (
+                    "FACTORY: Boost of 1+ gold per constructed factory",
+                    "INFRASTRUCTURE: Make troop move faster",
+                    "PORT: 50 turns",
+                ):
+                    words = desc.split(" ")
+                    line = ""
+                    for word in words:
+                        test = f"{line} {word}".strip()
+                        if self.font.size(test)[0] <= max_w:
+                            line = test
+                        else:
+                            surf = self.font.render(line, True, _C_TEXT)
+                            surface.blit(surf, (content_rect.x + 8, text_y))
+                            text_y += surf.get_height() + 4
+                            line = word
+                    if line:
+                        surf = self.font.render(line, True, _C_TEXT)
+                        surface.blit(surf, (content_rect.x + 8, text_y))
+                        text_y += surf.get_height() + 6
+                            
 
        
         if selected_tab == "TROOPS" and not self._countrymenutarget and self.active_left_tab != "COMBAT" and not self._selectedmapcountry:
@@ -3847,8 +3952,8 @@ class InGameUI:
             mouse = pygame.mouse.get_pos()
         hovered = rect.collidepoint(mouse) and enabled
         glow = self._button_glows.get(key, 0.0)
-        if hovered:
-            glow = min(1.0, glow + 0.12)
+        if hovered or selected: 
+            glow = min(1.0, glow + 0.14)
         else:
             glow = max(0.0, glow - 0.08)
         self._button_glows[key] = glow
@@ -3866,7 +3971,7 @@ class InGameUI:
         else:
             top = (31, 48, 74) if hovered else ((22, 34, 53) if enabled else (48, 53, 60))
             bottom = (11, 17, 27) if enabled else (35, 38, 43)
-            border = _C_GOLD if hovered and enabled else ((69, 84, 104) if enabled else (69, 75, 84))
+            border = _C_GOLD if (hovered or selected) and enabled else ((69, 84, 104) if enabled else (69, 75, 84))
 
         self._draw_vertical_gradient_rect(surface, drawrect, top, bottom, radius=radius)
         pygame.draw.rect(surface, border, drawrect, 1, border_radius=radius)
@@ -3913,7 +4018,7 @@ class InGameUI:
                 )
                 text_x += icon.get_width() + 8
             surface.blit(txt, (text_x, drawrect.centery - txt.get_height() // 2))
-        else:  
+        else:
             if icon is not None and drawrect.width >= 80:
                 gap = 6
                 total_width = icon.get_width() + gap + txt.get_width()
