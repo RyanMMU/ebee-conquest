@@ -2858,7 +2858,7 @@ class InGameUI:
                 for desc in (
                     "FACTORY: Boost of 1+ gold per constructed factory",
                     "INFRASTRUCTURE: Make troop move faster",
-                    "PORT: Enables naval supply and trade",
+                    "PORT: 50 turns",
                 ):
                     words = desc.split(" ")
                     line = ""
