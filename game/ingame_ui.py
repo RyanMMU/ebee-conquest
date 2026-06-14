@@ -401,6 +401,11 @@ class InGameUI:
     actionweapon3 = "weapon_3"
     actionweapon4 = "weapon_4"
 
+
+
+    def set_construction_target(self, country_name: str | None):
+        self._construction_target = country_name
+
     def __init__(self, window_size):
         self.window_size = window_size
         self.title_font = pygame.font.SysFont("bahnschrift", 22, bold=True)
@@ -513,6 +518,8 @@ class InGameUI:
         self._topbar_metric_rates = {}
         self._topbar_metric_rate_turn = None
         self._selected_construction = None
+        self._construction_target = None
+        self._construction_target = None
         self._construction_btn_rects = {}
    
         self._recruit_action_rect = pygame.Rect(0, 0, 10, 10)
@@ -593,7 +600,8 @@ class InGameUI:
         self.applylayout()
 
 
-    
+    def set_construction_target(self, country_name: str | None):
+        self._construction_target = country_name
 
     def _load_flags(self):
         flags = {}
@@ -2148,10 +2156,12 @@ class InGameUI:
                 self.bottom_buttons.set_selected(item)
                 if item != "CONSTRUCTION":
                     self._selected_construction = None
+                    self._construction_target = None
                 self.applylayout()
 
                 if item != "CONSTRUCTION":
                     self._selected_construction = None
+                    self._construction_target = None
                 if item == "RESEARCH":
                     self.researchview.toggleview()
 
@@ -2815,13 +2825,34 @@ class InGameUI:
             
             if self._selected_construction:
                 prompt_y = btn_y + len(labels) * (btn_h + gap) + 16
-                prompt_text = 'RIGHT CLICK A COUNTRY TO CONTRUCT'
+                prompt_text = 'RIGHT CLICK A STATE TO CONSTRUCT'
                 prompt_surf = self.font_bold.render(prompt_text, True, _C_GOLD_BRIGHT)
-              
+            
                 prompt_bg = pygame.Rect(content_rect.x, prompt_y - 4, content_rect.width, prompt_surf.get_height() + 8)
                 self._draw_vertical_gradient_rect(surface, prompt_bg, (28, 38, 20), (12, 18, 10), radius=4)
                 pygame.draw.rect(surface, _C_GOLD, prompt_bg, 1, border_radius=4)
                 surface.blit(prompt_surf, (content_rect.x + 8, prompt_y))
+
+                target_y = prompt_y + prompt_surf.get_height() + 12
+                target_name = self._construction_target or "None"
+                target_text = f"Target: {target_name}"
+                target_color = _C_TEXT if self._construction_target else _C_TEXT_MUTED
+                target_surf = self.font.render(target_text, True, target_color)
+                surface.blit(target_surf, (content_rect.x + 8, target_y))
+
+               
+                btn_y2 = target_y + target_surf.get_height() + 14
+                construct_rect = pygame.Rect(content_rect.x, btn_y2, content_rect.width, 44)
+                self._construction_btn_rects = {"construct": construct_rect}
+                enabled = bool(self._construction_target)
+                self._draw_glow_btn(
+                    surface, "construct", construct_rect, enabled,
+                    f"CONSTRUCT {self._selected_construction.upper()}",
+                    primary=True, mouse=mouse
+                )
+
+              
+           
 
        
         if selected_tab == "TROOPS" and not self._countrymenutarget and self.active_left_tab != "COMBAT" and not self._selectedmapcountry:
