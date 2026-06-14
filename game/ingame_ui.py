@@ -1571,11 +1571,10 @@ class InGameUI:
             show_left = True
             show_bottom = True
             show_right = bool(
-                self._countrymenutarget
-                or self.bottom_buttons.selected == "PRODUCTION"
-                or self.bottom_buttons.selected == "TROOPS"
-                or self._selectedmapcountry
-            )
+            self._countrymenutarget
+            or self.bottom_buttons.selected in ("PRODUCTION", "TROOPS", "CONSTRUCTION")
+            or self._selectedmapcountry
+        )
 
         left_w = self.leftbar_width if show_left else 0
         bottom_h = self.bottombar_height if show_bottom else 0
@@ -2149,6 +2148,9 @@ class InGameUI:
                 self.applylayout()
                 if item == "RESEARCH":
                     self.researchview.toggleview()
+
+                if item == "CONSTRUCTION":
+                    self.production_popup_open = False 
                 return None
 
       
@@ -2771,6 +2773,29 @@ class InGameUI:
                 True, "     +      ", mouse=mouse,
             )
             y_cursor += 100
+
+
+        elif selected_tab == "CONSTRUCTION" and not self._countrymenutarget:
+          
+            surface.blit(self.font_bold.render("CONSTRUCTION", True, _C_GOLD_BRIGHT), (content_rect.x, content_rect.y + 6))
+            surface.blit(self.font.render("Build infrastructure", True, (210, 210, 210)), (content_rect.x, content_rect.y + 28))
+
+      
+            btn_y = content_rect.y + 60
+            btn_h = 34
+            labels = ("Factory", "Infrastructure", "Port")
+            
+            for i, label in enumerate(labels):
+                btn_rect = pygame.Rect(content_rect.x, btn_y + i * (btn_h + 8), content_rect.width, btn_h)
+                self._draw_glow_btn(
+                    surface,
+                    f"construction_{label.lower()}",
+                    btn_rect,
+                    True,
+                    label.upper(),  
+                    mouse=mouse,
+                    icon_key="construction",
+                )
 
        
         if selected_tab == "TROOPS" and not self._countrymenutarget and self.active_left_tab != "COMBAT" and not self._selectedmapcountry:
