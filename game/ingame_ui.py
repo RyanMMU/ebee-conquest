@@ -3553,38 +3553,49 @@ class InGameUI:
        self._draw_vertical_gradient_rect(surface, left_rect, (15, 24, 38), (8, 13, 22), radius=6)
        pygame.draw.rect(surface, (52, 65, 82), left_rect, 1, border_radius=6)
 
-      self._draw_text_fit(
-          surface,
-          "HEALTH STATUS",
-          _C_GOLD_BRIGHT,
-          left_rect.x + 14,
-          left_rect.y + 12,
-          left_rect.width - 28,
-          self.font_bold
-      )
+       self._draw_text_fit(
+           surface,
+           "HEALTH STATUS",
+           _C_GOLD_BRIGHT,
+           left_rect.x + 14,
+           left_rect.y + 12,
+           left_rect.width - 28,
+           self.font_bold
+       )
 
-      # ===== HEALTH ALERT SYSTEM (NEW) =====
-      risk = health.get("risk_level", "Low")
+       # ===== HEALTH ALERT SYSTEM (NEW) =====
+       risk = health.get("risk_level", "Low")
 
-      if risk == "High":
-          alert_text = "⚠ CRISIS: Severe health situation detected!"
-          alert_color = (220, 80, 80)
-      elif risk == "Medium":
-          alert_text = "⚠ WARNING: Health risks present in country."
-          alert_color = (240, 180, 80)
-      else:
+       if risk == "High":
+           alert_text = "⚠ CRISIS: Severe health situation detected!"
+           alert_color = (220, 80, 80)
+       elif risk == "Medium":
+           alert_text = "⚠ WARNING: Health risks present in country."
+           alert_color = (240, 180, 80)
+       else:
            alert_text = "✅ STABLE: Health situation under control."
+           alert_color = (120, 220, 140)
 
-      self._draw_text_fit(
-          surface,
-          alert_text,
-          alert_color,
-          left_rect.x + 14,
-          left_rect.y + 32,
-          left_rect.width - 28,
-          self.small_font
-     )
-      
+       self._draw_text_fit(
+           surface,
+           alert_text,
+           alert_color,
+           left_rect.x + 14,
+           left_rect.y + 32,
+           left_rect.width - 28,
+           self.small_font
+       )
+
+       # ===== HEALTH ROWS =====
+       y = left_rect.y + 60
+
+       rows = (
+          ("Hospitalisation", f"{int(health.get('hospitalisation', 0) or 0)}"),
+          ("Mortality Rate", f"{float(health.get('mortality', 0) or 0):.2f}%"),
+          ("Healthcare Load", health.get("healthcare_load", "Normal")),
+          ("Risk Level", risk),
+       )
+
        for label, value in rows:
            self._draw_domestic_info_row(
                surface,
@@ -3593,32 +3604,32 @@ class InGameUI:
                label,
                value,
                left_rect.width - 28
-            )
+           )
            y += 28
-           
-       # ===== EPIDEMIC STATE CLASSIFICATION (NEW) =====
-      state = "NORMAL 🟢"
 
-      if risk == "High":
-          state = "EPIDEMIC 🔴"
-      elif risk == "Medium":
-          state = "WATCH 🟠"
+        # ===== EPIDEMIC STATE CLASSIFICATION (NEW) =====
+        state = "NORMAL 🟢"
 
-      self._draw_text_fit(
-          surface,
-          f"STATE: {state}",
-          _C_GOLD_BRIGHT,
-          left_rect.x + 14,
-          y + 10,
-          left_rect.width - 28,
-          self.small_font
-        )
+        if risk == "High":
+            state = "EPIDEMIC 🔴"
+        elif risk == "Medium":
+            state = "WATCH 🟠"
+
+        self._draw_text_fit(
+            surface,
+            f"STATE: {state}",
+            _C_GOLD_BRIGHT,
+            left_rect.x + 14,
+            y + 10,
+           left_rect.width - 28,
+           self.small_font
+       )
 
        # RIGHT PANEL
-       self._draw_vertical_gradient_rect(surface, right_rect, (15, 24, 38), (8, 13, 22), radius=6)
+     self._draw_vertical_gradient_rect(surface, right_rect, (15, 24, 38), (8, 13, 22), radius=6)
        pygame.draw.rect(surface, (52, 65, 82), right_rect, 1, border_radius=6)
 
-       self._draw_text_fit(
+     self._draw_text_fit(
            surface,
            "EPIDEMIC NOTES",
            _C_GOLD_BRIGHT,
