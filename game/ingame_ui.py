@@ -2776,25 +2776,27 @@ class InGameUI:
 
 
         elif selected_tab == "CONSTRUCTION" and not self._countrymenutarget:
-          
-            surface.blit(self.font_bold.render("CONSTRUCTION", True, _C_GOLD_BRIGHT), (content_rect.x, content_rect.y + 6))
-            surface.blit(self.font.render("Build infrastructure", True, (210, 210, 210)), (content_rect.x, content_rect.y + 28))
+           
+            header_y = content_rect.y + 8
+            surface.blit(self.font_bold.render("CONSTRUCTION", True, _C_GOLD_BRIGHT), (content_rect.x, header_y))
+            surface.blit(self.font.render("Select project", True, _C_TEXT_MUTED), (content_rect.x, header_y + 26))
 
-      
-            btn_y = content_rect.y + 60
-            btn_h = 34
+           
+            btn_y = header_y + 60
+            btn_h = 52   
+            gap = 12     
             labels = ("Factory", "Infrastructure", "Port")
             
             for i, label in enumerate(labels):
-                btn_rect = pygame.Rect(content_rect.x, btn_y + i * (btn_h + 8), content_rect.width, btn_h)
+                btn_rect = pygame.Rect(content_rect.x, btn_y + i * (btn_h + gap), content_rect.width, btn_h)
                 self._draw_glow_btn(
                     surface,
                     f"construction_{label.lower()}",
                     btn_rect,
                     True,
-                    label.upper(),  
+                    label,        
                     mouse=mouse,
-                    icon_key="construction",
+                 
                 )
 
        
