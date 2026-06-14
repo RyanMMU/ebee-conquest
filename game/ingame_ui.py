@@ -2789,13 +2789,13 @@ class InGameUI:
 
 
         elif selected_tab == "CONSTRUCTION" and not self._countrymenutarget:
-            surface.blit(self.font.render("Select project", True, _C_TEXT_MUTED), 
+            surface.blit(self.font.render("Select ", True, _C_TEXT_MUTED), 
                         (content_rect.x, content_rect.y + 26))
 
             btn_y = content_rect.y + 60
             btn_h = 52
             gap = 12
-            labels = ("Factory", "Infrastructure", "Port")
+            labels = ("FACTORY", "INFRASTRUCTURE", "PORT")
             
             self._construction_btn_rects = {}
             for i, label in enumerate(labels):
@@ -2815,7 +2815,7 @@ class InGameUI:
             
             if self._selected_construction:
                 prompt_y = btn_y + len(labels) * (btn_h + gap) + 16
-                prompt_text = "now please right click a country to construct your selection"
+                prompt_text = 'RIGHT CLICK A COUNTRY TO CONTRUCT'
                 prompt_surf = self.font_bold.render(prompt_text, True, _C_GOLD_BRIGHT)
               
                 prompt_bg = pygame.Rect(content_rect.x, prompt_y - 4, content_rect.width, prompt_surf.get_height() + 8)
@@ -3898,8 +3898,8 @@ class InGameUI:
             mouse = pygame.mouse.get_pos()
         hovered = rect.collidepoint(mouse) and enabled
         glow = self._button_glows.get(key, 0.0)
-        if hovered:
-            glow = min(1.0, glow + 0.12)
+        if hovered or selected: 
+            glow = min(1.0, glow + 0.14)
         else:
             glow = max(0.0, glow - 0.08)
         self._button_glows[key] = glow
@@ -3917,7 +3917,7 @@ class InGameUI:
         else:
             top = (31, 48, 74) if hovered else ((22, 34, 53) if enabled else (48, 53, 60))
             bottom = (11, 17, 27) if enabled else (35, 38, 43)
-            border = _C_GOLD if hovered and enabled else ((69, 84, 104) if enabled else (69, 75, 84))
+            border = _C_GOLD if (hovered or selected) and enabled else ((69, 84, 104) if enabled else (69, 75, 84))
 
         self._draw_vertical_gradient_rect(surface, drawrect, top, bottom, radius=radius)
         pygame.draw.rect(surface, border, drawrect, 1, border_radius=radius)
@@ -3964,7 +3964,7 @@ class InGameUI:
                 )
                 text_x += icon.get_width() + 8
             surface.blit(txt, (text_x, drawrect.centery - txt.get_height() // 2))
-        else:  
+        else:
             if icon is not None and drawrect.width >= 80:
                 gap = 6
                 total_width = icon.get_width() + gap + txt.get_width()
