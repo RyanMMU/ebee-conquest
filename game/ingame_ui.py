@@ -512,7 +512,8 @@ class InGameUI:
         self._topbar_metric_snapshot = {}
         self._topbar_metric_rates = {}
         self._topbar_metric_rate_turn = None
-
+        self._selected_construction = None
+        self._construction_btn_rects = {}
    
         self._recruit_action_rect = pygame.Rect(0, 0, 10, 10)
         self._declarewar_rect = pygame.Rect(0, 0, 10, 10)
@@ -2145,7 +2146,12 @@ class InGameUI:
                 if self.active_left_tab == "DOMESTIC AFFAIRS":
                     self.active_left_tab = None
                 self.bottom_buttons.set_selected(item)
+                if item != "CONSTRUCTION":
+                    self._selected_construction = None
                 self.applylayout()
+
+                if item != "CONSTRUCTION":
+                    self._selected_construction = None
                 if item == "RESEARCH":
                     self.researchview.toggleview()
 
@@ -2159,6 +2165,13 @@ class InGameUI:
             return self.actionendturn
 
         selected_tab = self.bottom_buttons.selected
+
+        if selected_tab == "CONSTRUCTION" and not self._countrymenutarget:
+            for label, rect in (self._construction_btn_rects or {}).items():
+                if rect.collidepoint(pos):
+                    self.ui_click_sound.play()
+                    self._selected_construction = label
+                    return f"construction_select_{label}"
 
         if selected_tab == "PRODUCTION" and not self._countrymenutarget:
             if self._production_blank_rect.collidepoint(pos):
@@ -2776,7 +2789,6 @@ class InGameUI:
 
 
         elif selected_tab == "CONSTRUCTION" and not self._countrymenutarget:
-           
             surface.blit(self.font.render("Select project", True, _C_TEXT_MUTED), 
                         (content_rect.x, content_rect.y + 26))
 
@@ -2785,16 +2797,31 @@ class InGameUI:
             gap = 12
             labels = ("Factory", "Infrastructure", "Port")
             
+            self._construction_btn_rects = {}
             for i, label in enumerate(labels):
                 btn_rect = pygame.Rect(content_rect.x, btn_y + i * (btn_h + gap), content_rect.width, btn_h)
+                self._construction_btn_rects[label.lower()] = btn_rect
+                is_selected = self._selected_construction == label.lower()
                 self._draw_glow_btn(
                     surface,
                     f"construction_{label.lower()}",
                     btn_rect,
                     True,
                     label,
+                    selected=is_selected,
                     mouse=mouse,
                 )
+            
+            
+            if self._selected_construction:
+                prompt_y = btn_y + len(labels) * (btn_h + gap) + 16
+                prompt_text = "now please right click a country to construct your selection"
+                prompt_surf = self.font_bold.render(prompt_text, True, _C_GOLD_BRIGHT)
+              
+                prompt_bg = pygame.Rect(content_rect.x, prompt_y - 4, content_rect.width, prompt_surf.get_height() + 8)
+                self._draw_vertical_gradient_rect(surface, prompt_bg, (28, 38, 20), (12, 18, 10), radius=4)
+                pygame.draw.rect(surface, _C_GOLD, prompt_bg, 1, border_radius=4)
+                surface.blit(prompt_surf, (content_rect.x + 8, prompt_y))
 
        
         if selected_tab == "TROOPS" and not self._countrymenutarget and self.active_left_tab != "COMBAT" and not self._selectedmapcountry:
