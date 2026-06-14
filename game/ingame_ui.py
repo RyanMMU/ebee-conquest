@@ -3583,7 +3583,7 @@ class InGameUI:
           left_rect.y + 32,
           left_rect.width - 28,
           self.small_font
-       )
+     )
       
        for label, value in rows:
            self._draw_domestic_info_row(
@@ -3595,6 +3595,24 @@ class InGameUI:
                left_rect.width - 28
             )
            y += 28
+           
+       # ===== EPIDEMIC STATE CLASSIFICATION (NEW) =====
+      state = "NORMAL 🟢"
+
+      if risk == "High":
+          state = "EPIDEMIC 🔴"
+      elif risk == "Medium":
+          state = "WATCH 🟠"
+
+      self._draw_text_fit(
+          surface,
+          f"STATE: {state}",
+          _C_GOLD_BRIGHT,
+          left_rect.x + 14,
+          y + 10,
+          left_rect.width - 28,
+          self.small_font
+        )
 
        # RIGHT PANEL
        self._draw_vertical_gradient_rect(surface, right_rect, (15, 24, 38), (8, 13, 22), radius=6)
