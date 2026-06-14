@@ -12,7 +12,77 @@ DATA_FILE = os.path.normpath(
 
 GAME_START_YEAR = 2020
 GAME_START_DATE = datetime.date(2020, 1, 1)
-DAYS_PER_TURN = 5
+DAYS_PER_TURN = 1
+TURNS_PER_YEAR = int(math.ceil(365 / max(1, DAYS_PER_TURN)))
+COVID_MIN_POPULATION = 1000
+COVID_DEFAULT_TRANSMISSION_RATE = 0.28
+COVID_DEFAULT_INFECTION_DAYS = 10.0
+COVID_MCO_TRANSMISSION_MODIFIER = 0.32
+COVID_HOSPITALISATION_RATE = 0.12
+COVID_BASE_MORTALITY_RATE = 0.8
+COVID_IMMUNITY_WANING_RATE = 1.0 / 150.0
+COVID_UNCONTROLLED_BETA_BOOST = 1.22
+COVID_BACKGROUND_IMPORTS_PER_100K = 7.0
+COVID_LOW_CASE_RESEED_SHARE = 0.0015
+COVID_DEFAULT_VACCINE_EFFECTIVENESS = 0.82
+COVID_DEFAULT_VACCINE_SEVERE_PROTECTION = 0.72
+COVID_ASEAN_FIRST_CASES = {
+    "thailand": (datetime.date(2020, 1, 13), 1),
+    "vietnam": (datetime.date(2020, 1, 23), 2),
+    "singapore": (datetime.date(2020, 1, 23), 1),
+    "malaysia": (datetime.date(2020, 1, 25), 3),
+    "cambodia": (datetime.date(2020, 1, 27), 1),
+    "philippines": (datetime.date(2020, 1, 30), 1),
+    "indonesia": (datetime.date(2020, 3, 2), 2),
+    "brunei": (datetime.date(2020, 3, 9), 1),
+    "myanmar": (datetime.date(2020, 3, 23), 2),
+    "laos": (datetime.date(2020, 3, 24), 2),
+}
+COVID_SRI_PETALING_CLUSTER_START = datetime.date(2020, 3, 10)
+COVID_SRI_PETALING_CLUSTER_END = datetime.date(2020, 3, 24)
+COVID_SRI_PETALING_DAILY_IMPORTS = {
+    "malaysia": 12,
+    "brunei": 3,
+    "singapore": 2,
+    "cambodia": 2,
+    "indonesia": 2,
+    "thailand": 1,
+    "philippines": 1,
+    "vietnam": 1,
+}
+COVID_RESPONSE_POLICIES = {
+    "mask_mandate": {
+        "label": "Mask Mandate",
+        "enabled_key": "mask_mandate_enabled",
+        "beta_modifier": 0.78,
+        "gamma_modifier": 1.0,
+        "economic_pressure": 0.03,
+        "public_unrest": 0.03,
+        "public_approval": -0.02,
+        "investor_confidence": -0.01,
+    },
+    "testing_program": {
+        "label": "Mass Testing",
+        "enabled_key": "testing_program_enabled",
+        "beta_modifier": 0.88,
+        "gamma_modifier": 1.18,
+        "economic_pressure": 0.05,
+        "public_unrest": -0.02,
+        "public_approval": 0.03,
+        "investor_confidence": -0.02,
+    },
+    "border_controls": {
+        "label": "Border Controls",
+        "enabled_key": "border_controls_enabled",
+        "beta_modifier": 0.92,
+        "gamma_modifier": 1.0,
+        "import_modifier": 0.35,
+        "economic_pressure": 0.09,
+        "public_unrest": 0.02,
+        "public_approval": 0.01,
+        "investor_confidence": -0.05,
+    },
+}
 MALAYSIA_COUNTRY_KEY = "malaysia"
 LEGISLATURE_SIDE_ORDER = {
     "government": 0,
@@ -43,6 +113,13 @@ def clamp(value, lower=0.0, upper=100.0):
 def safeint(value, default=0):
     try:
         return int(value)
+    except (TypeError, ValueError):
+        return default
+
+
+def safefloat(value, default=0.0):
+    try:
+        return float(value)
     except (TypeError, ValueError):
         return default
 
@@ -109,6 +186,418 @@ def turn_to_months_until_year(turnnumber, targetyear):
     target_day = max(0, (target - GAME_START_YEAR) * 365)
     remaining_days = max(0, target_day - current_day)
     return int(math.ceil(remaining_days / 30.0))
+
+
+def _lookup_economy_entry(npc_economies, countryid, countrydata):
+    if not isinstance(npc_economies, dict):
+        return None
+
+    candidates = (
+        countryid,
+        (countrydata or {}).get("country_id"),
+        (countrydata or {}).get("country_name"),
+    )
+    for candidate in candidates:
+        if candidate in npc_economies and isinstance(npc_economies[candidate], dict):
+            return npc_economies[candidate]
+
+    wanted = countrykey(countryid or (countrydata or {}).get("country_id") or (countrydata or {}).get("country_name"))
+    for economykey, economyentry in npc_economies.items():
+        if countrykey(economykey) == wanted and isinstance(economyentry, dict):
+            return economyentry
+    return None
+
+
+def _covid_country_key(countryid, countrydata):
+    return countrykey((countrydata or {}).get("country_id") or (countrydata or {}).get("country_name") or countryid)
+
+
+def _covid_first_case(countryid, countrydata):
+    return COVID_ASEAN_FIRST_CASES.get(_covid_country_key(countryid, countrydata))
+
+
+def _parse_iso_date(value):
+    try:
+        return datetime.date.fromisoformat(str(value)[:10])
+    except (TypeError, ValueError):
+        return None
+
+
+def _active_covid_response_count(countrydata):
+    response_count = 1 if countrydata.get("mco_enabled", False) else 0
+    for policy in COVID_RESPONSE_POLICIES.values():
+        if countrydata.get(policy["enabled_key"], False):
+            response_count += 1
+    if countrydata.get("covid_vaccine_rollout_active", False):
+        response_count += 1
+    return response_count
+
+
+def _vaccine_rollout_started(countrydata, currentdate):
+    if not countrydata.get("covid_vaccine_rollout_active", False):
+        return False
+    startdate = _parse_iso_date(countrydata.get("covid_vaccine_rollout_start_date"))
+    if startdate is None:
+        return True
+    return currentdate is not None and currentdate >= startdate
+
+
+def _apply_covid_vaccinations(countrydata, population, susceptible, recovered, currentdate):
+    if not _vaccine_rollout_started(countrydata, currentdate):
+        countrydata["covid_daily_vaccinations"] = 0
+        return susceptible, recovered
+
+    daily_capacity = max(0.0, safefloat(countrydata.get("covid_vaccine_daily_capacity", 0), 0.0))
+    if daily_capacity <= 0 or susceptible <= 0:
+        countrydata["covid_daily_vaccinations"] = 0
+        return susceptible, recovered
+
+    procurement = clamp(countrydata.get("covid_vaccine_procurement", 50)) / 100.0
+    public_trust = clamp(countrydata.get("covid_vaccine_public_trust", 60)) / 100.0
+    effectiveness = max(0.0, min(1.0, safefloat(countrydata.get("covid_vaccine_effectiveness", COVID_DEFAULT_VACCINE_EFFECTIVENESS), COVID_DEFAULT_VACCINE_EFFECTIVENESS)))
+    capacity_modifier = 0.55 + procurement * 0.65
+    uptake_modifier = 0.45 + public_trust * 0.70
+    administered = min(susceptible, daily_capacity * capacity_modifier * uptake_modifier)
+    protected = min(susceptible, administered * effectiveness)
+    susceptible = max(0.0, susceptible - protected)
+    recovered = min(population, recovered + protected)
+    countrydata["covid_vaccinated"] = int(round(min(population, safefloat(countrydata.get("covid_vaccinated", 0), 0.0) + administered)))
+    countrydata["covid_daily_vaccinations"] = int(round(administered))
+    return susceptible, recovered
+
+
+def _seed_covid_if_needed(countryid, countrydata, currentdate, population):
+    first_case = _covid_first_case(countryid, countrydata)
+    has_existing_model = any(
+        countrydata.get(key) is not None
+        for key in ("covid_susceptible", "covid_infectious", "covid_recovered")
+    )
+    if first_case is None:
+        if not has_existing_model and countrydata.get("covid_cases") is None:
+            countrydata["covid_cases"] = 0
+            countrydata["covid_infectious"] = 0
+            countrydata["covid_recovered"] = 0
+            countrydata["covid_susceptible"] = int(round(population))
+        return
+
+    first_date, imported_cases = first_case
+    countrydata["covid_first_case_date"] = first_date.isoformat()
+    if currentdate < first_date and not countrydata.get("_covid_seeded"):
+        countrydata["covid_cases"] = 0
+        countrydata["covid_infectious"] = 0
+        countrydata["covid_recovered"] = 0
+        countrydata["covid_susceptible"] = int(round(population))
+        countrydata["active_epidemic"] = "None"
+        return
+
+    if currentdate >= first_date and not countrydata.get("_covid_seeded"):
+        infectious = max(float(imported_cases), safefloat(countrydata.get("covid_cases", 0), 0.0))
+        countrydata["covid_infectious"] = int(round(infectious))
+        countrydata["covid_cases"] = int(round(infectious))
+        countrydata["covid_recovered"] = max(0, safeint(countrydata.get("covid_recovered", 0), 0))
+        countrydata["covid_susceptible"] = int(round(max(0.0, population - infectious - countrydata["covid_recovered"])))
+        countrydata["_covid_seeded"] = True
+        countrydata["covid_momentum_note"] = f"First imported cases recorded on {first_date.isoformat()}."
+
+
+def _estimate_covid_population(countryid, countrydata, is_player=False, player_metrics=None, npc_economies=None):
+    population = 0
+    if is_player and isinstance(player_metrics, dict):
+        population = safeint(player_metrics.get("population", 0), 0)
+    if population <= 0:
+        economyentry = _lookup_economy_entry(npc_economies, countryid, countrydata)
+        if economyentry:
+            population = safeint(economyentry.get("population", 0), 0)
+    if population <= 0:
+        population = safeint(countrydata.get("covid_population", countrydata.get("population", COVID_MIN_POPULATION)), COVID_MIN_POPULATION)
+
+    if countrydata.get("covid_susceptible") is not None:
+        susceptible = max(0.0, safefloat(countrydata.get("covid_susceptible", 0), 0.0))
+        current_cases = max(0.0, safefloat(countrydata.get("covid_infectious", countrydata.get("covid_cases", 0)), 0.0))
+        recovered = max(0.0, safefloat(countrydata.get("covid_recovered", 0), 0.0))
+        minimum_population = susceptible + current_cases + recovered
+    else:
+        current_cases = max(0.0, safefloat(countrydata.get("covid_infectious", countrydata.get("covid_cases", 0)), 0.0))
+        recovered = max(0.0, safefloat(countrydata.get("covid_recovered", 0), 0.0))
+        minimum_population = current_cases + recovered + 100.0
+
+    return max(float(population), minimum_population, float(COVID_MIN_POPULATION))
+
+
+def _normalise_covid_compartments(countrydata, population):
+    infectious = max(0.0, safefloat(countrydata.get("covid_infectious", countrydata.get("covid_cases", 0)), 0.0))
+    infectious = min(infectious, population)
+    recovered = max(0.0, safefloat(countrydata.get("covid_recovered", 0), 0.0))
+    recovered = min(recovered, max(0.0, population - infectious))
+
+    if countrydata.get("covid_susceptible") is None:
+        susceptible = max(0.0, population - infectious - recovered)
+    else:
+        susceptible = max(0.0, safefloat(countrydata.get("covid_susceptible", 0), 0.0))
+        total = susceptible + infectious + recovered
+        if total < population:
+            susceptible += population - total
+        elif total > population:
+            overflow = total - population
+            susceptible = max(0.0, susceptible - overflow)
+            total = susceptible + infectious + recovered
+            if total > population and total > 0:
+                scale = population / total
+                susceptible *= scale
+                infectious *= scale
+                recovered *= scale
+
+    return susceptible, infectious, recovered
+
+
+def _covid_calendar_beta_modifier(currentdate):
+    if currentdate is None:
+        return 1.0
+    if currentdate < datetime.date(2020, 3, 1):
+        return 0.35
+    if currentdate < COVID_SRI_PETALING_CLUSTER_START:
+        return 0.70
+    if currentdate <= COVID_SRI_PETALING_CLUSTER_END:
+        return 1.15
+    return 1.0
+
+
+def _covid_transmission_rates(countrydata, currentdate=None):
+    beta = max(0.0, safefloat(countrydata.get("covid_beta", COVID_DEFAULT_TRANSMISSION_RATE), COVID_DEFAULT_TRANSMISSION_RATE))
+    infection_days = max(1.0, safefloat(countrydata.get("covid_infection_duration_days", COVID_DEFAULT_INFECTION_DAYS), COVID_DEFAULT_INFECTION_DAYS))
+    gamma = 1.0 / infection_days
+    beta *= _covid_calendar_beta_modifier(currentdate)
+
+    state_capacity = clamp(countrydata.get("state_capacity", 50)) / 100.0
+    unrest = clamp(countrydata.get("public_unrest", 25)) / 100.0
+    compliance_modifier = 1.0 + max(0.0, unrest - 0.35) * 0.20 - max(0.0, state_capacity - 0.50) * 0.10
+
+    if countrydata.get("mco_enabled", False):
+        mco_modifier = safefloat(countrydata.get("mco_beta_modifier", COVID_MCO_TRANSMISSION_MODIFIER), COVID_MCO_TRANSMISSION_MODIFIER)
+        beta *= max(0.05, mco_modifier)
+        beta *= max(0.75, 1.0 - state_capacity * 0.18)
+    else:
+        beta *= max(0.65, compliance_modifier)
+        if currentdate is not None and currentdate >= datetime.date(2020, 3, 1) and _active_covid_response_count(countrydata) == 0:
+            beta *= COVID_UNCONTROLLED_BETA_BOOST
+        if currentdate is not None and currentdate >= datetime.date(2020, 4, 1):
+            pressure_boost = max(0.0, clamp(countrydata.get("economic_pressure", 45)) - 55.0) * 0.004
+            unrest_boost = max(0.0, clamp(countrydata.get("public_unrest", 25)) - 45.0) * 0.003
+            beta *= 1.0 + min(0.25, pressure_boost + unrest_boost)
+
+    for policy in COVID_RESPONSE_POLICIES.values():
+        if countrydata.get(policy["enabled_key"], False):
+            beta *= max(0.05, safefloat(policy.get("beta_modifier", 1.0), 1.0))
+            gamma *= max(0.05, safefloat(policy.get("gamma_modifier", 1.0), 1.0))
+
+    population = max(1.0, safefloat(countrydata.get("covid_population", COVID_MIN_POPULATION), COVID_MIN_POPULATION))
+    vaccinated_share = max(0.0, min(1.0, safefloat(countrydata.get("covid_vaccinated", 0), 0.0) / population))
+    if vaccinated_share > 0:
+        beta *= max(0.45, 1.0 - vaccinated_share * 0.52)
+
+    beta = max(0.0, beta)
+    return beta, gamma, beta / gamma if gamma > 0 else 0.0
+
+
+def _covid_daily_import_pressure(countryid, countrydata, currentdate):
+    if currentdate is None or not countrydata.get("_covid_seeded"):
+        return 0.0
+    imports = 0.0
+    if COVID_SRI_PETALING_CLUSTER_START <= currentdate <= COVID_SRI_PETALING_CLUSTER_END:
+        imports += float(COVID_SRI_PETALING_DAILY_IMPORTS.get(_covid_country_key(countryid, countrydata), 0))
+        if imports > 0:
+            countrydata["covid_momentum_note"] = "Sri Petaling-linked regional seeding is increasing imported infections."
+
+    if currentdate >= datetime.date(2020, 4, 1):
+        population = max(1.0, safefloat(countrydata.get("covid_population", COVID_MIN_POPULATION), COVID_MIN_POPULATION))
+        active_cases = max(0.0, safefloat(countrydata.get("covid_infectious", countrydata.get("covid_cases", 0)), 0.0))
+        response_count = _active_covid_response_count(countrydata)
+        background = population / 100000.0 * COVID_BACKGROUND_IMPORTS_PER_100K
+        if response_count == 0:
+            background *= 1.9
+        elif response_count == 1:
+            background *= 0.85
+        else:
+            background *= 0.35
+        if active_cases < population * COVID_LOW_CASE_RESEED_SHARE:
+            background += max(0.0, population * COVID_LOW_CASE_RESEED_SHARE - active_cases) * 0.08
+        imports += background
+
+    if imports <= 0:
+        return 0.0
+    border_policy = COVID_RESPONSE_POLICIES["border_controls"]
+    if countrydata.get(border_policy["enabled_key"], False):
+        imports *= safefloat(border_policy.get("import_modifier", 1.0), 1.0)
+    elif currentdate >= datetime.date(2020, 4, 1):
+        countrydata["covid_momentum_note"] = "Uncontrolled community spread is reseeding new chains of transmission."
+    return imports
+
+
+def _advance_country_covid(countryid, countrydata, currentdate=None, is_player=False, player_metrics=None, npc_economies=None):
+    population = _estimate_covid_population(countryid, countrydata, is_player, player_metrics, npc_economies)
+    _seed_covid_if_needed(countryid, countrydata, currentdate or GAME_START_DATE, population)
+    susceptible, infectious, recovered = _normalise_covid_compartments(countrydata, population)
+    beta, gamma, r0 = _covid_transmission_rates(countrydata, currentdate)
+
+    total_new_infections = 0.0
+    total_recoveries = 0.0
+    waned_immunity = min(recovered, recovered * COVID_IMMUNITY_WANING_RATE * max(1, DAYS_PER_TURN))
+    if waned_immunity > 0:
+        recovered = max(0.0, recovered - waned_immunity)
+        susceptible = min(population, susceptible + waned_immunity)
+    susceptible, recovered = _apply_covid_vaccinations(countrydata, population, susceptible, recovered, currentdate)
+    imported_infections = min(susceptible, _covid_daily_import_pressure(countryid, countrydata, currentdate))
+    if imported_infections > 0:
+        susceptible = max(0.0, susceptible - imported_infections)
+        infectious += imported_infections
+        total_new_infections += imported_infections
+
+    for _ in range(max(1, safeint(DAYS_PER_TURN, 1))):
+        if population <= 0 or infectious <= 0:
+            break
+        new_infections = min(susceptible, beta * susceptible * infectious / population)
+        recoveries = min(infectious, gamma * infectious)
+        susceptible = max(0.0, susceptible - new_infections)
+        infectious = max(0.0, infectious + new_infections - recoveries)
+        recovered = min(population, recovered + recoveries)
+        total_new_infections += new_infections
+        total_recoveries += recoveries
+
+    vaccinated_share = max(0.0, min(1.0, safefloat(countrydata.get("covid_vaccinated", 0), 0.0) / max(1.0, population)))
+    severe_protection = max(0.0, min(1.0, safefloat(
+        countrydata.get("covid_vaccine_severe_protection", COVID_DEFAULT_VACCINE_SEVERE_PROTECTION),
+        COVID_DEFAULT_VACCINE_SEVERE_PROTECTION,
+    )))
+    adjusted_hospitalisation_rate = COVID_HOSPITALISATION_RATE * max(0.30, 1.0 - vaccinated_share * severe_protection)
+    hospitalisation = int(round(infectious * adjusted_hospitalisation_rate))
+    healthcare_capacity_score = clamp(
+        clamp(countrydata.get("state_capacity", 50)) * 0.75
+        + clamp(countrydata.get("government_stability", 50)) * 0.25
+    )
+    hospital_capacity = max(20.0, population * 0.004 * max(0.40, healthcare_capacity_score / 50.0))
+    healthcare_load_pct = hospitalisation / hospital_capacity * 100.0
+    mortality_rate = min(6.0, COVID_BASE_MORTALITY_RATE * max(0.35, 1.0 - vaccinated_share * severe_protection) + max(0.0, healthcare_load_pct - 100.0) * 0.02)
+    daily_deaths = total_recoveries * mortality_rate / 100.0
+
+    countrydata["covid_population"] = int(round(population))
+    countrydata["covid_susceptible"] = int(round(susceptible))
+    countrydata["covid_infectious"] = int(round(infectious))
+    countrydata["covid_recovered"] = int(round(recovered))
+    countrydata["covid_cases"] = int(round(infectious))
+    countrydata["covid_new_cases"] = int(round(total_new_infections))
+    countrydata["covid_daily_recoveries"] = int(round(total_recoveries))
+    countrydata["covid_waning_immunity"] = int(round(waned_immunity))
+    countrydata["covid_deaths"] = round(safefloat(countrydata.get("covid_deaths", 0), 0.0) + daily_deaths, 2)
+    countrydata["covid_effective_beta"] = round(beta, 4)
+    countrydata["covid_gamma"] = round(gamma, 4)
+    countrydata["covid_r0"] = round(r0, 2)
+    countrydata["hospitalisation"] = hospitalisation
+    countrydata["mortality"] = round(mortality_rate, 2)
+    countrydata["covid_healthcare_load_pct"] = round(healthcare_load_pct, 1)
+
+    if infectious < 1:
+        countrydata["active_epidemic"] = "None"
+    elif r0 < 1 and infectious < 200:
+        countrydata["active_epidemic"] = "Contained"
+    elif infectious > 500 or healthcare_load_pct >= 100:
+        countrydata["active_epidemic"] = "Ongoing Outbreak"
+    elif infectious > 200:
+        countrydata["active_epidemic"] = "Localized Cases"
+    else:
+        countrydata["active_epidemic"] = "Imported Cases"
+
+    _apply_covid_domestic_debuffs(countrydata, population, infectious, healthcare_load_pct)
+    _apply_mco_domestic_debuffs(countrydata)
+
+
+def _apply_covid_domestic_debuffs(countrydata, population, infectious, healthcare_load_pct):
+    infection_share = infectious / max(1.0, population)
+    if infectious <= 0:
+        return
+
+    load_pressure = max(0.0, healthcare_load_pct - 60.0) / 100.0
+    epidemic_pressure = min(1.25, infection_share * 22.0 + load_pressure * 0.28)
+    if infectious > 120 or healthcare_load_pct > 55:
+        countrydata["economic_pressure"] = clamp(countrydata.get("economic_pressure", 45) + epidemic_pressure)
+        countrydata["public_approval"] = clamp(countrydata.get("public_approval", 50) - min(0.48, infection_share * 8.0 + load_pressure * 0.13))
+        countrydata["investor_confidence"] = clamp(countrydata.get("investor_confidence", 50) - min(0.42, infection_share * 9.0 + load_pressure * 0.11))
+        countrydata["public_unrest"] = clamp(countrydata.get("public_unrest", 25) + min(0.42, infection_share * 7.0 + load_pressure * 0.12))
+    if infectious > 300 or healthcare_load_pct >= 85:
+        stability_loss = min(0.24, infection_share * 2.8 + max(0.0, healthcare_load_pct - 85.0) * 0.0008)
+        countrydata["government_stability"] = clamp(countrydata.get("government_stability", 50) - stability_loss)
+        countrydata["covid_economy_drag"] = int(min(25, max(4, infectious / 95.0 + max(0.0, healthcare_load_pct - 75.0) / 18.0)))
+    else:
+        countrydata["covid_economy_drag"] = 0
+
+
+def _apply_mco_domestic_debuffs(countrydata):
+    if not countrydata.get("mco_enabled", False):
+        countrydata["mco_turns_active"] = 0
+    else:
+        countrydata["mco_turns_active"] = safeint(countrydata.get("mco_turns_active", 0), 0) + DAYS_PER_TURN
+        countrydata["economic_pressure"] = clamp(countrydata.get("economic_pressure", 45) + 0.25 * DAYS_PER_TURN)
+        countrydata["public_unrest"] = clamp(countrydata.get("public_unrest", 25) + 0.08 * DAYS_PER_TURN)
+        countrydata["public_approval"] = clamp(countrydata.get("public_approval", 50) - 0.06 * DAYS_PER_TURN)
+        countrydata["investor_confidence"] = clamp(countrydata.get("investor_confidence", 50) - 0.08 * DAYS_PER_TURN)
+
+    for policy in COVID_RESPONSE_POLICIES.values():
+        if not countrydata.get(policy["enabled_key"], False):
+            continue
+        countrydata["economic_pressure"] = clamp(
+            countrydata.get("economic_pressure", 45) + safefloat(policy.get("economic_pressure", 0), 0.0) * DAYS_PER_TURN
+        )
+        countrydata["public_unrest"] = clamp(
+            countrydata.get("public_unrest", 25) + safefloat(policy.get("public_unrest", 0), 0.0) * DAYS_PER_TURN
+        )
+        countrydata["public_approval"] = clamp(
+            countrydata.get("public_approval", 50) + safefloat(policy.get("public_approval", 0), 0.0) * DAYS_PER_TURN
+        )
+        countrydata["investor_confidence"] = clamp(
+            countrydata.get("investor_confidence", 50) + safefloat(policy.get("investor_confidence", 0), 0.0) * DAYS_PER_TURN
+        )
+
+
+def toggle_mco(countrydata):
+    if not isinstance(countrydata, dict):
+        return False
+
+    enabled = not bool(countrydata.get("mco_enabled", False))
+    countrydata["mco_enabled"] = enabled
+    countrydata["mco_status"] = "Active" if enabled else "Lifted"
+    countrydata["mco_toggle_count"] = safeint(countrydata.get("mco_toggle_count", 0), 0) + 1
+    if enabled:
+        countrydata["economic_pressure"] = clamp(countrydata.get("economic_pressure", 45) + 1.0)
+        countrydata["public_unrest"] = clamp(countrydata.get("public_unrest", 25) + 0.4)
+        countrydata["public_approval"] = clamp(countrydata.get("public_approval", 50) - 0.5)
+    else:
+        countrydata["public_unrest"] = clamp(countrydata.get("public_unrest", 25) - 0.4)
+    return enabled
+
+
+def get_covid_policy_definition(policykey):
+    return COVID_RESPONSE_POLICIES.get(countrykey(policykey))
+
+
+def toggle_covid_policy(countrydata, policykey):
+    if not isinstance(countrydata, dict):
+        return False
+    policy = get_covid_policy_definition(policykey)
+    if not policy:
+        return False
+
+    enabled_key = policy["enabled_key"]
+    enabled = not bool(countrydata.get(enabled_key, False))
+    countrydata[enabled_key] = enabled
+    countrydata["covid_policy_toggle_count"] = safeint(countrydata.get("covid_policy_toggle_count", 0), 0) + 1
+    if enabled:
+        countrydata["economic_pressure"] = clamp(countrydata.get("economic_pressure", 45) + 0.4)
+        if policykey == "testing_program":
+            countrydata["public_approval"] = clamp(countrydata.get("public_approval", 50) + 0.3)
+        elif policykey == "border_controls":
+            countrydata["investor_confidence"] = clamp(countrydata.get("investor_confidence", 50) - 0.5)
+        elif policykey == "mask_mandate":
+            countrydata["public_unrest"] = clamp(countrydata.get("public_unrest", 25) + 0.2)
+    return enabled
 
 
 def party_seats(party):
@@ -924,10 +1413,10 @@ def _resolve_malaysia_sheraton(countrydata, events):
 def _advance_malaysia_covid(countrydata, currentdate):
     if currentdate < datetime.date(2020, 3, 15):
         return
-    countrydata["covid_crisis_level"] = clamp(countrydata.get("covid_crisis_level", 0) + 5.5)
-    countrydata["economic_pressure"] = clamp(countrydata.get("economic_pressure", 45) + 1.8)
+    countrydata["covid_crisis_level"] = clamp(countrydata.get("covid_crisis_level", 0) + 1.1 * DAYS_PER_TURN)
+    countrydata["economic_pressure"] = clamp(countrydata.get("economic_pressure", 45) + 0.36 * DAYS_PER_TURN)
     if clamp(countrydata.get("covid_crisis_level", 0)) > 35:
-        countrydata["public_unrest"] = clamp(countrydata.get("public_unrest", 25) + 0.5)
+        countrydata["public_unrest"] = clamp(countrydata.get("public_unrest", 25) + 0.1 * DAYS_PER_TURN)
 
 
 def _maybe_malaysia_budget_test(countrydata, events, currentdate, currentturnnumber):
@@ -1064,7 +1553,7 @@ def _maybe_add_crisis(countrydata, events, currentyear):
                 "description": f"Military pressure is destabilizing {countryname}'s civilian government.",
             })
 
-    if turn_to_months_until_year((currentyear - GAME_START_YEAR) * 73 + 1, countrydata.get("next_election_year")) <= 12:
+    if turn_to_months_until_year((currentyear - GAME_START_YEAR) * TURNS_PER_YEAR + 1, countrydata.get("next_election_year")) <= 12:
         crisisid = f"election_warning_{countrydata.get('next_election_year')}"
         if crisisid not in emitted:
             emitted.add(crisisid)
@@ -1088,36 +1577,24 @@ def advance_domestic_affairs_turn(
     countriesatwarset=None,
 ):
     events = []
-    effects = {"player_stability_delta": 0.0, "player_pp_delta": 0, "player_ap_delta": 0}
+    effects = {"player_stability_delta": 0.0, "player_pp_delta": 0, "player_ap_delta": 0, "player_gold_delta": 0}
     currentyear = turn_to_year(currentturnnumber)
     countriesatwarset = set(countriesatwarset or ())
     playerkey = countrykey(playercountry)
+    currentdate = turn_to_date(currentturnnumber)
 
     for countryid, countrydata in (state or {}).items():
         countrydata["_domestic_turns_seen"] = safeint(countrydata.get("_domestic_turns_seen", 0), 0) + 1
-        
-        covid_cases = safeint(
-            countrydata.get("covid_cases", 100),
-            100
+        is_player = playerkey and countrykey(countryid) == playerkey
+        _advance_country_covid(
+            countryid,
+            countrydata,
+            currentdate=currentdate,
+            is_player=is_player,
+            player_metrics=player_metrics if is_player else None,
+            npc_economies=npc_economies,
         )
 
-        if countrydata.get("mco_enabled", False):
-            covid_cases = max(0, covid_cases - 15)
-        else:
-            covid_cases += 15
-
-        countrydata["covid_cases"] = covid_cases
-        countrydata["hospitalisation"] = int(covid_cases * 0.12)
-        countrydata["mortality"] = round(covid_cases * 0.002, 2)
-
-        if covid_cases > 500:
-            countrydata["active_epidemic"] = "Ongoing Outbreak"
-        elif covid_cases > 200:
-            countrydata["active_epidemic"] = "Localized Cases"
-        else:
-            countrydata["active_epidemic"] = "None"
-            
-        is_player = playerkey and countrykey(countryid) == playerkey
         atwar = countryid in countriesatwarset or countrydata.get("country_name") in countriesatwarset
         mood = build_political_mood(countrydata, player_metrics if is_player else None, atwar=atwar)
 
@@ -1157,6 +1634,24 @@ def advance_domestic_affairs_turn(
             if investor_confidence > 70:
                 effects["player_ap_delta"] += 1
             elif investor_confidence < 35:
+                effects["player_ap_delta"] -= 1
+            healthcare_load = safefloat(countrydata.get("covid_healthcare_load_pct", 0), 0.0)
+            active_cases = safeint(countrydata.get("covid_cases", 0), 0)
+            economy_drag = safeint(countrydata.get("covid_economy_drag", 0), 0)
+            if healthcare_load >= 100 or active_cases > 500:
+                effects["player_stability_delta"] -= 0.15
+                effects["player_ap_delta"] -= 1
+                effects["player_pp_delta"] -= 1
+            elif active_cases > 200:
+                effects["player_stability_delta"] -= 0.05
+            if economy_drag > 0:
+                effects["player_gold_delta"] -= economy_drag
+            if countrydata.get("mco_enabled", False):
+                effects["player_stability_delta"] -= 0.1
+                effects["player_ap_delta"] -= 1
+            if countrydata.get("testing_program_enabled", False):
+                effects["player_ap_delta"] -= 1
+            if countrydata.get("border_controls_enabled", False):
                 effects["player_ap_delta"] -= 1
 
     return {"events": events, "effects": effects}
@@ -1273,9 +1768,15 @@ def _economy_effects(countrydata):
     
 def _health_effects(countrydata):
     current_cases = safeint(
-        countrydata.get("covid_cases", 100),
-        100
+        countrydata.get("covid_cases", 0),
+        0
     )
+    susceptible = safeint(countrydata.get("covid_susceptible", 0), 0)
+    recovered = safeint(countrydata.get("covid_recovered", 0), 0)
+    new_cases = safeint(countrydata.get("covid_new_cases", 0), 0)
+    r0 = safefloat(countrydata.get("covid_r0", 0), 0.0)
+    beta = safefloat(countrydata.get("covid_effective_beta", countrydata.get("covid_beta", 0)), 0.0)
+    gamma = safefloat(countrydata.get("covid_gamma", 0), 0.0)
 
     hospitalisation = safeint(
         countrydata.get("hospitalisation", 0),
@@ -1298,9 +1799,13 @@ def _health_effects(countrydata):
         )
     )
 
-    if current_cases > 500:
+    healthcare_load_pct = safefloat(countrydata.get("covid_healthcare_load_pct", 0), 0.0)
+    vaccinated = safeint(countrydata.get("covid_vaccinated", 0), 0)
+    population = max(1, safeint(countrydata.get("covid_population", 0), 0))
+
+    if healthcare_load_pct >= 100 or current_cases > 500:
         risk_level = "High"
-    elif current_cases > 200:
+    elif healthcare_load_pct >= 70 or current_cases > 200:
         risk_level = "Medium"
     else:
         risk_level = "Low"
@@ -1308,14 +1813,33 @@ def _health_effects(countrydata):
     return {
         "active_epidemic": active_epidemic,
         "current_cases": current_cases,
+        "new_cases": new_cases,
+        "susceptible": susceptible,
+        "recovered": recovered,
+        "r0": r0,
+        "beta": beta,
+        "gamma": gamma,
         "mortality": mortality,
         "hospitalisation": hospitalisation,
         "risk_level": risk_level,
         "healthcare_capacity": healthcare_capacity,
+        "healthcare_load_pct": healthcare_load_pct,
+        "economy_drag": safeint(countrydata.get("covid_economy_drag", 0), 0),
+        "vaccinated": vaccinated,
+        "vaccinated_share": vaccinated / population * 100.0,
+        "daily_vaccinations": safeint(countrydata.get("covid_daily_vaccinations", 0), 0),
+        "vaccine_rollout_active": bool(countrydata.get("covid_vaccine_rollout_active", False)),
+        "vaccine_public_trust": clamp(countrydata.get("covid_vaccine_public_trust", 0)),
+        "vaccine_procurement": clamp(countrydata.get("covid_vaccine_procurement", 0)),
+        "momentum_note": countrydata.get("covid_momentum_note", ""),
+        "first_case_date": countrydata.get("covid_first_case_date", ""),
+        "mask_mandate_enabled": bool(countrydata.get("mask_mandate_enabled", False)),
+        "testing_program_enabled": bool(countrydata.get("testing_program_enabled", False)),
+        "border_controls_enabled": bool(countrydata.get("border_controls_enabled", False)),
         "healthcare_load": (
             "Overloaded"
-            if hospitalisation > 500
-            else "Normal"
+            if healthcare_load_pct >= 100
+            else ("Strained" if healthcare_load_pct >= 70 else "Normal")
         ),
     }
     

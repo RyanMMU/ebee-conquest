@@ -395,6 +395,8 @@ class InGameUI:
     actionstartfocus = "startfocus"
     actiondomesticaffairs = "domesticaffairs"
     actiontogglemco = "togglemco"
+    actiontogglecovidpolicy = "togglecovidpolicy"
+    actiontogglecovidmap = "togglecovidmap"
     actionpausemenu = "pausemenu"
     actionquitgame = "quitgame"
     actionweapon1 = "weapon_1"
@@ -467,6 +469,7 @@ class InGameUI:
         self._troopbadgelist = []
         self._hovertext = None
         self._hovermousepos = (0, 0)
+        self.covidcasemapenabled = False
         self.focusview = FocusTreeView()
         self.researchview = ResearchTreeView()
         self.pausemenuopen = False
@@ -490,9 +493,11 @@ class InGameUI:
         self._policy_popup_rect = pygame.Rect(0, 0, 10, 10)
         self._policy_focus_slot_rect = pygame.Rect(0, 0, 10, 10)
         self._policy_dropdown_progress = 0.0
+        self._covid_policy_button_rects = {}
+        self._covid_case_map_rect = pygame.Rect(0, 0, 10, 10)
         self._notificationcount = 0
         self._startdate = date(2020, 1, 1)
-        self._daysperturn = 5
+        self._daysperturn = 1
         
 
        
@@ -1770,6 +1775,7 @@ class InGameUI:
         selected_country_stats=None,
         systemstatus=None,
         notifications=None,
+        covidcasemapenabled=False,
     ):
         previous_notification_count = self._notificationcount
         previous_turn = self._last_turn_seen
@@ -1791,6 +1797,7 @@ class InGameUI:
         self._troopbadgelist = list(troopbadgelist or [])
         self._hovertext = hovertext
         self._hovermousepos = tuple(mouseposition or (0, 0))
+        self.covidcasemapenabled = bool(covidcasemapenabled)
         if focusview is not None:
             self.focusview.setdata(focusview)
         if researchdata is not None:
@@ -1953,12 +1960,10 @@ class InGameUI:
                     if tab_rect.collidepoint(event.pos):
                         self._domestic_active_tab = tab_name
                         return None
-                if (
-                    self._domestic_active_tab == "Health"
-                    and hasattr(self, "_mco_button_rect")
-                    and self._mco_button_rect.collidepoint(event.pos)
-                ):
-                    return self.actiontogglemco
+                if self._domestic_active_tab == "Health":
+                    for action, rect in (self._covid_policy_button_rects or {}).items():
+                        if rect.collidepoint(event.pos):
+                            return action
                 segment = self._get_domestic_segment_at_pos(event.pos)
                 if segment is not None:
                     self._domestic_selected_party_id = segment.get("party_id")
@@ -2176,14 +2181,11 @@ class InGameUI:
                     self.production_popup_open = False 
                 return None
             
-        if (
-            self.domesticaffairsopen
-            and self._domestic_active_tab == "Health"
-            and hasattr(self, "_mco_button_rect")
-            and self._mco_button_rect.collidepoint(pos)
-        ):
-            self.ui_click_sound.play()
-            return self.actiontogglemco
+        if self.domesticaffairsopen and self._domestic_active_tab == "Health":
+            for action, rect in (self._covid_policy_button_rects or {}).items():
+                if rect.collidepoint(pos):
+                    self.ui_click_sound.play()
+                    return action
 
       
         if self._endturn_rect.collidepoint(pos):
@@ -2523,25 +2525,32 @@ class InGameUI:
         if self._hovertext:
             tooltip_lines = []
             if isinstance(self._hovertext, dict):
-                name = self._hovertext.get("name", "unknown")
-                provinceid = self._hovertext.get("provinceid", "unknown")
-                population = self._hovertext.get("population", "unknown")
-                country = self._hovertext.get("country", "unknown")
-                terrain = self._hovertext.get("terrain", "unknown")
-                province_count = self._hovertext.get("province_count", "unknown")
-                vp = self._hovertext.get("victory_points", 0)
-                
-                tooltip_lines = [
-                    f"State: {name}",
-                    f"Province: {provinceid}",
-                    f"Population: {population}",
-                    f"Country: {country}",
-                    f"Terrain Type: {terrain}",
-                    f"Number of states: {province_count}",
-                ]
-                
-                if vp > 0:
-                    tooltip_lines.append(f"Victory Points: {vp}")
+                if self._hovertext.get("tooltip_lines"):
+                    tooltip_lines = [str(line) for line in self._hovertext.get("tooltip_lines", ())]
+                else:
+                    name = self._hovertext.get("name", "unknown")
+                    provinceid = self._hovertext.get("provinceid", "unknown")
+                    population = self._hovertext.get("population", "unknown")
+                    country = self._hovertext.get("country", "unknown")
+                    terrain = self._hovertext.get("terrain", "unknown")
+                    province_count = self._hovertext.get("province_count", "unknown")
+                    vp = self._hovertext.get("victory_points", 0)
+
+                    tooltip_lines = [
+                        f"State: {name}",
+                        f"Province: {provinceid}",
+                        f"Population: {population}",
+                        f"Country: {country}",
+                        f"Terrain Type: {terrain}",
+                        f"Number of states: {province_count}",
+                    ]
+
+                    if vp > 0:
+                        tooltip_lines.append(f"Victory Points: {vp}")
+                    if "covid_cases" in self._hovertext:
+                        tooltip_lines.append(f"COVID Cases: {self._hovertext.get('covid_cases', 0):,}")
+                        tooltip_lines.append(f"COVID R0: {float(self._hovertext.get('covid_r0', 0) or 0):.2f}")
+                        tooltip_lines.append(f"Healthcare Load: {float(self._hovertext.get('covid_load', 0) or 0):.1f}%")
                 
             else:
                 tooltip_lines = [str(self._hovertext)]
@@ -3107,11 +3116,12 @@ class InGameUI:
 
     def _draw_value_bar(self, surface, rect, label, value, accent=_C_GOLD, suffix="%"):
         try:
-            numeric = max(0.0, min(100.0, float(value or 0.0)))
+            raw_numeric = max(0.0, float(value or 0.0))
         except (TypeError, ValueError):
-            numeric = 0.0
+            raw_numeric = 0.0
+        numeric = max(0.0, min(100.0, raw_numeric))
         self._draw_text_fit(surface, label, _C_TEXT_MUTED, rect.x, rect.y, rect.width - 64, self.small_font_bold)
-        value_text = f"{numeric:.0f}{suffix}"
+        value_text = f"{raw_numeric:.0f}{suffix}"
         value_surface = self.small_font_bold.render(value_text, True, _C_TEXT)
         surface.blit(value_surface, (rect.right - value_surface.get_width(), rect.y))
         bar_rect = pygame.Rect(rect.x, rect.y + 18, rect.width, 9)
@@ -3559,6 +3569,67 @@ class InGameUI:
             surface.blit(text, (tooltip_rect.x + padding, draw_y))
             draw_y += text.get_height()
 
+    def _draw_hover_infobox(self, surface, mouse, lines, border=(126, 102, 58)):
+        if not lines:
+            return
+        padding = 10
+        text_surfs = []
+        for index, line in enumerate(lines):
+            font = self.small_font_bold if index == 0 else self.small_font
+            color = _C_GOLD_BRIGHT if index == 0 else (_C_TEXT if index <= 2 else _C_TEXT_MUTED)
+            text_surfs.append(font.render(str(line), True, color))
+        width = max(text.get_width() for text in text_surfs) + padding * 2
+        height = sum(text.get_height() for text in text_surfs) + padding * 2 + 3
+        x = min(surface.get_width() - width - 8, mouse[0] + 16)
+        y = min(surface.get_height() - height - 8, mouse[1] + 16)
+        tooltip_rect = pygame.Rect(max(8, x), max(self.topbar_height + 8, y), width, height)
+        draw_soft_glow(surface, tooltip_rect, _C_GOLD, 0.34, radius=7, rings=4)
+        self._draw_glass_panel(surface, tooltip_rect, radius=5, border=border, glow=False)
+        draw_y = tooltip_rect.y + padding
+        for text in text_surfs:
+            surface.blit(text, (tooltip_rect.x + padding, draw_y))
+            draw_y += text.get_height()
+
+    def _covid_response_tooltip_lines(self, action, active):
+        if action == self.actiontogglemco:
+            return [
+                "Movement Control Order",
+                "Cuts transmission heavily; can push R0 below 1.",
+                "Debuffs: lower gold and population growth, -AP, stability strain.",
+                "Daily pressure: unrest rises, approval and investor confidence fall.",
+            ]
+        if isinstance(action, tuple) and len(action) == 2 and action[0] == self.actiontogglecovidpolicy:
+            policy = action[1]
+            if policy == "mask_mandate":
+                return [
+                    "Mask Mandate",
+                    "Reduces beta with a light unrest cost.",
+                    "Useful before hospitals are strained.",
+                    "Status: active" if active else "Status: inactive",
+                ]
+            if policy == "testing_program":
+                return [
+                    "Mass Testing",
+                    "Reduces spread and increases removal/recovery rate.",
+                    "Costs AP each day while active, but improves public confidence.",
+                    "Status: active" if active else "Status: inactive",
+                ]
+            if policy == "border_controls":
+                return [
+                    "Border Controls",
+                    "Reduces imported cluster pressure and slightly lowers beta.",
+                    "Costs AP and investor confidence while active.",
+                    "Status: active" if active else "Status: inactive",
+                ]
+        if action == self.actiontogglecovidmap:
+            return [
+                "COVID Case Map",
+                "Colors countries by relative active cases.",
+                "Low cases show green; the highest active case count shows red.",
+                "Status: active" if active else "Status: inactive",
+            ]
+        return []
+
     def _draw_domestic_economy_tab(self, surface, rect, data, mouse):
         effects = data.get("economy_effects", {}) if isinstance(data.get("economy_effects", {}), dict) else {}
         chip_gap = 10
@@ -3648,6 +3719,7 @@ class InGameUI:
     def _draw_domestic_health_tab(self, surface, rect, data, mouse):
 
        health = data.get("health", {}) if isinstance(data.get("health", {}), dict) else {}
+       self._covid_policy_button_rects = {}
 
        chip_gap = 10
        chip_w = (rect.width - chip_gap * 2) // 3
@@ -3700,10 +3772,12 @@ class InGameUI:
 
        y = left_rect.y + 44
        rows = (
+           ("New Cases", f"{int(health.get('new_cases', 0) or 0):,}"),
+           ("Recovered", f"{int(health.get('recovered', 0) or 0):,}"),
            ("Hospitalisation", f"{int(health.get('hospitalisation', 0) or 0)}"),
            ("Mortality Rate", f"{float(health.get('mortality', 0) or 0):.2f}%"),
            ("Healthcare Load", health.get("healthcare_load", "Normal")),
-           ("Risk Level", health.get("risk_level", "Low")),
+           ("R0", f"{float(health.get('r0', 0) or 0):.2f}"),
         )
 
        for label, value in rows:
@@ -3723,7 +3797,7 @@ class InGameUI:
 
        self._draw_text_fit(
            surface,
-           "EPIDEMIC NOTES",
+           "RESPONSE OPTIONS",
            _C_GOLD_BRIGHT,
            right_rect.x + 14,
            right_rect.y + 12,
@@ -3731,11 +3805,16 @@ class InGameUI:
            self.font_bold
         )
 
+       mco_enabled = bool(data.get("mco_enabled", False))
+       mask_enabled = bool(health.get("mask_mandate_enabled", data.get("mask_mandate_enabled", False)))
+       testing_enabled = bool(health.get("testing_program_enabled", data.get("testing_program_enabled", False)))
+       borders_enabled = bool(health.get("border_controls_enabled", data.get("border_controls_enabled", False)))
        notes = [
-           "Epidemics reduce population growth and stability.",
-           "High hospitalisation increases economic pressure.",
-           "Outbreak severity depends on healthcare capacity.",
-           "Government response can reduce spread rate.",
+           f"First case: {health.get('first_case_date') or 'not recorded'}",
+           f"Susceptible: {int(health.get('susceptible', 0) or 0):,}",
+           f"Beta/Gamma: {float(health.get('beta', 0) or 0):.3f} / {float(health.get('gamma', 0) or 0):.3f}",
+           f"Economic drag: -{int(health.get('economy_drag', 0) or 0)} gold/day",
+           str(health.get("momentum_note") or "No major cluster momentum detected."),
         ]
 
        y = right_rect.y + 44
@@ -3751,40 +3830,72 @@ class InGameUI:
            )
            y += 25
 
-       # Optional bar 
+       button_area_top = max(y + 6, right_rect.y + 144)
+       button_gap = 8
+       button_w = max(84, (right_rect.width - 28 - button_gap) // 2)
+       button_h = 34
+       option_specs = [
+           (self.actiontogglemco, "MCO", mco_enabled, "national_policy"),
+           ((self.actiontogglecovidpolicy, "mask_mandate"), "Masks", mask_enabled, "domestic_affairs"),
+           ((self.actiontogglecovidpolicy, "testing_program"), "Testing", testing_enabled, "intel"),
+           ((self.actiontogglecovidpolicy, "border_controls"), "Borders", borders_enabled, "trade"),
+       ]
+       hovered_response = None
+       for index, (action, label, active, icon_key) in enumerate(option_specs):
+           col = index % 2
+           row = index // 2
+           button_rect = pygame.Rect(
+               right_rect.x + 14 + col * (button_w + button_gap),
+               button_area_top + row * (button_h + button_gap),
+               button_w,
+               button_h,
+           )
+           self._covid_policy_button_rects[action] = button_rect
+           if action == self.actiontogglemco:
+               self._mco_button_rect = button_rect
+           self._draw_glow_btn(
+               surface,
+               f"covid_{label.lower()}",
+               button_rect,
+               True,
+               f"{label} {'ON' if active else 'OFF'}",
+               primary=active,
+               selected=active,
+               mouse=mouse,
+               icon_key=icon_key,
+           )
+           if button_rect.collidepoint(mouse):
+               hovered_response = (action, active)
+
+       map_button_y = button_area_top + 2 * (button_h + button_gap)
+       self._covid_case_map_rect = pygame.Rect(right_rect.x + 14, map_button_y, right_rect.width - 28, button_h)
+       self._covid_policy_button_rects[self.actiontogglecovidmap] = self._covid_case_map_rect
+       self._draw_glow_btn(
+           surface,
+           "covid_case_map",
+           self._covid_case_map_rect,
+           True,
+           f"Case Map {'ON' if self.covidcasemapenabled else 'OFF'}",
+           primary=self.covidcasemapenabled,
+           selected=self.covidcasemapenabled,
+           mouse=mouse,
+           icon_key="date",
+       )
+       if self._covid_case_map_rect.collidepoint(mouse):
+           hovered_response = (self.actiontogglecovidmap, self.covidcasemapenabled)
+
+       load_value = float(health.get("healthcare_load_pct", 0) or 0)
+       load_accent = _C_DANGER if load_value >= 100 else (_C_GOLD if load_value >= 70 else _C_INFO)
        self._draw_value_bar(
            surface,
            pygame.Rect(right_rect.x + 14, right_rect.bottom - 48, right_rect.width - 28, 32),
-           "Healthcare Capacity",
-           health.get("healthcare_capacity", 0),
-           _C_INFO
+           "Healthcare Load",
+           load_value,
+           load_accent
         )
-       
-       mco_enabled = bool(data.get("mco_enabled", False))
-
-       self._mco_button_rect = pygame.Rect(
-           right_rect.x + 14,
-           right_rect.bottom - 95,
-           180,
-           36
-        )
-
-       pygame.draw.rect(
-           surface,
-           (60, 160, 80) if mco_enabled else (180, 70, 70),
-           self._mco_button_rect,
-           border_radius=6
-        )
-
-       self._draw_text_fit(
-           surface,
-           f"MCO: {'ON' if mco_enabled else 'OFF'}",
-           (255,255,255),
-           self._mco_button_rect.x,
-           self._mco_button_rect.y + 8,
-           self._mco_button_rect.width,
-           self.small_font
-        )
+       if hovered_response:
+           action, active = hovered_response
+           self._draw_hover_infobox(surface, mouse, self._covid_response_tooltip_lines(action, active))
         
 
     def _draw_war_progress_popup(self, surface, mouse):

@@ -13,43 +13,43 @@ ctypes.windll.user32.SetProcessDPIAware()
 select_sound = None
 
 COVID_NEWS_EVENTS = {
-    10: {
+    46: {
         "title": "FIRST COVID CASES",
         "description": "Several Southeast Asian countries begin reporting their first COVID-19 cases.",
     },
-    20: {
+    96: {
         "title": "BORDER RESTRICTIONS IMPLEMENTED",
         "description": "Governments across Southeast Asia tighten border controls to contain the virus.",
     },
-    30: {
+    146: {
         "title": "NATIONAL LOCKDOWNS BEGIN",
         "description": "Movement control measures and lockdowns begin across multiple countries.",
     },
-    40: {
+    196: {
         "title": "COVID ENDEMIC IN THAILAND",
         "description": "Thailand begins transitioning toward endemic COVID management policies.",
     },
-    50: {
+    246: {
         "title": "HOSPITALS UNDER PRESSURE",
         "description": "Healthcare systems face rising pressure due to increasing infection rates.",
     },
-    60: {
+    296: {
         "title": "MASK MANDATES EXPANDED",
         "description": "Public mask mandates are expanded in major cities and transportation hubs.",
     },
-    70: {
+    346: {
         "title": "ECONOMIC SLOWDOWN",
         "description": "Regional economies experience major slowdowns due to pandemic restrictions.",
     },
-    80: {
+    396: {
         "title": "REMOTE LEARNING INTRODUCED",
         "description": "Schools and universities transition to online learning systems.",
     },
-    90: {
+    446: {
         "title": "VACCINE DEVELOPMENT PROGRESSES",
         "description": "Global vaccine development efforts begin showing positive results.",
     },
-    100: {
+    496: {
         "title": "SOUTHEAST ASIA ADAPTS TO NEW NORMAL",
         "description": "Countries continue adapting to long-term pandemic management strategies.",
     },
@@ -305,6 +305,52 @@ def parsecolorvalue(rawcolorvalue):
             return None
 
     return None
+
+
+def buildcovidcaselookup(domesticaffairsstate):
+    entries = {}
+    maxcases = 0
+    for countryid, countrydata in (domesticaffairsstate or {}).items():
+        if not isinstance(countrydata, dict):
+            continue
+        key = domesticmodule.countrykey(countrydata.get("country_id") or countrydata.get("country_name") or countryid)
+        cases = max(0, int(countrydata.get("covid_cases", 0) or 0))
+        entry = {
+            "country": countrydata.get("country_name") or countrydata.get("country_id") or countryid,
+            "cases": cases,
+            "r0": float(countrydata.get("covid_r0", 0) or 0),
+            "load": float(countrydata.get("covid_healthcare_load_pct", 0) or 0),
+        }
+        entries[key] = entry
+        maxcases = max(maxcases, cases)
+    return {"entries": entries, "maxcases": max(1, maxcases)}
+
+
+def covidcasefill(countryname, covidcaselookup):
+    if not countryname or not covidcaselookup:
+        return (68, 126, 83)
+    entry = covidcaselookup.get("entries", {}).get(domesticmodule.countrykey(countryname))
+    if not entry:
+        return (68, 126, 83)
+    ratio = max(0.0, min(1.0, entry.get("cases", 0) / max(1, covidcaselookup.get("maxcases", 1))))
+    ratio = math.sqrt(ratio)
+    return mix_color((67, 160, 91), (208, 69, 68), ratio)
+
+
+def addcovidhovertip(hovertext, countryname, covidcaselookup):
+    if not countryname or not covidcaselookup:
+        return hovertext
+    entry = covidcaselookup.get("entries", {}).get(domesticmodule.countrykey(countryname))
+    if not entry:
+        return hovertext
+    if not isinstance(hovertext, dict):
+        hovertext = {}
+    else:
+        hovertext = dict(hovertext)
+    hovertext["covid_cases"] = int(entry.get("cases", 0) or 0)
+    hovertext["covid_r0"] = float(entry.get("r0", 0) or 0)
+    hovertext["covid_load"] = float(entry.get("load", 0) or 0)
+    return hovertext
 
 
 def blackworld(nonplayablestateshapelist, mapbox):
@@ -1570,6 +1616,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
     expandedstateid = None
     selectedprovinceid = None
     selectedprovinceidset = set()
+    covidcasemapenabled = False
 
     gamephase = "choosecountry"
     pendingcountry = None
@@ -3059,6 +3106,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
         )
 
     def advancedomesticturneffects():
+        nonlocal playergold
         nonlocal playerstability
         nonlocal playerpp
         nonlocal playerap
@@ -3072,6 +3120,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
             countriesatwarset=countriesatwarset,
         )
         effects = result.get("effects", {})
+        playergold = max(0, playergold + int(effects.get("player_gold_delta", 0) or 0))
         playerstability = max(0.0, min(100.0, playerstability + float(effects.get("player_stability_delta", 0.0) or 0.0)))
         playerpp = max(0, playerpp + int(effects.get("player_pp_delta", 0) or 0))
         playerap = max(0, playerap + int(effects.get("player_ap_delta", 0) or 0))
@@ -3404,6 +3453,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
         countrymenupulsevalue = None
         if gamephase == "play" and countrymenutarget:
             countrymenupulsevalue = 0.35 + 0.45 * (0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.008))
+        covidcaselookup = buildcovidcaselookup(domesticaffairsstate) if covidcasemapenabled and gamephase == "play" else None
 
         for copyshift in copyshiftlist:
             drawcamerax = camerax + copyshift
@@ -3471,6 +3521,9 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                                     hovertext = dict(hovertext)
                                     if hoveredprovinceid:
                                         hovertext["provinceid"] = hoveredprovinceid
+                                    if covidcasemapenabled:
+                                        hovercountry = drawitem.get("controllercountry", drawitem.get("country", stateshape.get("country")))
+                                        hovertext = addcovidhovertip(hovertext, hovercountry, covidcaselookup)
                             
                             else:
                                 hovertext = None
@@ -3548,6 +3601,17 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
 
                     if (
                         gamephase == "play"
+                        and covidcasemapenabled
+                        and drawitem.get("id") not in selectedprovinceidset
+                        and drawitem.get("id") not in routepreviewset
+                        and drawitem.get("id") not in movingprovinceidset
+                    ):
+                        drawcountry = drawitem.get("controllercountry", drawitem.get("country", stateshape.get("country")))
+                        basefillcolor = covidcasefill(drawcountry, covidcaselookup)
+
+                    if (
+                        gamephase == "play"
+                        and not covidcasemapenabled
                         and drawitem.get("id") not in selectedprovinceidset
                         and drawitem.get("id") not in routepreviewset
                         and drawitem.get("id") not in movingprovinceidset
@@ -3933,6 +3997,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                 "latency_ms": elapsedseconds * 1000.0,
             },
             notifications=notifications,
+            covidcasemapenabled=covidcasemapenabled,
         )
         runtimeui.update(elapsedseconds)
         runtimeui.draw(screen)
@@ -4186,11 +4251,42 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                 countrydata = domesticaffairsstate.get(playercountry)
 
                 if countrydata:
-                    countrydata["mco_enabled"] = not countrydata.get(
-                        "mco_enabled",
-                         False
+                    mcoenabled = domesticmodule.toggle_mco(countrydata)
+                    pushnotification(
+                        "MCO ENACTED" if mcoenabled else "MCO LIFTED",
+                        (
+                            "Movement controls reduce COVID transmission but hurt the economy and public patience."
+                            if mcoenabled
+                            else "Movement controls are lifted; economic activity recovers while transmission risk rises."
+                        ),
                     )
 
+                continue
+
+            if (
+                isinstance(uiaction, tuple)
+                and len(uiaction) == 2
+                and uiaction[0] == InGameUI.actiontogglecovidpolicy
+            ):
+                countrydata = domesticaffairsstate.get(playercountry)
+                policyid = uiaction[1]
+                policyinfo = domesticmodule.get_covid_policy_definition(policyid) or {}
+                if countrydata:
+                    policyenabled = domesticmodule.toggle_covid_policy(countrydata, policyid)
+                    policylabel = str(policyinfo.get("label") or policyid).upper()
+                    pushnotification(
+                        f"{policylabel} {'ENABLED' if policyenabled else 'DISABLED'}",
+                        "COVID response settings updated. Transmission, public patience and economic pressure will adjust next turn.",
+                    )
+                continue
+
+            if uiaction == InGameUI.actiontogglecovidmap:
+                covidcasemapenabled = not covidcasemapenabled
+                runtimeui.covidcasemapenabled = covidcasemapenabled
+                pushnotification(
+                    "COVID CASE MAP ENABLED" if covidcasemapenabled else "COVID CASE MAP DISABLED",
+                    "Map colors now show relative active COVID cases." if covidcasemapenabled else "Map colors returned to the normal tactical view.",
+                )
                 continue
 
 
@@ -4839,6 +4935,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                                 "appliedEffects": [dict(effect) for effect in focusturnresult.appliedeffects],
                             },
                         )
+                    countrydata = domesticaffairsstate.get(playercountry, {})
                     playergold, playerpopulation, playerstability, playerpp, playerap = applyendturneconomy(
                         playercountry,
                         provincemap,
@@ -4847,6 +4944,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                         playerstability,
                         playerpp,
                         playerap,
+                        mco_enabled=countrydata.get("mco_enabled", False),
                     )
                     npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
                     npcdirector.executeturn(
