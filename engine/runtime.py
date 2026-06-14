@@ -4620,11 +4620,18 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                 dragselectstart = None
                 dragselectcurrent = None
 
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3: # right click for move orders
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
                 if devconsole.visible or gamephase != "play" or frontlineplacementmode:
                     continue
-
-
+                if runtimeui.bottom_buttons.selected == "CONSTRUCTION" and runtimeui._selected_construction:
+                    if hoveredstateid is not None:
+                        runtimeui.set_construction_target(hoveredstateid)
+                        countrymenutarget = None
+                        runtimeui.select_map_country(None)
+                        emitmappulse(eventmappos, (72, 183, 123), radius=140, duration=0.7, width=3)
+                    else:
+                        runtimeui.set_construction_target(None)
+                    continue
                 if hoveredstateid is not None and hoveredprovinceid is None:
                     selectedstateobject = stateobjectlookup.get(hoveredstateid)
                     if selectedstateobject:
@@ -4634,12 +4641,9 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                             countrymenutarget = None
                             emitmappulse(eventmappos, (74, 143, 231), radius=120, duration=0.65, width=2)
                             continue
-
                 if hoveredstateid is None and hoveredprovinceid is None:
                     runtimeui.select_map_country(None)
                     countrymenutarget = None
-
-                # Only open the country interaction menu when the click is on a state (no hovered province).
                 if hoveredprovinceid is None:
                     if hoveredstateid is not None:
                         selectedstateobject = stateobjectlookup.get(hoveredstateid)
