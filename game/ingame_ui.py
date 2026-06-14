@@ -2777,14 +2777,12 @@ class InGameUI:
 
         elif selected_tab == "CONSTRUCTION" and not self._countrymenutarget:
            
-            header_y = content_rect.y + 8
-            surface.blit(self.font_bold.render("CONSTRUCTION", True, _C_GOLD_BRIGHT), (content_rect.x, header_y))
-            surface.blit(self.font.render("Select project", True, _C_TEXT_MUTED), (content_rect.x, header_y + 26))
+            surface.blit(self.font.render("Select project", True, _C_TEXT_MUTED), 
+                        (content_rect.x, content_rect.y + 26))
 
-           
-            btn_y = header_y + 60
-            btn_h = 52   
-            gap = 12     
+            btn_y = content_rect.y + 60
+            btn_h = 52
+            gap = 12
             labels = ("Factory", "Infrastructure", "Port")
             
             for i, label in enumerate(labels):
@@ -2794,9 +2792,8 @@ class InGameUI:
                     f"construction_{label.lower()}",
                     btn_rect,
                     True,
-                    label,        
+                    label,
                     mouse=mouse,
-                 
                 )
 
        
