@@ -3607,15 +3607,15 @@ class InGameUI:
            )
            y += 28
 
-        # ===== EPIDEMIC STATE CLASSIFICATION (NEW) =====
-        state = "NORMAL 🟢"
+       # ===== EPIDEMIC STATE CLASSIFICATION (NEW) =====
+       state = "NORMAL 🟢"
 
-        if risk == "High":
+       if risk == "High":
             state = "EPIDEMIC 🔴"
-        elif risk == "Medium":
+       elif risk == "Medium":
             state = "WATCH 🟠"
 
-        self._draw_text_fit(
+       self._draw_text_fit(
             surface,
             f"STATE: {state}",
             _C_GOLD_BRIGHT,
