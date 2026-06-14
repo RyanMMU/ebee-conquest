@@ -3588,8 +3588,8 @@ class InGameUI:
        
        pygame.draw.line(
            surface,
-           (80. 90, 110)
-           (left_rect.x + 14, left_rect.y + 52)
+           (80, 90, 110),
+           (left_rect.x + 14, left_rect.y + 52),
            (left_rect.right - 14, left_rect.y + 52),
            1
        )
@@ -3615,23 +3615,32 @@ class InGameUI:
            )
            y += 28
 
-       # ===== EPIDEMIC STATE CLASSIFICATION (NEW) =====
-       state = "NORMAL 🟢"
+       # ===== EPIDEMIC STATE BADGE =====
+       badge_color = (120, 220, 140)
 
        if risk == "High":
-            state = "EPIDEMIC 🔴"
+           state = "EPIDEMIC 🔴"
+           badge_color = (220, 80, 80)
        elif risk == "Medium":
-            state = "WATCH 🟠"
+           state = "WATCH 🟠"
+           badge_color = (240, 180, 80)
+       else:
+           state = "NORMAL 🟢"
+
+       # background highlight effect
+       badge_rect = pygame.Rect(left_rect.x + 14, y + 6, 180, 26)
+
+       pygame.draw.rect(surface, badge_color, badge_rect, border_radius=6)
 
        self._draw_text_fit(
-            surface,
-            f"STATE: {state}",
-            _C_GOLD_BRIGHT,
-            left_rect.x + 14,
-            y + 10,
-           left_rect.width - 28,
+           surface,
+           state,
+           (255, 255, 255),
+           badge_rect.x,
+           badge_rect.y + 4,
+           badge_rect.width,
            self.small_font
-       )
+        )
 
        # RIGHT PANEL
        self._draw_vertical_gradient_rect(surface, right_rect, (15, 24, 38), (8, 13, 22), radius=6)
