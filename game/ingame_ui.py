@@ -2881,9 +2881,9 @@ class InGameUI:
                 text_y = construct_rect.bottom + 10
                 max_w = content_rect.width - 16
                 for desc in (
-                    "FACTORY: Boost of 1+ gold per constructed factory",
-                    "INFRASTRUCTURE: Make troop move faster",
-                    "PORT: 50 turns",
+                    "FACTORY: Boost of 1+ gold per constructed factory.",
+                    "INFRASTRUCTURE: Make troop move faster.",
+                    "PORT: Allows troops to move from land to water.",
                 ):
                     words = desc.split(" ")
                     line = ""
