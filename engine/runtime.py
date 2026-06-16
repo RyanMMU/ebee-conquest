@@ -4827,10 +4827,16 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                     continue
 
 
-                allowedprovinceidset = {
-                    provinceid for provinceid, province in provincemap.items() if getprovincecontroller(province) in allowedcountryset
-                } # this allows movement thrugh your own province and supposedly the enemy provinces
-                # TODO: fix the issue that you cannot move through enemy provinces
+                allowedprovinceidset = set()
+                for provinceid, province in provincemap.items():
+                    if getprovincecontroller(province) in allowedcountryset:
+                        allowedprovinceidset.add(provinceid)
+                    elif province.get("is_water"):
+                        for nid in provincegraph.get(provinceid, []):
+                            nprov = provincemap.get(nid)
+                            if nprov and nprov.get("has_port") and getprovincecontroller(nprov) in allowedcountryset:
+                                allowedprovinceidset.add(provinceid)
+                                break
 
 
                 # allows for multiple source provinces if you have multiple selected, prioritizes the hovered province if it is in the selection, then prioritizes the order of selection, then just goes through them in id order
@@ -4884,13 +4890,21 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                         
                     move_sound.play()
                     
+                    infra_bonus = 0
+                    for pid in foundpath:
+                        prov = provincemap.get(pid)
+                        if prov:
+                            lvl = int(prov.get("infrastructure_level", 0))
+                            if lvl > infra_bonus:
+                                infra_bonus = lvl
+                    speedmod = 1.0 + infra_bonus * 0.05
                     movementorderlist.append(
                         {
                             "amount": movingtroopcount,
-                            "path": foundpath, # list of province ids to move through in order per turn
-                            "index": 0, # the current provincei n the path list
+                            "path": foundpath,
+                            "index": 0,
                             "current": foundpath[0],
-                            "speedmodifier": 1.0,
+                            "speedmodifier": speedmod,
                             "controllercountry": getprovincecontroller(sourceprovince),
                             "country": getprovincecontroller(sourceprovince),
                             "countrycolor": sourceprovince.get("countrycolor"),
