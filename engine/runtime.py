@@ -1637,6 +1637,13 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
     ) = initializeplayereconomy(economyconfig)
     focustree = loadfocustreeforcountry(None)
     domesticaffairsstate = domesticmodule.create_domestic_affairs_state()
+    constructions = {}
+    completed_buildings = {}
+    construction_types = {
+        "factory": {"turns": 20, "max_per_state": None},
+        "infrastructure": {"turns": 30, "max_per_state": 10},
+        "port": {"turns": 50, "max_per_state": 1}
+    }
 
 
     # THIS is the NPC instance
@@ -4333,6 +4340,10 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                     playerap,
                     mco_enabled=countrydata.get("mco_enabled", False),
                 )
+                factory_bonus = 0
+                for b in completed_buildings.values():
+                    factory_bonus += b.get("factory", 0)
+                playergold += factory_bonus
                 npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
                 npcdirector.executeturn(
                     movementorderlist,
@@ -4346,6 +4357,30 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                     npcdirector.countryeconomy,
                 )
                 advancedomesticturneffects()
+
+                for state_id in list(constructions.keys()):
+                    for construction in list(constructions[state_id]):
+                        construction["turns_remaining"] -= 1
+                        if construction["turns_remaining"] <= 0:
+                            if construction["type"] == "factory":
+                                playergold += 1
+                                pushnotification("FACTORY COMPLETE", f"Factory in {state_id} complete. +1 gold per turn.")
+                            elif construction["type"] == "infrastructure":
+                                for province in provincemap.values():
+                                    if province.get("parentid") == state_id:
+                                        province["infrastructure_level"] = min(10, int(province.get("infrastructure_level", 0)) + 1)
+                                pushnotification("INFRASTRUCTURE COMPLETE", f"Infrastructure level increased in {state_id}.")
+                            elif construction["type"] == "port":
+                                for province in provincemap.values():
+                                    if province.get("parentid") == state_id:
+                                        province["has_port"] = True
+                                pushnotification("PORT COMPLETE", f"Port constructed in {state_id}. Water movement enabled.")
+                            constructions[state_id].remove(construction)
+                    if not constructions[state_id]:
+                        del constructions[state_id]
+
+                
+
                 if researching_node_id and researching_turns_remaining > 0:
                     researching_turns_remaining -= 1
                     if researching_turns_remaining <= 0:
@@ -4736,51 +4771,35 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                     continue
                 if runtimeui.bottom_buttons.selected == "CONSTRUCTION" and runtimeui._selected_construction:
                     if hoveredstateid is not None:
-                        runtimeui.set_construction_target(hoveredstateid)
-                        countrymenutarget = None
-                        runtimeui.select_map_country(None)
-                        emitmappulse(eventmappos, (72, 183, 123), radius=140, duration=0.7, width=3)
+                        if hoveredstateid not in constructions:
+                            constructions[hoveredstateid] = []
+                        selected_type = runtimeui._selected_construction
+                        if len(constructions[hoveredstateid]) >= 2:
+                            pushnotification("CONSTRUCTION LIMIT", "Maximum 2 constructions per state. Complete one first.")
+                        else:
+                            max_allowed = construction_types[selected_type]["max_per_state"]
+                            current_built = 0
+                            if hoveredstateid in completed_buildings:
+                                if selected_type == "factory":
+                                    current_built = completed_buildings[hoveredstateid]["factory"]
+                                elif selected_type == "infrastructure":
+                                    current_built = completed_buildings[hoveredstateid]["infra"]
+                                elif selected_type == "port":
+                                    current_built = 1 if completed_buildings[hoveredstateid]["port"] else 0
+                            queued = len([c for c in constructions[hoveredstateid] if c["type"] == selected_type])
+                            if max_allowed is None or current_built + queued < max_allowed:
+                                constructions[hoveredstateid].append({
+                                    "type": selected_type,
+                                    "turns_remaining": construction_types[selected_type]["turns"],
+                                    "started_turn": currentturnnumber
+                                })
+                                runtimeui.set_construction_target(hoveredstateid)
+                                emitmappulse(eventmappos, (72, 183, 123), radius=140, duration=0.7, width=3)
+                            else:
+                                pushnotification("CONSTRUCTION LIMIT", f"Maximum {max_allowed} {selected_type}s per state.")
                     else:
                         runtimeui.set_construction_target(None)
                     continue
-                if hoveredstateid is not None and hoveredprovinceid is None:
-                    selectedstateobject = stateobjectlookup.get(hoveredstateid)
-                    if selectedstateobject:
-                        destinationcountry = selectedstateobject.get("controllercountry", selectedstateobject.get("country"))
-                        if destinationcountry:
-                            runtimeui.select_map_country(destinationcountry)
-                            countrymenutarget = None
-                            emitmappulse(eventmappos, (74, 143, 231), radius=120, duration=0.65, width=2)
-                            continue
-                if hoveredstateid is None and hoveredprovinceid is None:
-                    runtimeui.select_map_country(None)
-                    countrymenutarget = None
-                if hoveredprovinceid is None:
-                    if hoveredstateid is not None:
-                        selectedstateobject = stateobjectlookup.get(hoveredstateid)
-                        if selectedstateobject:
-                            destinationcountry = selectedstateobject.get("controllercountry", selectedstateobject.get("country"))
-                            if playercountry and destinationcountry and destinationcountry != playercountry:
-                                countrymenutarget = destinationcountry
-                                routepreviewset = set()
-                                emitmappulse(eventmappos, (212, 169, 77), radius=140, duration=0.7, width=2)
-                                continue
-                    countrymenutarget = None
-                    continue
-
-                destinationprovince = provincemap.get(hoveredprovinceid)
-                if not destinationprovince:
-                    continue
-
-                destinationcountry = getprovincecontroller(destinationprovince)
-                if playercountry and destinationcountry and destinationcountry != playercountry:
-                    if destinationcountry not in countriesatwarset:
-                        countrymenutarget = destinationcountry
-                        routepreviewset = set() # set() is an empty set to clear route preview
-                        emitmappulse(eventmappos, (212, 169, 77), radius=140, duration=0.7, width=2)
-                        continue
-
-                countrymenutarget = None
 
 
 
@@ -4946,6 +4965,10 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                         playerap,
                         mco_enabled=countrydata.get("mco_enabled", False),
                     )
+                    factory_bonus = 0
+                    for b in completed_buildings.values():
+                        factory_bonus += b.get("factory", 0)
+                    playergold += factory_bonus
                     npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
                     npcdirector.executeturn(
                         movementorderlist,
@@ -4959,6 +4982,31 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                         npcdirector.countryeconomy,
                     )
                     advancedomesticturneffects()
+
+                    for state_id in list(constructions.keys()):
+                        for construction in list(constructions[state_id]):
+                            construction["turns_remaining"] -= 1
+                            if construction["turns_remaining"] <= 0:
+                                if state_id not in completed_buildings:
+                                    completed_buildings[state_id] = {"factory":0,"infra":0,"port":False}
+                                if construction["type"] == "factory":
+                                    completed_buildings[state_id]["factory"] += 1
+                                    pushnotification("FACTORY COMPLETE", f"Factory in {state_id} complete. +1 gold per turn.")
+                                elif construction["type"] == "infrastructure":
+                                    completed_buildings[state_id]["infra"] = min(10, completed_buildings[state_id]["infra"] + 1)
+                                    for province in provincemap.values():
+                                        if province.get("parentid") == state_id:
+                                            province["infrastructure_level"] = completed_buildings[state_id]["infra"]
+                                    pushnotification("INFRASTRUCTURE COMPLETE", f"Infrastructure level increased in {state_id}.")
+                                elif construction["type"] == "port":
+                                    completed_buildings[state_id]["port"] = True
+                                    for province in provincemap.values():
+                                        if province.get("parentid") == state_id:
+                                            province["has_port"] = True
+                                    pushnotification("PORT COMPLETE", f"Port constructed in {state_id}. Water movement enabled.")
+                                constructions[state_id].remove(construction)
+                        if not constructions[state_id]:
+                            del constructions[state_id]
                     if researching_node_id and researching_turns_remaining > 0:
                         researching_turns_remaining -= 1
                         if researching_turns_remaining <= 0:
