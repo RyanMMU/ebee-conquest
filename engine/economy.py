@@ -88,21 +88,49 @@ def canrecruittroops(playergold, playerpopulation, requiredgold, requiredpopulat
     return playergold >= requiredgold and playerpopulation >= requiredpopulation
 
 
-def applyendturneconomy(playercountry, provincemap, playergold, playerpopulation, playerstability, playerpp, playerap):
+def applyendturneconomy(
+    playercountry,
+    provincemap,
+    playergold,
+    playerpopulation,
+    playerstability,
+    playerpp,
+    playerap,
+    mco_enabled=False,
+):
     if not playercountry:
-
         return playergold, playerpopulation, playerstability, playerpp, playerap
 
     ownedprovincecount = sum(
-        1 for province in provincemap.values() if getprovincecontroller(province) == playercountry
+        1
+        for province in provincemap.values()
+        if getprovincecontroller(province) == playercountry
     )
 
+    goldincome, populationgrowth, stabilitydelta, ppincome, apincome = (
+        getendturneconomydelta(ownedprovincecount)
+    )
 
-    goldincome, populationgrowth, stabilitydelta, ppincome, apincome = getendturneconomydelta(ownedprovincecount)
+    # MCO suppresses activity while freeing capacity for public-health control.
+    if mco_enabled:
+        goldincome = int(goldincome * 0.35)
+        populationgrowth = int(populationgrowth * 0.60)
+        stabilitydelta -= 0.2
+        apincome = max(0, apincome - 1)
+
     playergold += goldincome
     playerpopulation += populationgrowth
-    playerstability = max(0.0, min(100.0, playerstability + stabilitydelta))
+    playerstability = max(
+        0.0,
+        min(100.0, playerstability + stabilitydelta)
+    )
     playerpp += ppincome
     playerap += apincome
 
-    return playergold, playerpopulation, playerstability, playerpp, playerap
+    return (
+        playergold,
+        playerpopulation,
+        playerstability,
+        playerpp,
+        playerap,
+    )
