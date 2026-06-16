@@ -582,7 +582,8 @@ class InGameUI:
                 "COMBAT",
                 "INTEL",
                 "NATIONAL POLICY",
-                "DOMESTIC AFFAIRS"
+                "DOMESTIC AFFAIRS",
+                "SETTINGS",
             ]
         )
         self.bottom_buttons.set_items(
@@ -593,6 +594,7 @@ class InGameUI:
                 "PRODUCTION",
                 "CONSTRUCTION",
                 "TROOPS",
+                
             ]
         )
         self.bottom_buttons.set_selected(None)
@@ -718,6 +720,8 @@ class InGameUI:
             "war_progress": "war_progress.svg",
             "occupation": "occupation.svg",
             "close": "close.svg",
+            "SETTINGS": "settings.png",
+            "settings": "settings.png",
         }
 
         for key, filename in icon_files.items():
@@ -2152,6 +2156,12 @@ class InGameUI:
                         self._domestic_active_tab = self._domestic_active_tab or "Executive"
                     self.applylayout()
                     return self.actiondomesticaffairs
+
+                if item == "SETTINGS":
+                    self.domesticaffairsopen = False
+                    self.active_left_tab = None if self.active_left_tab == "SETTINGS" else "SETTINGS"
+                    self.applylayout()
+                    return "settings"
                 self.domesticaffairsopen = False
                 self.active_left_tab = item
                 self.applylayout()
@@ -2763,7 +2773,7 @@ class InGameUI:
             )
             y_cursor += 130
 
-        elif self._selectedmapcountry and not self._countrymenutarget:
+        if self._selectedmapcountry and not self._countrymenutarget:
             big_flag = self._get_big_flag(self._selectedmapcountry, size=(240, 144))
             y_cursor = content_rect.y + 45
             if big_flag:
