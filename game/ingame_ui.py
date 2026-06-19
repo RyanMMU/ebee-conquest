@@ -399,6 +399,7 @@ class InGameUI:
     actiontogglecovidmap = "togglecovidmap"
     actionpausemenu = "pausemenu"
     actionquitgame = "quitgame"
+    actiontogglesettingsfullscreen = "togglesettingsfullscreen"
     actionweapon1 = "weapon_1"
     actionweapon2 = "weapon_2"
     actionweapon3 = "weapon_3"
@@ -406,8 +407,7 @@ class InGameUI:
 
 
 
-    def set_construction_target(self, country_name: str | None):
-        self._construction_target = country_name
+    
 
     def __init__(self, window_size):
         self.window_size = window_size
@@ -494,6 +494,19 @@ class InGameUI:
         self._policy_focus_slot_rect = pygame.Rect(0, 0, 10, 10)
         self._policy_dropdown_progress = 0.0
         self._covid_policy_button_rects = {}
+
+        try:
+            import json as _json
+            with open("settings.json") as _settingsfile:
+                self.settings_volume = int(_json.load(_settingsfile).get("volume", 50))
+        except (FileNotFoundError, ValueError, OSError):
+            self.settings_volume = 50
+        self.is_fullscreen = False
+        self._settings_volume_dragging = False
+        self._settings_popup_rect = pygame.Rect(0, 0, 10, 10)
+        self._settings_slider_rect = pygame.Rect(0, 0, 10, 10)
+        self._settings_fullscreen_rect = pygame.Rect(0, 0, 10, 10)
+        self._settings_close_rect = pygame.Rect(0, 0, 10, 10)
         self._covid_case_map_rect = pygame.Rect(0, 0, 10, 10)
         self._notificationcount = 0
         self._startdate = date(2020, 1, 1)
@@ -524,7 +537,6 @@ class InGameUI:
         self._topbar_metric_rates = {}
         self._topbar_metric_rate_turn = None
         self._selected_construction = None
-        self._construction_target = None
         self._construction_target = None
         self._construction_btn_rects = {}
    
@@ -562,14 +574,8 @@ class InGameUI:
         self._production_item_count = 44
         self.production_selected = None
         self._researched_weapon_nodes: list[dict] = []
-        self._recruit_action_rect = pygame.Rect(0, 0, 10, 10)
-        self._declarewar_rect = pygame.Rect(0, 0, 10, 10)
-        self._split_rect = pygame.Rect(0, 0, 10, 10)
-        self._merge_rect = pygame.Rect(0, 0, 10, 10)
-        self._frontline_rect = pygame.Rect(0, 0, 10, 10)
         self._production_blank_rect = pygame.Rect(0, 0, 10, 10)
-        self._research_btn_rects = [pygame.Rect(0, 0, 10, 10) for _ in range(4)]
-
+        
         self.leftbar = LeftBar(pygame.Rect(0, 0, 10, 10))
         self.bottom_buttons = BottomButtons(pygame.Rect(0, 0, 10, 10))
 
@@ -582,7 +588,8 @@ class InGameUI:
                 "COMBAT",
                 "INTEL",
                 "NATIONAL POLICY",
-                "DOMESTIC AFFAIRS"
+                "DOMESTIC AFFAIRS",
+                "SETTINGS",
             ]
         )
         self.bottom_buttons.set_items(
@@ -593,6 +600,7 @@ class InGameUI:
                 "PRODUCTION",
                 "CONSTRUCTION",
                 "TROOPS",
+                
             ]
         )
         self.bottom_buttons.set_selected(None)
@@ -608,6 +616,9 @@ class InGameUI:
 
     def set_construction_target(self, country_name: str | None):
         self._construction_target = country_name
+
+    def set_fullscreen_state(self, is_fullscreen: bool):
+        self.is_fullscreen = bool(is_fullscreen)
 
     def _load_flags(self):
         flags = {}
@@ -718,6 +729,8 @@ class InGameUI:
             "war_progress": "war_progress.svg",
             "occupation": "occupation.svg",
             "close": "close.svg",
+            "SETTINGS": "settings.png",
+            "settings": "settings.png",
         }
 
         for key, filename in icon_files.items():
@@ -1134,6 +1147,26 @@ class InGameUI:
             "accent": data.get("accent", _C_GOLD),
         }
 
+
+    def _settings_controls(self):
+        anchor_rect = self.leftbar.item_rects.get("SETTINGS")
+        if anchor_rect is None:
+            return None, None, None, None
+
+        popup_w = min(360, max(300, self.window_size[0] - anchor_rect.right - 24))
+        popup_h = 220
+        popup_x = anchor_rect.right + 8
+        popup_y = anchor_rect.y
+        popup_x = max(12, min(self.window_size[0] - popup_w - 12, popup_x))
+        popup_y = max(self.topbar_height + 8, min(self.window_size[1] - popup_h - 12, popup_y))
+        popup_rect = pygame.Rect(popup_x, popup_y, popup_w, popup_h)
+
+        slider = pygame.Rect(popup_rect.x + 24, popup_rect.y + 78, popup_rect.width - 48, 12)
+        fullscreen = pygame.Rect(popup_rect.x + 24, popup_rect.y + 122, popup_rect.width - 48, 48)
+        close_size = 28
+        close = pygame.Rect(popup_rect.right - close_size - 14, popup_rect.y + 14, close_size, close_size)
+        return popup_rect, slider, fullscreen, close
+
     def _draw_notification_popup(self, surface, mouse):
         if self.active_left_tab != "NOTIFICATIONS":
             self._notification_popup_rect = pygame.Rect(0, 0, 10, 10)
@@ -1249,6 +1282,79 @@ class InGameUI:
             thumb_h = max(28, int(max_visible * (max_visible / max(total_h, 1))))
             thumb_y = track_rect.y + int((track_rect.height - thumb_h) * (self._notification_scroll / max_scroll))
             pygame.draw.rect(surface, _C_GOLD, pygame.Rect(track_rect.x, thumb_y, track_rect.width, thumb_h), border_radius=2)
+
+
+
+    def _draw_settings_popup(self, surface, mouse):
+        if self.active_left_tab != "SETTINGS":
+            self._settings_popup_rect = pygame.Rect(0, 0, 10, 10)
+            return
+
+        popup_rect, slider, fullscreen, close = self._settings_controls()
+        if popup_rect is None:
+            self._settings_popup_rect = pygame.Rect(0, 0, 10, 10)
+            return
+
+        self._settings_popup_rect = popup_rect
+        self._settings_slider_rect = slider
+        self._settings_fullscreen_rect = fullscreen
+        self._settings_close_rect = close
+
+        self._draw_glass_panel(surface, popup_rect, radius=8, border=_C_GOLD, glow=True)
+
+        title = self.font_bold.render("SETTINGS", True, _C_GOLD_BRIGHT)
+        surface.blit(title, (popup_rect.x + 16, popup_rect.y + 14))
+
+        close_hovered = close.collidepoint(mouse)
+        close_top = (45, 55, 68) if close_hovered else (23, 32, 48)
+        self._draw_vertical_gradient_rect(surface, close, close_top, (10, 16, 25), radius=6)
+        pygame.draw.rect(surface, (_C_DANGER if close_hovered else (62, 76, 95)), close, 1, border_radius=6)
+        close_icon = self._topbar_icons.get("close")
+        if close_icon is not None:
+            surface.blit(close_icon, close_icon.get_rect(center=close.center))
+        else:
+            close_label = self.small_font_bold.render("X", True, _C_TEXT)
+            surface.blit(close_label, close_label.get_rect(center=close.center))
+
+        volume_label = self.font.render(f"Volume: {self.settings_volume}%", True, _C_TEXT)
+        surface.blit(volume_label, (slider.x, slider.y - 28))
+
+        pygame.draw.rect(surface, (36, 45, 60), slider, border_radius=6)
+        fill = slider.copy()
+        fill.width = int(slider.width * self.settings_volume / 100)
+        self._draw_vertical_gradient_rect(surface, fill, (83, 199, 132), (39, 130, 82), radius=6)
+        knob_x = slider.x + fill.width
+        knob_hover = abs(mouse[0] - knob_x) < 18 and abs(mouse[1] - slider.centery) < 18
+        knob_radius = 10 + int((knob_hover or self._settings_volume_dragging) * 3)
+        pygame.draw.circle(surface, _C_TEXT, (knob_x, slider.centery), knob_radius)
+        pygame.draw.circle(surface, _C_GOLD, (knob_x, slider.centery), knob_radius + 4, 1)
+
+        fs_label = "FULLSCREEN: ON" if self.is_fullscreen else "FULLSCREEN: OFF"
+        self._draw_glow_btn(
+            surface, "settings_fullscreen", fullscreen,
+            True, fs_label, primary=self.is_fullscreen, selected=self.is_fullscreen, mouse=mouse,
+        )
+
+
+    def _apply_settings_volume_from_mouse(self, mouse):
+        slider = self._settings_slider_rect
+        if slider.width <= 0:
+            return
+        ratio = (mouse[0] - slider.x) / max(1, slider.width)
+        self.settings_volume = int(max(0.0, min(1.0, ratio)) * 100)
+        vol = self.settings_volume / 100.0
+        try:
+            pygame.mixer.music.set_volume(vol)
+        except pygame.error:
+            pass
+        if self.ui_click_sound is not None:
+            self.ui_click_sound.set_volume(vol * 0.4)
+        try:
+            import json as _json
+            with open("settings.json", "w") as _settingsfile:
+                _json.dump({"volume": self.settings_volume}, _settingsfile)
+        except OSError:
+            pass
 
     def _draw_combat_popup(self, surface, mouse):
         if self.active_left_tab != "COMBAT":
@@ -1926,6 +2032,13 @@ class InGameUI:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             self._ui_pulses.emit(event.pos, _C_GOLD_BRIGHT, radius=82, duration=0.42, width=2)
 
+        if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self._settings_volume_dragging = False
+
+        if event.type == pygame.MOUSEMOTION and self._settings_volume_dragging:
+            self._apply_settings_volume_from_mouse(event.pos)
+            return None
+
         if event.type == pygame.MOUSEWHEEL and self.active_left_tab == "NOTIFICATIONS":
             mouse_pos = pygame.mouse.get_pos()
             if self._notification_popup_rect.collidepoint(mouse_pos):
@@ -2152,6 +2265,12 @@ class InGameUI:
                         self._domestic_active_tab = self._domestic_active_tab or "Executive"
                     self.applylayout()
                     return self.actiondomesticaffairs
+
+                if item == "SETTINGS":
+                    self.domesticaffairsopen = False
+                    self.active_left_tab = None if self.active_left_tab == "SETTINGS" else "SETTINGS"
+                    self.applylayout()
+                    return None
                 self.domesticaffairsopen = False
                 self.active_left_tab = item
                 self.applylayout()
@@ -2222,6 +2341,23 @@ class InGameUI:
                     return getattr(self, f"actionweapon{i+1}")
 
             return None
+        
+
+
+        if self.active_left_tab == "SETTINGS":
+            if self._settings_close_rect.collidepoint(pos):
+                self.ui_click_sound.play()
+                self.active_left_tab = None
+                return None
+            if self._settings_slider_rect.inflate(6, 24).collidepoint(pos):
+                self._settings_volume_dragging = True
+                self._apply_settings_volume_from_mouse(pos)
+                return None
+            if self._settings_fullscreen_rect.collidepoint(pos):
+                self.ui_click_sound.play()
+                return self.actiontogglesettingsfullscreen
+            if self._settings_popup_rect.collidepoint(pos):
+                return None
 
 
         if self.active_left_tab == "NOTIFICATIONS":
@@ -2315,6 +2451,9 @@ class InGameUI:
         if self.active_left_tab == "NOTIFICATIONS" and self._notification_popup_rect.collidepoint(mouseposition):
             return True
         if self.active_left_tab == "COMBAT" and self._combat_popup_rect.collidepoint(mouseposition):
+            return True
+        
+        if self.active_left_tab == "SETTINGS" and self._settings_popup_rect.collidepoint(mouseposition):
             return True
         if self._policy_dropdown_progress > 0.01 and self._policy_popup_rect.collidepoint(mouseposition):
             return True
@@ -2685,6 +2824,7 @@ class InGameUI:
             self._draw_notification_popup(surface, mouse)
             self._draw_combat_popup(surface, mouse)
             self._draw_policy_popup(surface, mouse)
+            self._draw_settings_popup(surface, mouse)
             if self.warprogressopen:
                 self._draw_war_progress_popup(surface, mouse)
             if self.domesticaffairsopen:
@@ -2701,6 +2841,7 @@ class InGameUI:
             self._draw_notification_popup(surface, mouse)
             self._draw_combat_popup(surface, mouse)
             self._draw_policy_popup(surface, mouse)
+            self._draw_settings_popup(surface, mouse)
             if self.warprogressopen:
                 self._draw_war_progress_popup(surface, mouse)
             if self.domesticaffairsopen:
@@ -2716,6 +2857,7 @@ class InGameUI:
             self._draw_notification_popup(surface, mouse)
             self._draw_combat_popup(surface, mouse)
             self._draw_policy_popup(surface, mouse)
+            self._draw_settings_popup(surface, mouse)
             if self.warprogressopen:
                 self._draw_war_progress_popup(surface, mouse)
             if self.domesticaffairsopen:
@@ -2763,7 +2905,7 @@ class InGameUI:
             )
             y_cursor += 130
 
-        elif self._selectedmapcountry and not self._countrymenutarget:
+        if self._selectedmapcountry and not self._countrymenutarget:
             big_flag = self._get_big_flag(self._selectedmapcountry, size=(240, 144))
             y_cursor = content_rect.y + 45
             if big_flag:
@@ -3047,6 +3189,7 @@ class InGameUI:
         self._draw_notification_popup(surface, mouse)
         self._draw_combat_popup(surface, mouse)
         self._draw_policy_popup(surface, mouse)
+        self._draw_settings_popup(surface, mouse)
 
         if self.warprogressopen:
             self._draw_war_progress_popup(surface, mouse)
@@ -3724,7 +3867,7 @@ class InGameUI:
        chip_gap = 10
        chip_w = (rect.width - chip_gap * 2) // 3
 
-       # Top chips (summary)
+       
        self._draw_metric_chip(
            surface,
            pygame.Rect(rect.x, rect.y, chip_w, 58),
@@ -3756,7 +3899,7 @@ class InGameUI:
        left_rect = pygame.Rect(rect.x, body_y, rect.width // 2 - 7, rect.bottom - body_y)
        right_rect = pygame.Rect(left_rect.right + 14, body_y, rect.width - left_rect.width - 14, rect.bottom - body_y)
 
-       # LEFT PANEL
+       
        self._draw_vertical_gradient_rect(surface, left_rect, (15, 24, 38), (8, 13, 22), radius=6)
        pygame.draw.rect(surface, (52, 65, 82), left_rect, 1, border_radius=6)
 
@@ -3791,7 +3934,7 @@ class InGameUI:
             )
            y += 28
 
-       # RIGHT PANEL
+       
        self._draw_vertical_gradient_rect(surface, right_rect, (15, 24, 38), (8, 13, 22), radius=6)
        pygame.draw.rect(surface, (52, 65, 82), right_rect, 1, border_radius=6)
 

@@ -1556,6 +1556,9 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
     windowwidth, windowheight = screen.get_size()
     runtimeui = InGameUI((windowwidth, windowheight))
     runtimeui.ui_click_sound.set_volume(volume * 0.4)
+    
+    runtimeui.settings_volume = int(max(0, min(100, round(volume * 100))))
+    runtimeui.set_fullscreen_state(is_fullscreen)
     maprect = runtimeui.map_rect
     camerastate = cameramodule.createcamerastate(maprect.width, maprect.height, mapbox)
 
@@ -3185,9 +3188,10 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
         updatescriptengine()
         esomodule.updaterollingfpshistory(fpshistory, clock.get_fps(), fpshistorymaxsamples)
         mouseposition_full = pygame.mouse.get_pos()
-        #this gives x and y (0 and 1)
+        
         mainwindowwidth, mainwindowheight = screen.get_size()
         runtimeui.setwindowsize((mainwindowwidth, mainwindowheight))
+        runtimeui.set_fullscreen_state(is_fullscreen)
         maprect = runtimeui.map_rect
 
         screen_main = screen
@@ -4000,6 +4004,11 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
             covidcasemapenabled=covidcasemapenabled,
         )
         runtimeui.update(elapsedseconds)
+        currentuivolume = runtimeui.settings_volume / 100.0
+        if select_sound is not None:
+            select_sound.set_volume(currentuivolume * 0.5)
+        move_sound.set_volume(currentuivolume * 0.5)
+        mahathir_speech.set_volume(currentuivolume * 0.7)
         runtimeui.draw(screen)
         scriptengine.draw_script_ui(screen)
         if perfidlecollecting:
@@ -4101,6 +4110,32 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                 continue
 
             if uiaction == "notification_scroll":
+                continue
+
+            if uiaction == InGameUI.actiontogglesettingsfullscreen:
+                is_fullscreen = not is_fullscreen
+                oldmaprect = maprect
+                if is_fullscreen:
+                    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+                else:
+                    screen = pygame.display.set_mode((defaultwindowwidth, defaultwindowheight), pygame.RESIZABLE)
+                newwindowwidth, newwindowheight = screen.get_size()
+                runtimeui.setwindowsize((newwindowwidth, newwindowheight))
+                runtimeui.set_fullscreen_state(is_fullscreen)
+                maprect = runtimeui.map_rect
+                cameramodule.resizecamerastate(
+                    camerastate,
+                    oldmaprect.width,
+                    oldmaprect.height,
+                    maprect.width,
+                    maprect.height,
+                    mapbox,
+                )
+                cameramodule.clampcamerastate(camerastate, maprect.height, mapbox)
+                sea_gradient_cache = None
+                sea_gradient_cache_size = None
+                map_vignette_cache = None
+                map_vignette_cache_size = None
                 continue
 
             if runtimeui.pausemenuopen:
