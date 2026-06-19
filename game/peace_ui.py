@@ -18,7 +18,7 @@ class PeaceTreatyScreen:
         self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         self.clock = pygame.time.Clock()
         self.title_font = pygame.font.SysFont("bahnschrift", 20, bold=True)  
-        self.mini_font= pygame.font.SysFont("bahnschrift", 12)  
+        
         self.small_font = pygame.font.SysFont("bahnschrift", 15)
         self.backspace_held = False
         self.backspace_timer = 0

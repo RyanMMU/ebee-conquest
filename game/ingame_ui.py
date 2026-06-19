@@ -407,8 +407,7 @@ class InGameUI:
 
 
 
-    def set_construction_target(self, country_name: str | None):
-        self._construction_target = country_name
+    
 
     def __init__(self, window_size):
         self.window_size = window_size
@@ -539,7 +538,6 @@ class InGameUI:
         self._topbar_metric_rate_turn = None
         self._selected_construction = None
         self._construction_target = None
-        self._construction_target = None
         self._construction_btn_rects = {}
    
         self._recruit_action_rect = pygame.Rect(0, 0, 10, 10)
@@ -576,14 +574,8 @@ class InGameUI:
         self._production_item_count = 44
         self.production_selected = None
         self._researched_weapon_nodes: list[dict] = []
-        self._recruit_action_rect = pygame.Rect(0, 0, 10, 10)
-        self._declarewar_rect = pygame.Rect(0, 0, 10, 10)
-        self._split_rect = pygame.Rect(0, 0, 10, 10)
-        self._merge_rect = pygame.Rect(0, 0, 10, 10)
-        self._frontline_rect = pygame.Rect(0, 0, 10, 10)
         self._production_blank_rect = pygame.Rect(0, 0, 10, 10)
-        self._research_btn_rects = [pygame.Rect(0, 0, 10, 10) for _ in range(4)]
-
+        
         self.leftbar = LeftBar(pygame.Rect(0, 0, 10, 10))
         self.bottom_buttons = BottomButtons(pygame.Rect(0, 0, 10, 10))
 
@@ -3875,7 +3867,7 @@ class InGameUI:
        chip_gap = 10
        chip_w = (rect.width - chip_gap * 2) // 3
 
-       # Top chips (summary)
+       
        self._draw_metric_chip(
            surface,
            pygame.Rect(rect.x, rect.y, chip_w, 58),
@@ -3907,7 +3899,7 @@ class InGameUI:
        left_rect = pygame.Rect(rect.x, body_y, rect.width // 2 - 7, rect.bottom - body_y)
        right_rect = pygame.Rect(left_rect.right + 14, body_y, rect.width - left_rect.width - 14, rect.bottom - body_y)
 
-       # LEFT PANEL
+       
        self._draw_vertical_gradient_rect(surface, left_rect, (15, 24, 38), (8, 13, 22), radius=6)
        pygame.draw.rect(surface, (52, 65, 82), left_rect, 1, border_radius=6)
 
@@ -3942,7 +3934,7 @@ class InGameUI:
             )
            y += 28
 
-       # RIGHT PANEL
+       
        self._draw_vertical_gradient_rect(surface, right_rect, (15, 24, 38), (8, 13, 22), radius=6)
        pygame.draw.rect(surface, (52, 65, 82), right_rect, 1, border_radius=6)
 
