@@ -1564,8 +1564,13 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
     
     runtimeui.settings_volume = int(max(0, min(100, round(volume * 100))))
     runtimeui.set_fullscreen_state(is_fullscreen)
+    
+
+
     maprect = runtimeui.map_rect
     camerastate = cameramodule.createcamerastate(maprect.width, maprect.height, mapbox)
+
+    
 
 
 
@@ -1739,6 +1744,40 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                     if savedfocus:
                         savedfocus.progress = loadeddata.get("focusprogress", 0)
             countrybordersdirty = True
+
+
+            if playercountry:
+                ownedminx = ownedminy = float("inf")
+                ownedmaxx = ownedmaxy = float("-inf")
+                for stateshape in playablestateshapelist:
+                    if stateshape.get("controllercountry") != playercountry:
+                        continue
+                    rect = stateshape.get("rectangle")
+                    if rect is None:
+                        continue
+                    ownedminx = min(ownedminx, float(rect.left))
+                    ownedminy = min(ownedminy, float(rect.top))
+                    ownedmaxx = max(ownedmaxx, float(rect.right))
+                    ownedmaxy = max(ownedmaxy, float(rect.bottom))
+
+                if ownedminx < float("inf") and ownedmaxx > float("-inf"):
+                    ownedboxwidth = max(1.0, ownedmaxx - ownedminx)
+                    ownedboxheight = max(1.0, ownedmaxy - ownedminy)
+                    ownedmargin = 80.0
+                    ownedboxwidth += ownedmargin * 2
+                    ownedboxheight += ownedmargin * 2
+
+                    loadzoomx = maprect.width / ownedboxwidth
+                    loadzoomy = maprect.height / ownedboxheight
+                    loadtargetzoom = max(minimumzoomvalue, min(maximumzoomvalue, min(loadzoomx, loadzoomy)))
+                    camerastate.zoom = loadtargetzoom
+                    camerastate.targetzoom = loadtargetzoom
+
+                    loadcenterworldx = (ownedminx + ownedmaxx) * 0.5
+                    loadcenterworldy = (ownedminy + ownedmaxy) * 0.5
+                    camerastate.x = maprect.width * 0.5 - loadcenterworldx * loadtargetzoom
+                    camerastate.y = maprect.height * 0.5 - loadcenterworldy * loadtargetzoom
+                    cameramodule.clampcamerastate(camerastate, maprect.height, mapbox)
 
     def normalizewarpair(firstcountry, secondcountry):
         if not firstcountry or not secondcountry:
