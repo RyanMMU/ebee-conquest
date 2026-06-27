@@ -398,8 +398,10 @@ class InGameUI:
     actiontogglecovidpolicy = "togglecovidpolicy"
     actiontogglecovidmap = "togglecovidmap"
     actionpausemenu = "pausemenu"
-    actionquitgame = "quitgame"
+    actionsavegame = "savegame"
     actiontogglesettingsfullscreen = "togglesettingsfullscreen"
+    actionquitgame = "quitgame"
+    
     actionweapon1 = "weapon_1"
     actionweapon2 = "weapon_2"
     actionweapon3 = "weapon_3"
@@ -611,6 +613,9 @@ class InGameUI:
         self.pause_menu = pygame.Rect(0,0,10,10)
         self.quit_menu = pygame.Rect(0,0,10,10)
         self.map_rect = pygame.Rect(0, 0, 10, 10)
+        self._pausesave_rect = pygame.Rect(0, 0, 10, 10)
+        self._pausesave_notice = None
+        self._pausesave_notice_time = 0.0
         self.applylayout()
 
 
@@ -1770,11 +1775,14 @@ class InGameUI:
 
         self._research_back_rect = pygame.Rect(back_x, back_y, back_w, back_h)
         menu_w = min(320, max(220, window_width - 80))
-        menu_h = 170
+        menu_h = 222
         menu_x = max(0, (window_width - menu_w) // 2)
         menu_y = max(0, (window_height - menu_h) // 2)
         self._pausemenu_rect = pygame.Rect(menu_x, menu_y, menu_w, menu_h)
+        self._pausesave_rect = pygame.Rect(menu_x + (menu_w - 150) // 2, menu_y + menu_h - 104, 150, 40)
         self._pausequit_rect = pygame.Rect(menu_x + (menu_w - 150) // 2, menu_y + menu_h - 52, 150, 40)
+        self._pausesave_notice = None
+        self._pausesave_notice_time = 0.0
         self._war_progress_rect = pygame.Rect(content_x, content_y + 40, content_w, 34)
 
     def _current_layout_key(self):
@@ -2006,6 +2014,12 @@ class InGameUI:
         elif self._policy_dropdown_progress > target:
             self._policy_dropdown_progress = max(target, self._policy_dropdown_progress - dt * speed)
 
+
+        if self._pausesave_notice_time > 0.0:
+            self._pausesave_notice_time = max(0.0, self._pausesave_notice_time - dt)
+            if self._pausesave_notice_time <= 0.0:
+                self._pausesave_notice = None
+
     def _get_selected_division_entry(self):
         for entry in self._selectedtroopentries or ():
             if isinstance(entry, dict) and entry.get("divisionid"):
@@ -2157,6 +2171,9 @@ class InGameUI:
 
         if self.pausemenuopen:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if self._pausesave_rect.collidepoint(event.pos):
+                    self.ui_click_sound.play()
+                    return self.actionsavegame
                 if self._pausequit_rect.collidepoint(event.pos):
                     self.ui_click_sound.play()
                     return self.actionquitgame
@@ -4442,6 +4459,11 @@ class InGameUI:
             else:
                 surface.blit(txt, txt.get_rect(center=drawrect.center))
 
+
+    def shownsavenotice(self, text):
+        self._pausesave_notice = str(text)
+        self._pausesave_notice_time = 1.8
+
     def _draw_pausemenu(self, surface: pygame.Surface):
         overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
         overlay.fill((0, 0, 0, 150))
@@ -4458,4 +4480,9 @@ class InGameUI:
         info = self.font.render("Press ESC to resume", True, (200, 200, 200))
         surface.blit(info, info.get_rect(center=(draw_rect.centerx, draw_rect.y + 72)))
 
+        self._draw_glow_btn(surface, "pause_save", self._pausesave_rect, True, "SAVE GAME", primary=True, mouse=pygame.mouse.get_pos())
         self._draw_glow_btn(surface, "pause_quit", self._pausequit_rect, True, "QUIT GAME", mouse=pygame.mouse.get_pos())
+
+        if self._pausesave_notice and self._pausesave_notice_time > 0.0:
+            notice_surface = self.small_font_bold.render(self._pausesave_notice, True, _C_SUCCESS)
+            surface.blit(notice_surface, notice_surface.get_rect(center=(draw_rect.centerx, self._pausesave_rect.y - 14)))

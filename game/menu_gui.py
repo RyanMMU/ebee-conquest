@@ -2,10 +2,11 @@ import math
 import os
 import shutil
 import sys
-#testting 
+
 import pygame
 
 from engine.runtime import main as run_game
+from engine import savegame as savegamemodule
 from game.animation.motion import (
     AmbientParticleField,
     PulseLayer,
@@ -103,6 +104,11 @@ class AnimatedMainMenu:
         self.mouse = (0, 0)
         self.notice = None
         self.notice_time = 0.0
+       
+        self.loadgame_open = False
+        self.loadgame_slots = []
+        self.loadgame_slot_rects = {}
+        self.loadgame_back_rect = pygame.Rect(0, 0, 10, 10)
 
         self.title_font = _load_font("Inter_18pt-Medium.ttf", 42, bold=True)
         self.heading_font = _load_font("Inter_18pt-Medium.ttf", 28, bold=True)
@@ -268,11 +274,75 @@ class AnimatedMainMenu:
             elif key == "quit":
                 self.running = False
             elif key == "load_game":
-                self.notice = "Save loading is not implemented yet."
-                self.notice_time = 2.4
-
+                self.loadgame_slots = savegamemodule.listsaveslots()
+                self.loadgame_open = True
             return
-        
+                    
+    def _loadgame_popup_rect(self):
+        w, h = self.screen.get_size()
+        popup_w = min(520, max(360, int(w * 0.42)))
+        popup_h = min(560, max(360, int(h * 0.66)))
+        rect = pygame.Rect(0, 0, popup_w, popup_h)
+        rect.center = (w // 2, h // 2)
+        return rect
+
+    def _draw_loadgame_popup(self, dt):
+        overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 170))
+        self.screen.blit(overlay, (0, 0))
+
+        popup = self._loadgame_popup_rect()
+        draw_soft_glow(self.screen, popup, _C_GOLD, 0.32, radius=12, rings=6)
+        _draw_vertical_gradient(self.screen, popup, (18, 27, 42), (6, 10, 18), radius=10)
+        pygame.draw.rect(self.screen, (86, 78, 52), popup, 1, border_radius=10)
+
+        title = self.heading_font.render("LOAD GAME", True, _C_GOLD_BRIGHT)
+        self.screen.blit(title, (popup.x + 28, popup.y + 24))
+
+        self.loadgame_slot_rects = {}
+        row_h = 56
+        gap = 10
+        list_top = popup.y + 70
+        list_bottom = popup.bottom - 70
+
+        if not self.loadgame_slots:
+            empty = self.main_font.render("No saved games found.", True, _C_MUTED)
+            self.screen.blit(empty, (popup.x + 28, list_top + 10))
+        else:
+            y = list_top
+            for entry in self.loadgame_slots:
+                if y + row_h > list_bottom:
+                    break
+                row_rect = pygame.Rect(popup.x + 24, y, popup.width - 48, row_h)
+                self.loadgame_slot_rects[entry["slot"]] = row_rect
+                hovered = row_rect.collidepoint(self.mouse)
+                top = (34, 54, 86) if hovered else (16, 25, 42)
+                bottom = (13, 24, 42) if hovered else (6, 10, 18)
+                _draw_vertical_gradient(self.screen, row_rect, top, bottom, radius=8)
+                pygame.draw.rect(self.screen, _C_GOLD if hovered else (69, 84, 104), row_rect, 1, border_radius=8)
+                label = self.main_font.render(entry["label"], True, _C_TEXT)
+                self.screen.blit(label, (row_rect.x + 16, row_rect.y + 8))
+                detail = f"{entry.get('playercountry') or 'Unknown'} - Turn {entry.get('turn') or 1}"
+                detail_surface = self.small_font.render(detail, True, _C_MUTED)
+                self.screen.blit(detail_surface, (row_rect.x + 16, row_rect.y + 30))
+                y += row_h + gap
+
+        back_w, back_h = 140, 44
+        self.loadgame_back_rect = pygame.Rect(popup.centerx - back_w // 2, popup.bottom - back_h - 20, back_w, back_h)
+        self._draw_button(self.loadgame_back_rect, "loadgame_back", "BACK", dt)
+
+    def _handle_loadgame_click(self):
+        if self.loadgame_back_rect.collidepoint(self.mouse):
+            self._play_click()
+            self.loadgame_open = False
+            return
+        for slotnumber, rect in self.loadgame_slot_rects.items():
+            if rect.collidepoint(self.mouse):
+                self._play_click()
+                self.loadgame_open = False
+                run_game(is_fullscreen=self.is_fullscreen, volume=self.volume / 100.0, load_slot=slotnumber)
+                pygame.quit()
+                sys.exit()
           
 
     def _launch_transition(self, origin_rect):
@@ -425,8 +495,15 @@ class AnimatedMainMenu:
             else:
                 self._set_menu("main")
             return
+        
+        if self.loadgame_open:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                self._handle_loadgame_click()
+            return
 
         if self.menu == "scripts":
+
+            
             action = self.script_menu.handle_event(event, self.mouse, self.screen.get_size())
             if action == "back":
                 self._play_click()
@@ -466,6 +543,8 @@ class AnimatedMainMenu:
                 self._draw_scripts()
             else:
                 self._draw_main(dt)
+            if self.loadgame_open:
+                self._draw_loadgame_popup(dt)
             pygame.display.flip()
 
 

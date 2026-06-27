@@ -10,6 +10,9 @@ from svgelements import Path
 import ctypes
 ctypes.windll.user32.SetProcessDPIAware()
 
+from engine.console import developmentconsole, loaddevmodeflag
+from engine import savegame as savegamemodule
+
 select_sound = None
 
 COVID_NEWS_EVENTS = {
@@ -1129,7 +1132,7 @@ def drawloadingscreen(
 
 
 
-def main(eventbus=None, is_fullscreen=False, volume=1.0):
+def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
     global select_sound
     
     if eventbus is None:
@@ -1538,6 +1541,8 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
             "edgeCount": totaledges,
         },
     )
+
+    
     if not drawloadingscreen(
         screen,
         loadingtitlefont,
@@ -1627,6 +1632,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
 
     # Economy defaults come from economy module
     currentturnnumber = 1
+    currentsaveslot = [load_slot]
     economyconfig = getdefaulteconomyconfig()
     (
         playergold,
@@ -1686,6 +1692,53 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
     for _rcat in _research_raw.values():
         for _rn in _rcat.get("nodes", []):
             _research_cost_lookup[_rn["id"]] = _rn["cost"]
+
+
+    if load_slot is not None:
+        loadeddata = savegamemodule.readsaveslot(load_slot)
+        if loadeddata is not None:
+            playercountry = loadeddata.get("playercountry")
+            currentturnnumber = loadeddata.get("currentturnnumber", currentturnnumber)
+            playergold = loadeddata.get("playergold", playergold)
+            playerpopulation = loadeddata.get("playerpopulation", playerpopulation)
+            playerstability = loadeddata.get("playerstability", playerstability)
+            playerpp = loadeddata.get("playerpp", playerpp)
+            playerap = loadeddata.get("playerap", playerap)
+            recruitamount = loadeddata.get("recruitamount", recruitamount)
+            gamephase = loadeddata.get("gamephase", gamephase)
+            countriesatwarset = set(loadeddata.get("countriesatwarset", []))
+            warpairset = savegamemodule.deserializewarpairset(loadeddata.get("warpairset"))
+            warrecordlookup.clear()
+            warrecordlookup.update(savegamemodule.deserializewarrecordlookup(loadeddata.get("warrecordlookup")))
+            occupationtransferlookup.clear()
+            occupationtransferlookup.update(loadeddata.get("occupationtransferlookup", {}))
+            capitulationtimer.clear()
+            capitulationtimer.update(loadeddata.get("capitulationtimer", {}))
+            capitulatedset = set(loadeddata.get("capitulatedset", []))
+            savegamemodule.applyserializedprovincemap(loadeddata.get("provincemap"), provincemap)
+            movementorderlist = loadeddata.get("movementorderlist", [])
+            for order in movementorderlist:
+                if order.get("countrycolor") is not None:
+                    order["countrycolor"] = tuple(order["countrycolor"])
+            frontlineassignmentlist = loadeddata.get("frontlineassignmentlist", [])
+            frontlineassignmentcounter = loadeddata.get("frontlineassignmentcounter", 0)
+            researched_set = set(loadeddata.get("researched_set", []))
+            researching_node_id = loadeddata.get("researching_node_id")
+            researching_turns_remaining = loadeddata.get("researching_turns_remaining", 0)
+            domesticaffairsstate = loadeddata.get("domesticaffairsstate", domesticaffairsstate)
+            notifications = loadeddata.get("notifications", [])
+            covidcasemapenabled = loadeddata.get("covidcasemapenabled", False)
+            if playercountry:
+                npcdirector.setplayercountry(playercountry)
+                npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
+                focustree = loadfocustreeforcountry(playercountry)
+                savedfocusid = loadeddata.get("focusid")
+                if savedfocusid:
+                    focustree.startfocus(savedfocusid)
+                    savedfocus = focustree.getfocus(savedfocusid)
+                    if savedfocus:
+                        savedfocus.progress = loadeddata.get("focusprogress", 0)
+            countrybordersdirty = True
 
     def normalizewarpair(firstcountry, secondcountry):
         if not firstcountry or not secondcountry:
@@ -2957,6 +3010,50 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
         if playercountry and not playercountrychanged:
             npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
 
+
+    def buildsavesnapshot():
+        return {
+            "playercountry": playercountry,
+            "currentturnnumber": currentturnnumber,
+            "playergold": playergold,
+            "playerpopulation": playerpopulation,
+            "playerstability": playerstability,
+            "playerpp": playerpp,
+            "playerap": playerap,
+            "recruitamount": recruitamount,
+            "recruitgoldcostperunit": recruitgoldcostperunit,
+            "recruitpopulationcostperunit": recruitpopulationcostperunit,
+            "gamephase": gamephase,
+            "countriesatwarset": list(countriesatwarset),
+            "warpairset": savegamemodule.serializewarpairset(warpairset),
+            "warrecordlookup": savegamemodule.serializewarrecordlookup(warrecordlookup),
+            "occupationtransferlookup": occupationtransferlookup,
+            "capitulationtimer": capitulationtimer,
+            "capitulatedset": list(capitulatedset),
+            "provincemap": savegamemodule.serializeprovincemap(provincemap),
+            "movementorderlist": savegamemodule.serializemovementorders(movementorderlist),
+            "frontlineassignmentlist": frontlineassignmentlist,
+            "frontlineassignmentcounter": frontlineassignmentcounter,
+            "researched_set": list(researched_set),
+            "researching_node_id": researching_node_id,
+            "researching_turns_remaining": researching_turns_remaining,
+            "domesticaffairsstate": domesticaffairsstate,
+            "focusid": focustree.activeid,
+            "focusprogress": focustree.getfocus(focustree.activeid).progress if focustree.activeid and focustree.getfocus(focustree.activeid) else 0,
+            "notifications": notifications,
+            "covidcasemapenabled": covidcasemapenabled,
+        }
+
+    def performsavegame():
+        targetslot = currentsaveslot[0]
+        if targetslot is None:
+            targetslot = savegamemodule.getnextavailableslot()
+            if targetslot is None:
+                targetslot = 1
+            currentsaveslot[0] = targetslot
+        savegamemodule.writesaveslot(targetslot, buildsavesnapshot())
+        return targetslot
+
     devconsole = developmentconsole(enabled=developmentmode)
     notifications = []
     _notif_id_counter = 0
@@ -4101,6 +4198,11 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
             uiaction = runtimeui.process_event(event)
             if uiaction == InGameUI.actionquitgame:
                 isrunning = False
+                continue
+
+            if uiaction == InGameUI.actionsavegame:
+                savedslot = performsavegame()
+                runtimeui.shownsavenotice(f"Saved to Game {savedslot}")
                 continue
 
             if uiaction == InGameUI.actionpausemenu:
