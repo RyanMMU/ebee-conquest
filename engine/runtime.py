@@ -1079,6 +1079,65 @@ def drawloadingscreen(
     pygame.display.flip()
     return True
 
+def showsplashscreen(screen):
+    clock = pygame.time.Clock()
+
+    splash_images = [
+        "game/images/developer_logo.png",
+        "game/images/game_logo.png",
+    ]
+
+    for image_path in splash_images:
+        logo = pygame.image.load(image_path).convert_alpha()
+
+        screen_width, screen_height = screen.get_size()
+
+        scale = min(
+            screen_width * 0.6 / logo.get_width(),
+            screen_height * 0.6 / logo.get_height(),
+        )
+
+        logo = pygame.transform.smoothscale(
+            logo,
+            (
+                int(logo.get_width() * scale),
+                int(logo.get_height() * scale),
+            ),
+        )
+
+        # Fade In
+        for alpha in range(0, 256, 8):
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return
+
+            screen.fill((0, 0, 0))
+
+            logo.set_alpha(alpha)
+
+            rect = logo.get_rect(center=(screen_width // 2, screen_height // 2))
+            screen.blit(logo, rect)
+
+            pygame.display.flip()
+            clock.tick(60)
+
+        pygame.time.delay(1200)
+
+        # Fade Out
+        for alpha in range(255, -1, -8):
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return
+
+            screen.fill((0, 0, 0))
+
+            logo.set_alpha(alpha)
+
+            rect = logo.get_rect(center=(screen_width // 2, screen_height // 2))
+            screen.blit(logo, rect)
+
+            pygame.display.flip()
+            clock.tick(60)
 
 
 
