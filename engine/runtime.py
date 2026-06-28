@@ -4747,6 +4747,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                 
                 if sourceprovinceidlist:
                     move_sound.play()
+                    play_country_move_voice(getprovincecontroller(sourceprovince))
                     
                 for sourceprovinceid in sourceprovinceidlist:
                     if sourceprovinceid == hoveredprovinceid:
@@ -4781,6 +4782,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                         playerap = max(0, playerap - moveorderapcost)
                         
                     move_sound.play()
+                    play_country_move_voice(getprovincecontroller(sourceprovince))
                     
                     movementorderlist.append(
                         {
