@@ -170,6 +170,8 @@ class AnimatedMainMenu:
         self._bg_surface = None
         self._bg_size = None
         self._refresh_background()
+        
+        show_splash_screen(self.screen)
 
     def _refresh_background(self):
         size = self.screen.get_size()
