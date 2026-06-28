@@ -1097,6 +1097,23 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
 
     move_sound = pygame.mixer.Sound("game/sounds/troop_move.wav")
     move_sound.set_volume(volume * 0.5)
+    
+    country_move_sounds = {
+        "Malaysia": pygame.mixer.Sound("game/speeches/malaysia_move.wav"),
+        "Indonesia": pygame.mixer.Sound("game/speeches/indonesia_move.wav"),
+        "Singapore": pygame.mixer.Sound("game/speeches/singapore_move.wav"),
+        "Thailand": pygame.mixer.Sound("game/speeches/thailand_move.wav"),
+        "Vietnam": pygame.mixer.Sound("game/speeches/vietnam_move.wav"),
+        "Philippines": pygame.mixer.Sound("game/speeches/philippines_move.wav"),
+        "Brunei": pygame.mixer.Sound("game/speeches/brunei_move.wav"),
+        "Cambodia": pygame.mixer.Sound("game/speeches/cambodia_move.wav"),
+        "Laos": pygame.mixer.Sound("game/speeches/laos_move.wav"),
+        "Myanmar": pygame.mixer.Sound("game/speeches/myanmar_move.wav"),
+        "Timor-Leste": pygame.mixer.Sound("game/speeches/timorleste_move.wav"),
+    }
+
+    for sound in country_move_sounds.values():
+        sound.set_volume(volume * 0.7)
 
     mahathir_speech = pygame.mixer.Sound("game/speeches/mahathir_speech.wav")
     mahathir_speech.set_volume(volume * 0.7)
