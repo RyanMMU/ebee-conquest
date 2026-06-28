@@ -4779,8 +4779,6 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                     moveorderapcost = economyconfig.get("moveorderapcost", 10)
                     if not developmentmode:
                         playerap = max(0, playerap - moveorderapcost)
-                        
-                    move_sound.play()
                     
                     country = getprovincecontroller(sourceprovince)
                     play_country_move_voice(country)
