@@ -65,6 +65,59 @@ def _safe_sound(path, volume=0.4):
         return sound
     except pygame.error:
         return None
+    
+def show_splash_screen(screen):
+    clock = pygame.time.Clock()
+
+    splash_images = [
+        "game/images/developer_logo.png",
+        "game/images/game_logo.png",
+    ]
+
+    for image_path in splash_images:
+        logo = pygame.image.load(image_path).convert_alpha()
+
+        sw, sh = screen.get_size()
+
+        scale = min(sw * 0.6 / logo.get_width(), sh * 0.6 / logo.get_height())
+
+        logo = pygame.transform.smoothscale(
+            logo,
+            (
+                int(logo.get_width() * scale),
+                int(logo.get_height() * scale),
+            ),
+        )
+
+        for alpha in range(0, 256, 8):
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return
+
+            screen.fill((0, 0, 0))
+
+            logo.set_alpha(alpha)
+
+            screen.blit(logo, logo.get_rect(center=(sw // 2, sh // 2)))
+
+            pygame.display.flip()
+            clock.tick(60)
+
+        pygame.time.delay(1200)
+
+        for alpha in range(255, -1, -8):
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return
+
+            screen.fill((0, 0, 0))
+
+            logo.set_alpha(alpha)
+
+            screen.blit(logo, logo.get_rect(center=(sw // 2, sh // 2)))
+
+            pygame.display.flip()
+            clock.tick(60)
 
 
 def _draw_vertical_gradient(surface, rect, top_color, bottom_color, radius=0):
