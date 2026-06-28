@@ -32,6 +32,10 @@ def getprovincecontroller(province):
     # get the current controller
     return province.get("controllercountry", province.get("country"))
 
+def play_country_move_voice(country):
+    sound = country_move_sounds.get(country)
+    if sound:
+        sound.play()
 
 def getprovinceowner(province):
     # get the original owner
