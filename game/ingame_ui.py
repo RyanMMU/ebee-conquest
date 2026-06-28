@@ -491,6 +491,18 @@ class InGameUI:
         self._notification_max_scroll = 0
         self._notification_card_rects = {}
         self._notification_popup_rect = pygame.Rect(0, 0, 10, 10)
+        self._marquee_queue = []
+        self._marquee_seen_keys = set()
+        self._marquee_current = None
+        self._marquee_text = ""
+        self._marquee_text_width = 0
+        self._marquee_phase = "idle"
+        self._marquee_progress = 0.0
+        self._marquee_elapsed = 0.0
+        self._marquee_scroll = 0.0
+        self._marquee_center_paused = False
+        self._marquee_pause_remaining = 0.0
+        self._marquee_rect = pygame.Rect(0, 0, 10, 10)
         self._combat_popup_rect = pygame.Rect(0, 0, 10, 10)
         self._policy_popup_rect = pygame.Rect(0, 0, 10, 10)
         self._policy_focus_slot_rect = pygame.Rect(0, 0, 10, 10)
@@ -498,16 +510,18 @@ class InGameUI:
         self._covid_policy_button_rects = {}
 
         try:
-            import json as _json
-            with open("settings.json") as _settingsfile:
-                self.settings_volume = int(_json.load(_settingsfile).get("volume", 50))
-        except (FileNotFoundError, ValueError, OSError):
-            self.settings_volume = 50
+            from engine.settings import loadsettings as _loadsettings
+            _savedsettings = _loadsettings()
+        except Exception:
+            _savedsettings = {}
+        self.settings_volume = int(_savedsettings.get("volume", 50))
+        self.settings_ai_mode = str(_savedsettings.get("llm_mode") or "graph")
         self.is_fullscreen = False
         self._settings_volume_dragging = False
         self._settings_popup_rect = pygame.Rect(0, 0, 10, 10)
         self._settings_slider_rect = pygame.Rect(0, 0, 10, 10)
         self._settings_fullscreen_rect = pygame.Rect(0, 0, 10, 10)
+        self._settings_ai_mode_rect = pygame.Rect(0, 0, 10, 10)
         self._settings_close_rect = pygame.Rect(0, 0, 10, 10)
         self._covid_case_map_rect = pygame.Rect(0, 0, 10, 10)
         self._notificationcount = 0
@@ -924,6 +938,174 @@ class InGameUI:
         draw_light_sweep(surface, rect, self._motion_time * 0.72, _C_GOLD_BRIGHT, alpha=16)
         draw_scanlines(surface, rect, self._motion_time, color=(74, 143, 231), alpha=6, spacing=30)
 
+    @staticmethod
+    def _marquee_notification_key(notification):
+        notificationid = notification.get("id")
+        if notificationid is not None:
+            return ("id", str(notificationid))
+        return (
+            "content",
+            str(notification.get("title", "")),
+            str(notification.get("description", "")),
+            str(notification.get("turn", "")),
+        )
+
+    def _enqueue_marquee_notifications(self, notifications):
+        newnotifications = []
+        for notification in notifications:
+            if not isinstance(notification, dict):
+                continue
+            key = self._marquee_notification_key(notification)
+            if key in self._marquee_seen_keys:
+                continue
+            self._marquee_seen_keys.add(key)
+            newnotifications.append(dict(notification))
+
+        if len(self._marquee_seen_keys) > 512:
+            self._marquee_seen_keys = {
+                self._marquee_notification_key(notification)
+                for notification in notifications[-256:]
+                if isinstance(notification, dict)
+            }
+        self._marquee_queue.extend(newnotifications[-6:])
+
+    def _start_next_marquee(self):
+        if self._marquee_current is not None or not self._marquee_queue:
+            return
+        self._marquee_current = self._marquee_queue.pop(0)
+        title = " ".join(str(self._marquee_current.get("title") or "NEWS UPDATE").split())
+        description = " ".join(str(self._marquee_current.get("description") or "").split())
+        title = title[:72]
+        description = description[:240]
+        self._marquee_text = f"{title.upper()}  •  {description}" if description else title.upper()
+        self._marquee_text_width = self.font_bold.size(self._marquee_text)[0]
+        self._marquee_phase = "enter"
+        self._marquee_progress = 0.0
+        self._marquee_elapsed = 0.0
+        self._marquee_scroll = 0.0
+        self._marquee_center_paused = False
+        self._marquee_pause_remaining = 0.0
+
+    def _update_live_marquee(self, dt):
+        if self._marquee_current is None:
+            self._start_next_marquee()
+            return
+
+        if self._marquee_phase == "enter":
+            self._marquee_progress = min(1.0, self._marquee_progress + dt * 4.8)
+            if self._marquee_progress >= 1.0:
+                self._marquee_phase = "active"
+            return
+
+        if self._marquee_phase == "exit":
+            self._marquee_progress = max(0.0, self._marquee_progress - dt * 4.2)
+            if self._marquee_progress <= 0.0:
+                self._marquee_current = None
+                self._marquee_text = ""
+                self._marquee_phase = "idle"
+                self._start_next_marquee()
+            return
+
+        self._marquee_elapsed += dt
+        tickerleft = self.leftbar.rect.right if self.leftbar.rect.width else 0
+        availablewidth = max(180, self.window_size[0] - tickerleft - 100)
+        traveldistance = availablewidth + self._marquee_text_width + 24
+        scrollspeed = max(110.0, traveldistance / 9.0)
+        centerposition = (availablewidth + self._marquee_text_width) * 0.5 + 8
+
+        if self._marquee_pause_remaining > 0.0:
+            self._marquee_pause_remaining = max(0.0, self._marquee_pause_remaining - dt)
+            return
+
+        nextscroll = self._marquee_scroll + scrollspeed * dt
+        if (
+            not self._marquee_center_paused
+            and self._marquee_scroll <= centerposition <= nextscroll
+        ):
+            self._marquee_scroll = centerposition
+            self._marquee_center_paused = True
+            self._marquee_pause_remaining = 2.0
+            return
+
+        self._marquee_scroll = nextscroll
+        if self._marquee_scroll >= traveldistance:
+            self._marquee_phase = "exit"
+
+    def _draw_live_marquee(self, surface):
+        if self._marquee_current is None or self._marquee_progress <= 0.0:
+            self._marquee_rect = pygame.Rect(0, 0, 10, 10)
+            return
+
+        tickerheight = 34
+        eased = ease_out_cubic(self._marquee_progress)
+        tickerleft = self.leftbar.rect.right if self.leftbar.rect.width else 0
+        tickerrect = pygame.Rect(
+            tickerleft,
+            self.topbar.rect.bottom - int((1.0 - eased) * tickerheight),
+            max(0, min(surface.get_width(), self.topbar.rect.width) - tickerleft),
+            tickerheight,
+        )
+        self._marquee_rect = tickerrect
+        if tickerrect.width <= 0:
+            return
+
+        self._draw_vertical_gradient_rect(
+            surface,
+            tickerrect,
+            (12, 19, 30),
+            (5, 10, 18),
+        )
+        pygame.draw.line(surface, (57, 68, 84), tickerrect.topleft, tickerrect.topright, 1)
+        pygame.draw.line(surface, (95, 75, 40), tickerrect.bottomleft, tickerrect.bottomright, 1)
+
+        livepulse = 0.55 + 0.45 * pulse(self._motion_time, 2.8)
+        livewidth = 82
+        liverect = pygame.Rect(tickerrect.x + 8, tickerrect.y + 5, livewidth - 12, tickerheight - 10)
+        redfill = (
+            64 + int(34 * livepulse),
+            12 + int(10 * livepulse),
+            18 + int(10 * livepulse),
+        )
+        pygame.draw.rect(surface, redfill, liverect, border_radius=4)
+        pygame.draw.rect(surface, _C_DANGER, liverect, 1, border_radius=4)
+        pygame.draw.circle(
+            surface,
+            (255, 72, 72),
+            (liverect.x + 12, liverect.centery),
+            4 + int(livepulse * 2),
+        )
+        livetext = self.small_font_bold.render("LIVE", True, (255, 102, 102))
+        surface.blit(livetext, (liverect.x + 23, liverect.centery - livetext.get_height() // 2))
+
+        pygame.draw.line(
+            surface,
+            (78, 62, 39),
+            (tickerrect.x + livewidth, tickerrect.y + 6),
+            (tickerrect.x + livewidth, tickerrect.bottom - 6),
+            1,
+        )
+        viewport = pygame.Rect(
+            tickerrect.x + livewidth + 10,
+            tickerrect.y + 2,
+            max(1, tickerrect.width - livewidth - 18),
+            tickerrect.height - 4,
+        )
+
+        headline = self.font_bold.render(self._marquee_text, True, _C_TEXT)
+        headline.set_alpha(int(255 * eased))
+        headline_x = viewport.right + 8 - int(self._marquee_scroll)
+        headline_y = viewport.centery - headline.get_height() // 2 + int((1.0 - eased) * 16)
+        previousclip = surface.get_clip()
+        surface.set_clip(viewport)
+        surface.blit(headline, (headline_x, headline_y))
+        surface.set_clip(previousclip)
+
+        if self._marquee_phase == "enter":
+            flashalpha = int(70 * (1.0 - self._marquee_progress))
+            flash = pygame.Surface(viewport.size, pygame.SRCALPHA)
+            flash.fill((*_C_GOLD_BRIGHT, flashalpha))
+            surface.blit(flash, viewport.topleft)
+
     def _draw_map_edge_shadows(self, surface):
         rect = self.map_rect.clip(surface.get_rect())
         if rect.width <= 0 or rect.height <= 0:
@@ -1156,10 +1338,10 @@ class InGameUI:
     def _settings_controls(self):
         anchor_rect = self.leftbar.item_rects.get("SETTINGS")
         if anchor_rect is None:
-            return None, None, None, None
+            return None, None, None, None, None
 
         popup_w = min(360, max(300, self.window_size[0] - anchor_rect.right - 24))
-        popup_h = 220
+        popup_h = 300
         popup_x = anchor_rect.right + 8
         popup_y = anchor_rect.y
         popup_x = max(12, min(self.window_size[0] - popup_w - 12, popup_x))
@@ -1168,9 +1350,10 @@ class InGameUI:
 
         slider = pygame.Rect(popup_rect.x + 24, popup_rect.y + 78, popup_rect.width - 48, 12)
         fullscreen = pygame.Rect(popup_rect.x + 24, popup_rect.y + 122, popup_rect.width - 48, 48)
+        aimode = pygame.Rect(popup_rect.x + 24, popup_rect.y + 184, popup_rect.width - 48, 48)
         close_size = 28
         close = pygame.Rect(popup_rect.right - close_size - 14, popup_rect.y + 14, close_size, close_size)
-        return popup_rect, slider, fullscreen, close
+        return popup_rect, slider, fullscreen, aimode, close
 
     def _draw_notification_popup(self, surface, mouse):
         if self.active_left_tab != "NOTIFICATIONS":
@@ -1295,7 +1478,7 @@ class InGameUI:
             self._settings_popup_rect = pygame.Rect(0, 0, 10, 10)
             return
 
-        popup_rect, slider, fullscreen, close = self._settings_controls()
+        popup_rect, slider, fullscreen, aimode, close = self._settings_controls()
         if popup_rect is None:
             self._settings_popup_rect = pygame.Rect(0, 0, 10, 10)
             return
@@ -1303,6 +1486,7 @@ class InGameUI:
         self._settings_popup_rect = popup_rect
         self._settings_slider_rect = slider
         self._settings_fullscreen_rect = fullscreen
+        self._settings_ai_mode_rect = aimode
         self._settings_close_rect = close
 
         self._draw_glass_panel(surface, popup_rect, radius=8, border=_C_GOLD, glow=True)
@@ -1339,6 +1523,27 @@ class InGameUI:
             surface, "settings_fullscreen", fullscreen,
             True, fs_label, primary=self.is_fullscreen, selected=self.is_fullscreen, mouse=mouse,
         )
+        aimodelabels = {
+            "online": "AI: ONLINE LLM (ILMU)",
+            "ollama": "AI: OLLAMA LOCAL",
+            "graph": "AI: GRAPH-BASED",
+        }
+        self._draw_glow_btn(
+            surface,
+            "settings_ai_mode",
+            aimode,
+            True,
+            aimodelabels.get(self.settings_ai_mode, "AI: GRAPH-BASED"),
+            primary=self.settings_ai_mode == "online",
+            selected=self.settings_ai_mode == "online",
+            mouse=mouse,
+        )
+        modenote = self.small_font.render(
+            "AI changes apply to the next campaign.",
+            True,
+            _C_TEXT_MUTED,
+        )
+        surface.blit(modenote, (aimode.x, aimode.bottom + 10))
 
 
     def _apply_settings_volume_from_mouse(self, mouse):
@@ -1355,9 +1560,8 @@ class InGameUI:
         if self.ui_click_sound is not None:
             self.ui_click_sound.set_volume(vol * 0.4)
         try:
-            import json as _json
-            with open("settings.json", "w") as _settingsfile:
-                _json.dump({"volume": self.settings_volume}, _settingsfile)
+            from engine.settings import updatesettings as _updatesettings
+            _updatesettings({"volume": self.settings_volume})
         except OSError:
             pass
 
@@ -1938,7 +2142,9 @@ class InGameUI:
             if len(self._fps_history) > 42:
                 self._fps_history = self._fps_history[-42:]
         if notifications is not None:
-            self.notifications = list(notifications)
+            incomingnotifications = list(notifications)
+            self._enqueue_marquee_notifications(incomingnotifications)
+            self.notifications = incomingnotifications
         self._notificationcount = len([n for n in self.notifications if not n.get("read")])
         if self._notificationcount > previous_notification_count:
             self._ui_pulses.emit(self.leftbar.rect.center, _C_GOLD_BRIGHT, radius=120, duration=0.8, width=3)
@@ -1999,6 +2205,7 @@ class InGameUI:
             dt = 0.0
         self._motion_time += dt
         self._ui_pulses.update(dt)
+        self._update_live_marquee(dt)
         self._drawer_progress = exp_lerp(self._drawer_progress, 1.0 if self.rightbar.rect.width else 0.0, 6.8, dt)
         self._choose_progress = exp_lerp(self._choose_progress, 1.0 if self.gamephase == "choosecountry" else 0.0, 6.0, dt)
         self._tooltip_progress = exp_lerp(self._tooltip_progress, 1.0 if self._hovertext else 0.0, 11.0, dt)
@@ -2373,6 +2580,17 @@ class InGameUI:
             if self._settings_fullscreen_rect.collidepoint(pos):
                 self.ui_click_sound.play()
                 return self.actiontogglesettingsfullscreen
+            if self._settings_ai_mode_rect.collidepoint(pos):
+                self.ui_click_sound.play()
+                modes = ("online", "ollama", "graph")
+                currentmode = self.settings_ai_mode if self.settings_ai_mode in modes else "graph"
+                self.settings_ai_mode = modes[(modes.index(currentmode) + 1) % len(modes)]
+                try:
+                    from engine.settings import updatesettings as _updatesettings
+                    _updatesettings({"llm_mode": self.settings_ai_mode})
+                except OSError:
+                    pass
+                return None
             if self._settings_popup_rect.collidepoint(pos):
                 return None
 
@@ -2489,6 +2707,7 @@ class InGameUI:
             self._draw_command_atmosphere(surface)
            
             self._draw_topbar_background(surface)
+            self._draw_live_marquee(surface)
             title = self.title_font.render("EBEE COMMAND", True, _C_GOLD_BRIGHT)
             subtitle = self.small_font.render("SELECT THEATER COMMAND", True, _C_TEXT_MUTED)
             surface.blit(title, (20, 16))
@@ -2547,6 +2766,7 @@ class InGameUI:
         self._draw_bottombar_background(surface)
         self.bottom_buttons.draw(surface, self.font, mouse, font_bold=self.font_bold, icons=self._topbar_icons)
         self._draw_topbar_background(surface)
+        self._draw_live_marquee(surface)
 
         
         hovered = self._endturn_rect.collidepoint(mouse)

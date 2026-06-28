@@ -7,6 +7,7 @@ import pygame
 
 from engine.runtime import main as run_game
 from engine import savegame as savegamemodule
+from engine.settings import loadsettings, savesettings, updatesettings
 from game.animation.motion import (
     AmbientParticleField,
     PulseLayer,
@@ -94,12 +95,16 @@ class AnimatedMainMenu:
         self.running = True
         self.menu = "main"
         self.menu_transition = 1.0
-        try:
-            import json
-            with open("settings.json") as f:
-                self.volume = json.load(f).get("volume", 50)
-        except (FileNotFoundError, ValueError):
-            self.volume = 50
+        self.settings = loadsettings()
+        self.volume = int(self.settings.get("volume", 50))
+        self.setup_active = not bool(self.settings.get("setup_complete"))
+        self.setup_player_name = str(self.settings.get("player_name") or "")
+        self.setup_mode = str(self.settings.get("llm_mode") or "online")
+        self.setup_api_key = str(self.settings.get("online_api_key") or "")
+        self.setup_use_demo_key = bool(self.settings.get("use_demo_key", True))
+        self.setup_active_field = "player_name"
+        self.setup_error = ""
+        self.setup_expand = 1.0 if self.setup_mode == "online" else 0.0
         self.volume_dragging = False
         self.mouse = (0, 0)
         self.notice = None
@@ -123,6 +128,214 @@ class AnimatedMainMenu:
         self._bg_surface = None
         self._bg_size = None
         self._refresh_background()
+
+    def _setup_controls(self):
+        w, h = self.screen.get_size()
+        panelwidth = min(760, max(600, int(w * 0.62)))
+        expandedheight = 485 + int(115 * self.setup_expand)
+        panelheight = min(h - 36, expandedheight)
+        panel = pygame.Rect(0, 0, panelwidth, panelheight)
+        panel.center = (w // 2, h // 2)
+        namerect = pygame.Rect(panel.x + 44, panel.y + 96, panel.width - 88, 46)
+        optionrects = {}
+        optiontop = namerect.bottom + 42
+        for index, mode in enumerate(("online", "ollama", "graph")):
+            optionrects[mode] = pygame.Rect(
+                panel.x + 44,
+                optiontop + index * 60,
+                panel.width - 88,
+                50,
+            )
+        apirect = pygame.Rect(panel.x + 44, optionrects["graph"].bottom + 42, panel.width - 88, 44)
+        demorect = pygame.Rect(panel.x + 44, apirect.bottom + 10, panel.width - 88, 34)
+        continuebutton = pygame.Rect(panel.right - 220, panel.bottom - 58, 176, 42)
+        return panel, namerect, optionrects, apirect, demorect, continuebutton
+
+    def _draw_setup_popup(self, dt):
+        targetexpand = 1.0 if self.setup_mode == "online" else 0.0
+        self.setup_expand = exp_lerp(self.setup_expand, targetexpand, 11.0, dt)
+
+        overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 196))
+        self.screen.blit(overlay, (0, 0))
+        panel, namerect, optionrects, apirect, demorect, continuebutton = self._setup_controls()
+        draw_soft_glow(self.screen, panel, _C_GOLD, 0.38, radius=14, rings=7)
+        _draw_vertical_gradient(self.screen, panel, (19, 30, 48), (5, 10, 18), radius=12)
+        pygame.draw.rect(self.screen, (104, 89, 52), panel, 1, border_radius=12)
+
+        title = self.heading_font.render("FIRST-RUN COMMAND SETUP", True, _C_GOLD_BRIGHT)
+        self.screen.blit(title, (panel.x + 44, panel.y + 28))
+        subtitle = self.small_font.render(
+            "Choose how Ebee's non-player nations reason and negotiate.",
+            True,
+            _C_MUTED,
+        )
+        self.screen.blit(subtitle, (panel.x + 44, panel.y + 62))
+
+        namelabel = self.small_font.render("PLAYER NAME", True, _C_GOLD)
+        self.screen.blit(namelabel, (namerect.x, namerect.y - 20))
+        nameactive = self.setup_active_field == "player_name"
+        pygame.draw.rect(self.screen, (9, 17, 29), namerect, border_radius=7)
+        pygame.draw.rect(
+            self.screen,
+            _C_GOLD if nameactive else (66, 82, 103),
+            namerect,
+            2 if nameactive else 1,
+            border_radius=7,
+        )
+        namevalue = self.setup_player_name or "Enter your name"
+        namecolor = _C_TEXT if self.setup_player_name else _C_MUTED
+        namesurface = self.main_font.render(namevalue[-42:], True, namecolor)
+        self.screen.blit(namesurface, (namerect.x + 14, namerect.centery - namesurface.get_height() // 2))
+
+        modelabel = self.small_font.render("CHOOSE MODE", True, _C_GOLD)
+        self.screen.blit(modelabel, (namerect.x, namerect.bottom + 18))
+        labels = {
+            "online": ("EBEE CONQUEST ONLINE LLM (RECOMMENDED)", "Hosted through the ILMU OpenAI-compatible API"),
+            "ollama": ("OLLAMA LOCAL LLM", "Runs through localhost · model: llama3.2"),
+            "graph": ("GRAPH-BASED LLM", "Offline deterministic negotiation logic"),
+        }
+        for mode, rect in optionrects.items():
+            selected = mode == self.setup_mode
+            hovered = rect.collidepoint(self.mouse)
+            fill = (47, 43, 29) if selected else ((25, 39, 60) if hovered else (11, 20, 33))
+            pygame.draw.rect(self.screen, fill, rect, border_radius=7)
+            pygame.draw.rect(
+                self.screen,
+                _C_GOLD if selected else (62, 77, 96),
+                rect,
+                2 if selected else 1,
+                border_radius=7,
+            )
+            pygame.draw.circle(self.screen, _C_GOLD if selected else (104, 115, 130), (rect.x + 22, rect.centery), 8, 2)
+            if selected:
+                pygame.draw.circle(self.screen, _C_GOLD_BRIGHT, (rect.x + 22, rect.centery), 4)
+            label, detail = labels[mode]
+            self.screen.blit(self.small_font.render(label, True, _C_TEXT), (rect.x + 42, rect.y + 8))
+            self.screen.blit(self.small_font.render(detail, True, _C_MUTED), (rect.x + 42, rect.y + 27))
+
+        if self.setup_expand > 0.03:
+            fieldalpha = int(255 * self.setup_expand)
+            slideoffset = int((1.0 - self.setup_expand) * -34)
+            apirect = apirect.move(0, slideoffset)
+            demorect = demorect.move(0, slideoffset)
+            apilabel = self.small_font.render(
+                'INPUT API KEY OR USE DEMO MODE KEY',
+                True,
+                (*_C_GOLD, fieldalpha),
+            )
+            self.screen.blit(apilabel, (apirect.x, apirect.y - 21))
+            apiactive = self.setup_active_field == "api_key" and not self.setup_use_demo_key
+            pygame.draw.rect(self.screen, (8, 15, 26), apirect, border_radius=7)
+            pygame.draw.rect(
+                self.screen,
+                _C_GOLD if apiactive else (65, 80, 100),
+                apirect,
+                2 if apiactive else 1,
+                border_radius=7,
+            )
+            if self.setup_use_demo_key:
+                displaykey = "Demo key selected"
+                keycolor = _C_MUTED
+            elif self.setup_api_key:
+                displaykey = "•" * min(34, max(8, len(self.setup_api_key) - 4)) + self.setup_api_key[-4:]
+                keycolor = _C_TEXT
+            else:
+                displaykey = "Paste your sk-… key"
+                keycolor = _C_MUTED
+            keysurface = self.main_font.render(displaykey, True, keycolor)
+            keysurface.set_alpha(fieldalpha)
+            self.screen.blit(keysurface, (apirect.x + 14, apirect.centery - keysurface.get_height() // 2))
+
+            demofill = (42, 49, 32) if self.setup_use_demo_key else (11, 20, 33)
+            pygame.draw.rect(self.screen, demofill, demorect, border_radius=6)
+            pygame.draw.rect(self.screen, (79, 91, 104), demorect, 1, border_radius=6)
+            checkbox = pygame.Rect(demorect.x + 10, demorect.y + 8, 18, 18)
+            pygame.draw.rect(self.screen, _C_GOLD if self.setup_use_demo_key else _C_MUTED, checkbox, 2, border_radius=3)
+            if self.setup_use_demo_key:
+                pygame.draw.line(self.screen, _C_GOLD_BRIGHT, (checkbox.x + 4, checkbox.centery), (checkbox.x + 8, checkbox.bottom - 4), 2)
+                pygame.draw.line(self.screen, _C_GOLD_BRIGHT, (checkbox.x + 8, checkbox.bottom - 4), (checkbox.right - 3, checkbox.y + 4), 2)
+            demolabel = self.small_font.render(
+                "Use temporary demo key (expires in one month)",
+                True,
+                _C_TEXT,
+            )
+            demolabel.set_alpha(fieldalpha)
+            self.screen.blit(demolabel, (demorect.x + 38, demorect.y + 9))
+
+        if self.setup_error:
+            errorsurface = self.small_font.render(self.setup_error, True, (241, 128, 128))
+            self.screen.blit(errorsurface, (panel.x + 44, panel.bottom - 48))
+        self._draw_button(continuebutton, "setup_continue", "CONTINUE", dt, primary=True)
+
+    def _complete_setup(self):
+        playername = self.setup_player_name.strip()
+        if not playername:
+            self.setup_error = "Enter a player name to continue."
+            self.setup_active_field = "player_name"
+            return
+        if self.setup_mode == "online" and not self.setup_use_demo_key and not self.setup_api_key.strip():
+            self.setup_error = "Enter an API key or enable the demo key."
+            self.setup_active_field = "api_key"
+            return
+        self.settings.update({
+            "setup_complete": True,
+            "player_name": playername,
+            "llm_mode": self.setup_mode,
+            "online_api_key": self.setup_api_key.strip(),
+            "use_demo_key": self.setup_use_demo_key,
+            "volume": self.volume,
+        })
+        self.settings = savesettings(self.settings)
+        self.setup_active = False
+        self.setup_error = ""
+        self.notice = f"Welcome, {playername}."
+        self.notice_time = 2.4
+
+    def _handle_setup_event(self, event):
+        panel, namerect, optionrects, apirect, demorect, continuebutton = self._setup_controls()
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_TAB:
+                self.setup_active_field = "api_key" if self.setup_active_field == "player_name" else "player_name"
+            elif event.key == pygame.K_RETURN:
+                self._complete_setup()
+            elif event.key == pygame.K_BACKSPACE:
+                if self.setup_active_field == "player_name":
+                    self.setup_player_name = self.setup_player_name[:-1]
+                elif not self.setup_use_demo_key:
+                    self.setup_api_key = self.setup_api_key[:-1]
+            elif event.unicode and event.unicode.isprintable():
+                if self.setup_active_field == "player_name" and len(self.setup_player_name) < 36:
+                    self.setup_player_name += event.unicode
+                elif (
+                    self.setup_active_field == "api_key"
+                    and not self.setup_use_demo_key
+                    and len(self.setup_api_key) < 256
+                ):
+                    self.setup_api_key += event.unicode
+            return
+        if event.type != pygame.MOUSEBUTTONDOWN or event.button != 1:
+            return
+        if namerect.collidepoint(event.pos):
+            self.setup_active_field = "player_name"
+            return
+        for mode, rect in optionrects.items():
+            if rect.collidepoint(event.pos):
+                self.setup_mode = mode
+                self.setup_error = ""
+                return
+        if self.setup_mode == "online" and apirect.collidepoint(event.pos):
+            self.setup_use_demo_key = False
+            self.setup_active_field = "api_key"
+            return
+        if self.setup_mode == "online" and demorect.collidepoint(event.pos):
+            self.setup_use_demo_key = not self.setup_use_demo_key
+            if not self.setup_use_demo_key:
+                self.setup_active_field = "api_key"
+            return
+        if continuebutton.collidepoint(event.pos):
+            self._button_click("setup_continue", continuebutton)
+            self._complete_setup()
 
     def _refresh_background(self):
         size = self.screen.get_size()
@@ -400,17 +613,18 @@ class AnimatedMainMenu:
     def _settings_controls(self):
         w, h = self.screen.get_size()
         panel_w = min(720, max(440, int(w * 0.54)))
-        panel_h = 430
+        panel_h = min(530, h - 36)
         panel = pygame.Rect(0, 0, panel_w, panel_h)
         panel.center = (w // 2, h // 2)
-        slider = pygame.Rect(panel.x + 54, panel.y + 128, panel.width - 108, 12)
-        fullscreen = pygame.Rect(panel.x + 54, panel.y + 182, panel.width - 108, 52)
-        back = pygame.Rect(panel.x + 54, panel.y + 254, (panel.width - 124) // 2, 50)
+        slider = pygame.Rect(panel.x + 54, panel.y + 118, panel.width - 108, 12)
+        fullscreen = pygame.Rect(panel.x + 54, panel.y + 170, panel.width - 108, 50)
+        aimode = pygame.Rect(panel.x + 54, panel.y + 238, panel.width - 108, 50)
+        back = pygame.Rect(panel.x + 54, panel.y + 326, (panel.width - 124) // 2, 50)
         cache = pygame.Rect(back.right + 16, back.y, back.width, 50)
-        return panel, slider, fullscreen, back, cache
+        return panel, slider, fullscreen, aimode, back, cache
 
     def _draw_settings(self, dt):
-        panel, slider, fullscreen, back, cache = self._settings_controls()
+        panel, slider, fullscreen, aimode, back, cache = self._settings_controls()
         t = pygame.time.get_ticks() / 1000.0
         enter = ease_out_back(self.menu_transition)
         panel = panel.move(0, int((1.0 - enter) * 42))
@@ -436,6 +650,24 @@ class AnimatedMainMenu:
 
         fs_label = "FULLSCREEN: ON" if self.is_fullscreen else "FULLSCREEN: OFF"
         self._draw_button(fullscreen, "settings_fullscreen", fs_label, dt, primary=self.is_fullscreen)
+        aimodelabels = {
+            "online": "AI MODE: ONLINE LLM (ILMU)",
+            "ollama": "AI MODE: OLLAMA LOCAL LLM",
+            "graph": "AI MODE: GRAPH-BASED",
+        }
+        self._draw_button(
+            aimode,
+            "settings_ai_mode",
+            aimodelabels.get(self.setup_mode, "AI MODE: GRAPH-BASED"),
+            dt,
+            primary=self.setup_mode == "online",
+        )
+        modenote = self.small_font.render(
+            "Click to change · applies when the next campaign is launched",
+            True,
+            _C_MUTED,
+        )
+        self.screen.blit(modenote, (aimode.x, aimode.bottom + 9))
         self._draw_button(back, "settings_back", "BACK", dt)
         self._draw_button(cache, "settings_cache", "REMOVE CACHE", dt, danger=True)
 
@@ -443,7 +675,7 @@ class AnimatedMainMenu:
         self.screen.blit(warning, (panel.x + 54, panel.bottom - 50))
 
     def _handle_settings_click(self):
-        panel, slider, fullscreen, back, cache = self._settings_controls()
+        panel, slider, fullscreen, aimode, back, cache = self._settings_controls()
         if slider.inflate(6, 24).collidepoint(self.mouse):
             self.volume_dragging = True
             self._update_volume_from_mouse(slider)
@@ -452,6 +684,15 @@ class AnimatedMainMenu:
         if fullscreen.collidepoint(self.mouse):
             self._button_click("settings_fullscreen", fullscreen)
             self._toggle_fullscreen()
+            return
+        if aimode.collidepoint(self.mouse):
+            self._button_click("settings_ai_mode", aimode)
+            modes = ("online", "ollama", "graph")
+            currentmode = self.setup_mode if self.setup_mode in modes else "graph"
+            self.setup_mode = modes[(modes.index(currentmode) + 1) % len(modes)]
+            self.settings = updatesettings({"llm_mode": self.setup_mode})
+            self.notice = f"AI mode set to {self.setup_mode.title()}."
+            self.notice_time = 2.0
             return
         if back.collidepoint(self.mouse):
             self._button_click("settings_back", back)
@@ -465,7 +706,7 @@ class AnimatedMainMenu:
 
     def _update_volume_from_mouse(self, slider=None):
         if slider is None:
-            _panel, slider, _fullscreen, _back, _cache = self._settings_controls()
+            _panel, slider, _fullscreen, _aimode, _back, _cache = self._settings_controls()
         self.volume = int(clamp((self.mouse[0] - slider.x) / max(1, slider.width)) * 100)
         vol = self.volume / 100.0
         try:
@@ -476,10 +717,8 @@ class AnimatedMainMenu:
             self.click_sound.set_volume(vol * 0.4)
 
         try:
-            import json
-            with open("settings.json", "w") as f:
-                json.dump({"volume": self.volume}, f)
-        except Exception:
+            self.settings = updatesettings({"volume": self.volume})
+        except OSError:
             pass
     def _draw_scripts(self):
         self.script_menu.draw(self.screen)
@@ -487,6 +726,10 @@ class AnimatedMainMenu:
     def _handle_event(self, event):
         if event.type == pygame.QUIT:
             self.running = False
+            return
+
+        if self.setup_active:
+            self._handle_setup_event(event)
             return
 
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -545,6 +788,8 @@ class AnimatedMainMenu:
                 self._draw_main(dt)
             if self.loadgame_open:
                 self._draw_loadgame_popup(dt)
+            if self.setup_active:
+                self._draw_setup_popup(dt)
             pygame.display.flip()
 
 

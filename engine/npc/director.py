@@ -6,7 +6,7 @@ from .defense import NpcDefensePlanner
 from .economy import NpcEconomyPlanner
 from .index import NpcCountryIndex, NpcWorldIndex
 from .invasion import NpcInvasionPlanner
-from .personality import NpcPersonality
+from .personality import NpcPersonality, getcountrypersonalitypreset
 from .strength import NpcStrengthEvaluator
 
 
@@ -159,7 +159,9 @@ class NpcDirector:
     def getpersonality(self, countryname):
         # todo: focus tree choices can override or adjust this personality later.
         canonicalcountry = self._canonicalizecountry(countryname)
-        return self.countrypersonalitylookup.get(canonicalcountry, self.defaultpersonality)
+        if canonicalcountry in self.countrypersonalitylookup:
+            return self.countrypersonalitylookup[canonicalcountry]
+        return getcountrypersonalitypreset(canonicalcountry)
 
     def sync_player_wars(self, playercountry, countriesatwarset, warpairset=None):
         self.playercountry = playercountry

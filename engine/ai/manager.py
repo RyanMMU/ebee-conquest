@@ -104,3 +104,34 @@ def create_default_manager():
     manager = AIManager()
     manager.register_provider(DeepSeekProvider(), select=True)
     return manager
+
+
+def create_manager_from_settings(settings=None):
+    from engine.settings import loadsettings, resolvedonlineapikey
+    from .graph_based import GraphBasedProvider
+    from .openai_compatible import OpenAICompatibleProvider
+
+    settings = settings or loadsettings()
+    mode = str(settings.get("llm_mode") or "graph").lower()
+    manager = AIManager()
+
+    if mode == "online":
+        provider = OpenAICompatibleProvider(
+            name="online",
+            provider_label="Ebee Conquest Online LLM",
+            api_key=resolvedonlineapikey(settings),
+            base_url=settings.get("online_base_url") or "https://api.ilmu.ai/v1",
+            model=settings.get("online_model") or "ilmu-mini-v3.3",
+        )
+    elif mode == "ollama":
+        provider = OpenAICompatibleProvider(
+            name="ollama",
+            provider_label="Ollama Local LLM",
+            base_url=settings.get("ollama_base_url") or "http://localhost:11434/v1",
+            model=settings.get("ollama_model") or "llama3.2",
+        )
+    else:
+        provider = GraphBasedProvider()
+
+    manager.register_provider(provider, select=True)
+    return manager

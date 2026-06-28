@@ -1665,6 +1665,11 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
         emit=eventbus.emit,
         economyconfig=economyconfig,
     )
+    from engine.ai import create_manager_from_settings
+    from engine.settings import loadsettings
+
+    gamesettings = loadsettings()
+    peaceaimanager = create_manager_from_settings(gamesettings)
 
 
     movementorderlist = []
@@ -1688,6 +1693,13 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
     occupationtransferlookup = {}
     capitulationtimer = {}
     capitulatedset = set()
+    deferredpeaceconferenceprogress = {}
+    diplomacystate = {
+        "puppets": {},
+        "military_access": {},
+        "regime_changes": {},
+        "peace_treaties": [],
+    }
     countrymenutarget = None
     researched_set: set[str] = set()
     researching_node_id: str | None = None
@@ -1720,6 +1732,31 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
             capitulationtimer.clear()
             capitulationtimer.update(loadeddata.get("capitulationtimer", {}))
             capitulatedset = set(loadeddata.get("capitulatedset", []))
+            deferredpeaceconferenceprogress.clear()
+            deferredpeaceconferenceprogress.update(
+                loadeddata.get("deferredpeaceconferenceprogress", {})
+            )
+            loadeddiplomacy = loadeddata.get("diplomacystate", {})
+            if isinstance(loadeddiplomacy, dict):
+                for diplomacykey in diplomacystate:
+                    loadedvalue = loadeddiplomacy.get(diplomacykey)
+                    if isinstance(loadedvalue, type(diplomacystate[diplomacykey])):
+                        diplomacystate[diplomacykey] = loadedvalue
+            for regimecountry, regimename in diplomacystate["regime_changes"].items():
+                LEADERS[regimecountry] = regimename
+            for peacetreaty in diplomacystate["peace_treaties"]:
+                if not isinstance(peacetreaty, dict):
+                    continue
+                treatyvictor = peacetreaty.get("victor")
+                for stateid in peacetreaty.get("territory_state_ids", ()):
+                    stateshape = stateobjectlookup.get(stateid)
+                    if not stateshape or not treatyvictor:
+                        continue
+                    stateshape["ownercountry"] = treatyvictor
+                    stateshape["controllercountry"] = treatyvictor
+                    stateshape["country"] = treatyvictor
+                    stateshape["countrycolor"] = countrytocolorlookup.get(treatyvictor, (85, 85, 85))
+                    statetocountrylookup[stateid] = treatyvictor
             savegamemodule.applyserializedprovincemap(loadeddata.get("provincemap"), provincemap)
             movementorderlist = loadeddata.get("movementorderlist", [])
             for order in movementorderlist:
@@ -1744,6 +1781,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                     if savedfocus:
                         savedfocus.progress = loadeddata.get("focusprogress", 0)
             countrybordersdirty = True
+            npcdirector.rebuildcountryindexes()
 
 
             if playercountry:
@@ -2369,39 +2407,236 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
         data["active_pair_count"] = len(pairwars)
         return data
 
-    def executecapitulation(defeatedcountry, victoriouscountry):
-        if defeatedcountry in capitulatedset:
-            return
-        capitulatedset.add(defeatedcountry)
-
-        aggressorcolor = countrytocolorlookup.get(victoriouscountry, (85, 85, 85))
-        for province in provincemap.values():
-            owner = getprovinceowner(province)
-            prevcontroller = getprovincecontroller(province)
-
-            if owner == defeatedcountry:
-                setprovincecontroller(province, victoriouscountry, aggressorcolor)
-            elif prevcontroller == defeatedcountry:
-                actualowner = getprovinceowner(province)
-                ownercolor = countrytocolorlookup.get(actualowner, (85, 85, 85))
-                setprovincecontroller(province, actualowner, ownercolor)
-            else:
+    def buildpeaceterritoryoptions(defeatedcountry):
+        optionlookup = {}
+        for provinceid, province in provincemap.items():
+            if getprovinceowner(province) != defeatedcountry:
                 continue
+            stateid = (
+                province.get("parentid")
+                or province.get("parentstateid")
+                or coremodule.getparentstateidfromprovinceid(provinceid)
+            )
+            option = optionlookup.setdefault(
+                str(stateid),
+                {
+                    "id": str(stateid),
+                    "label": str(stateid).replace("_", " "),
+                    "province_ids": [],
+                },
+            )
+            option["province_ids"].append(provinceid)
+        return sorted(optionlookup.values(), key=lambda option: option["label"])
 
+    def getcountryeconomyforstrength(countryname):
+        if countryname == playercountry:
+            return {
+                "gold": playergold,
+                "population": playerpopulation,
+                "stability": playerstability,
+            }
+        return npcdirector.countryeconomy.get(countryname, {})
+
+    def setprovinceafterpeace(province, newcontroller, newowner=None):
+        previouscontroller = getprovincecontroller(province)
+        if newowner is not None:
+            province["ownercountry"] = newowner
+        controllercolor = countrytocolorlookup.get(newcontroller, (85, 85, 85))
+        setprovincecontroller(province, newcontroller, controllercolor)
+        if previouscontroller != newcontroller:
             eventbus.emit(EngineEventType.PROVINCECONTROLCHANGED, {
                 "provinceId": province.get("id"),
-                "previousController": prevcontroller,
-                "newController": getprovincecontroller(province),
+                "previousController": previouscontroller,
+                "newController": newcontroller,
             })
+
+    def applyplayerpeacesettlement(defeatedcountry, victoriouscountry, result, territoryoptions):
+        accepted = bool(result and result.get("accepted"))
+        proposal = result.get("proposal", {}) if accepted else {}
+        demands = set(proposal.get("demands", ()))
+        selectedstates = set(proposal.get("territory_state_ids", ()))
+        validstates = {option["id"] for option in territoryoptions}
+        selectedstates &= validstates
+
+        for provinceid, province in provincemap.items():
+            owner = getprovinceowner(province)
+            controller = getprovincecontroller(province)
+            stateid = str(
+                province.get("parentid")
+                or province.get("parentstateid")
+                or coremodule.getparentstateidfromprovinceid(provinceid)
+            )
+            if owner == defeatedcountry:
+                if accepted and "STATE TRANSFER" in demands and stateid in selectedstates:
+                    setprovinceafterpeace(province, victoriouscountry, newowner=victoriouscountry)
+                else:
+                    setprovinceafterpeace(province, defeatedcountry, newowner=defeatedcountry)
+            elif controller == defeatedcountry:
+                setprovinceafterpeace(province, owner, newowner=owner)
+
+        for stateid in selectedstates:
+            stateshape = stateobjectlookup.get(stateid)
+            if stateshape is None:
+                continue
+            stateshape["ownercountry"] = victoriouscountry
+            stateshape["controllercountry"] = victoriouscountry
+            stateshape["country"] = victoriouscountry
+            stateshape["countrycolor"] = countrytocolorlookup.get(victoriouscountry, (85, 85, 85))
+            statetocountrylookup[stateid] = victoriouscountry
+
+        if accepted and "PUPPET STATE" in demands:
+            diplomacystate["puppets"][defeatedcountry] = victoriouscountry
+        if accepted and "MILITARY ACCESS" in demands:
+            accesslist = diplomacystate["military_access"].setdefault(victoriouscountry, [])
+            if defeatedcountry not in accesslist:
+                accesslist.append(defeatedcountry)
+        if accepted and "REGIME CHANGE" in demands:
+            regimename = f"{defeatedcountry} Provisional Council"
+            diplomacystate["regime_changes"][defeatedcountry] = regimename
+            LEADERS[defeatedcountry] = regimename
+        if accepted:
+            diplomacystate["peace_treaties"].append({
+                "turn": currentturnnumber,
+                "victor": victoriouscountry,
+                "defeated": defeatedcountry,
+                "demands": sorted(demands),
+                "territory_state_ids": sorted(selectedstates),
+            })
+
+    def runplayerpeaceconference(defeatedcountry, victoriouscountry):
+        from engine.peace import PeaceNegotiation, calculate_country_strength
+        from game.peace_ui import PeaceTreatyScreen
+
+        territoryoptions = buildpeaceterritoryoptions(defeatedcountry)
+        victorstrength = calculate_country_strength(
+            provincemap,
+            victoriouscountry,
+            getcountryeconomyforstrength(victoriouscountry),
+        )
+        defeatedstrength = calculate_country_strength(
+            provincemap,
+            defeatedcountry,
+            getcountryeconomyforstrength(defeatedcountry),
+        )
+        defeatedprovincecount = 0
+        occupiedprovincecount = 0
+        for province in provincemap.values():
+            if getprovinceowner(province) != defeatedcountry:
+                continue
+            defeatedprovincecount += 1
+            if getprovincecontroller(province) == victoriouscountry:
+                occupiedprovincecount += 1
+        occupationratio = (
+            occupiedprovincecount / defeatedprovincecount
+            if defeatedprovincecount
+            else 1.0
+        )
+        negotiation = PeaceNegotiation(
+            ai_manager=peaceaimanager,
+            victor=victoriouscountry,
+            defeated=defeatedcountry,
+            player_name=gamesettings.get("player_name") or "Player",
+            personality=npcdirector.getpersonality(defeatedcountry),
+            victor_strength=victorstrength,
+            defeated_strength=defeatedstrength,
+            available_state_ids=[option["id"] for option in territoryoptions],
+            occupation_ratio=occupationratio,
+        )
+        conferencescreen = pygame.display.get_surface()
+        conference = PeaceTreatyScreen(
+            conferencescreen,
+            negotiation,
+            territoryoptions,
+            volume=runtimeui.settings_volume / 100.0,
+        )
+        result = conference.run()
+        pygame.event.clear()
+        if result.get("reason") == "window_closed":
+            pygame.event.post(pygame.event.Event(pygame.QUIT))
+        return result, territoryoptions
+
+    def executecapitulation(
+        defeatedcountry,
+        victoriouscountry,
+        capitulationprogress=None,
+        occupationprogress=None,
+    ):
+        nonlocal countrybordersdirty
+        if defeatedcountry in capitulatedset:
+            return
+
+        playerconference = (
+            victoriouscountry == playercountry
+            and defeatedcountry != playercountry
+            and not perfenabled
+        )
+        conferenceresult = None
+        territoryoptions = None
+        if playerconference:
+            conferenceresult, territoryoptions = runplayerpeaceconference(
+                defeatedcountry,
+                victoriouscountry,
+            )
+            if not conferenceresult.get("accepted"):
+                capitulationtimer.pop(defeatedcountry, None)
+                deferredpeaceconferenceprogress[defeatedcountry] = {
+                    "capitulation_progress": float(capitulationprogress or 0.0),
+                    "occupation_progress": float(occupationprogress or 0.0),
+                    "aggressor": victoriouscountry,
+                    "turn": currentturnnumber,
+                }
+                pushnotification(
+                    "PEACE TALKS ADJOURNED",
+                    f"{victoriouscountry} left talks with {defeatedcountry}. "
+                    "The war continues; capturing more territory will reopen negotiations.",
+                )
+                return
+
+        capitulatedset.add(defeatedcountry)
+        deferredpeaceconferenceprogress.pop(defeatedcountry, None)
 
         for pair in list(warpairset):
             if defeatedcountry in pair:
                 warrecordlookup.pop(pair, None)
                 warpairset.discard(pair)
 
-        countriesatwarset.discard(defeatedcountry)
+        countriesatwarset.clear()
+        if playercountry:
+            for activepair in warpairset:
+                if playercountry == activepair[0]:
+                    countriesatwarset.add(activepair[1])
+                elif playercountry == activepair[1]:
+                    countriesatwarset.add(activepair[0])
         capitulationtimer.pop(defeatedcountry, None)
-        nonlocal countrybordersdirty
+        movementorderlist[:] = [
+            order for order in movementorderlist
+            if order.get("controllercountry", order.get("country")) != defeatedcountry
+        ]
+
+        if playerconference:
+            applyplayerpeacesettlement(
+                defeatedcountry,
+                victoriouscountry,
+                conferenceresult,
+                territoryoptions,
+            )
+            acceptedmessage = " The negotiated treaty has been applied."
+        else:
+            acceptedmessage = ""
+            for province in provincemap.values():
+                owner = getprovinceowner(province)
+                controller = getprovincecontroller(province)
+                if owner == defeatedcountry:
+                    setprovinceafterpeace(province, victoriouscountry)
+                elif controller == defeatedcountry:
+                    setprovinceafterpeace(province, owner)
+
+        npcdirector.rebuildcountryindexes()
+        npcdirector.sync_player_wars(
+            playercountry,
+            countriesatwarset,
+            warpairset=warpairset,
+        )
         countrybordersdirty = True
 
         eventbus.emit(EngineEventType.CAPITULATED, {
@@ -2412,13 +2647,15 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
 
         pushnotification(
             "CAPITULATION",
-            f"{defeatedcountry} has capitulated to {victoriouscountry}!",
+            f"{defeatedcountry} has capitulated to {victoriouscountry}!{acceptedmessage}",
         )
 
     def checkcapitulations():
         metrics = buildwarcountrymetrics()
         totalvp = metrics["totalvp"]
         ownedcontrolledvp = metrics["ownedcontrolledvp"]
+        totalprovinces = metrics["totalprovinces"]
+        ownedcontrolledprovinces = metrics["ownedcontrolledprovinces"]
 
         def check_victim_capitulation(victimpairs):
             for victim, enemies in victimpairs.items():
@@ -2426,16 +2663,39 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                 if victimtotalvp <= 0:
                     continue
                 totalcapturedvp = 0.0
+                totalcapturedprovinces = 0
                 leader = None
                 leadercapturedvp = 0.0
                 for enemy in enemies:
                     capturedvp = ownedcontrolledvp.get((victim, enemy), 0.0)
+                    totalcapturedprovinces += ownedcontrolledprovinces.get(
+                        (victim, enemy),
+                        0,
+                    )
                     totalcapturedvp += capturedvp
                     if capturedvp > leadercapturedvp:
                         leadercapturedvp = capturedvp
                         leader = enemy
                 progress = (totalcapturedvp / victimtotalvp) * 100.0
+                victimprovincecount = max(1, totalprovinces.get(victim, 0))
+                occupationprogress = (
+                    totalcapturedprovinces / victimprovincecount
+                ) * 100.0
                 if progress >= 80.0 and leader:
+                    deferredconference = deferredpeaceconferenceprogress.get(victim)
+                    if deferredconference:
+                        previousoccupation = float(
+                            deferredconference.get("occupation_progress", 0.0)
+                        )
+                        if occupationprogress > previousoccupation + 0.01:
+                            deferredpeaceconferenceprogress.pop(victim, None)
+                            executecapitulation(
+                                victim,
+                                leader,
+                                capitulationprogress=progress,
+                                occupationprogress=occupationprogress,
+                            )
+                        continue
                     if victim not in capitulationtimer:
                         stability = playerstability if victim == playercountry else npcdirector.countryeconomy.get(victim, {}).get("stability", 50.0)
                         graceturns = int(10 + (stability / 100.0) * 10)
@@ -2448,7 +2708,12 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                             f"{victim} is at risk of capitulation in {graceturns} turns.",
                         )
                     elif currentturnnumber >= capitulationtimer[victim]["capitulateturn"]:
-                        executecapitulation(victim, capitulationtimer[victim]["aggressor"])
+                        executecapitulation(
+                            victim,
+                            capitulationtimer[victim]["aggressor"],
+                            capitulationprogress=progress,
+                            occupationprogress=occupationprogress,
+                        )
 
         defenderpairs = {}
         aggressorpairs = {}
@@ -3069,6 +3334,8 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
             "occupationtransferlookup": occupationtransferlookup,
             "capitulationtimer": capitulationtimer,
             "capitulatedset": list(capitulatedset),
+            "deferredpeaceconferenceprogress": deferredpeaceconferenceprogress,
+            "diplomacystate": diplomacystate,
             "provincemap": savegamemodule.serializeprovincemap(provincemap),
             "movementorderlist": savegamemodule.serializemovementorders(movementorderlist),
             "frontlineassignmentlist": frontlineassignmentlist,
@@ -5256,6 +5523,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
 
         pygame.display.flip()
 
+    peaceaimanager.shutdown(wait=False)
     pygame.quit()
 # loading screen and main loop ends
 
