@@ -12,6 +12,7 @@ ctypes.windll.user32.SetProcessDPIAware()
 
 from engine.console import developmentconsole, loaddevmodeflag
 from engine import savegame as savegamemodule
+from game.window_icon import set_window_icon
 
 select_sound = None
 
@@ -1139,6 +1140,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
     startupbegintimestamp = time.perf_counter()
     pygame.init()
     pygame.mixer.init()
+    set_window_icon()
     
     select_sound = pygame.mixer.Sound("game/sounds/troop_select.wav")
     select_sound.set_volume(volume * 0.5)
@@ -1779,7 +1781,9 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
             for order in movementorderlist:
                 if order.get("countrycolor") is not None:
                     order["countrycolor"] = tuple(order["countrycolor"])
-            frontlineassignmentlist = loadeddata.get("frontlineassignmentlist", [])
+            frontlineassignmentlist = savegamemodule.deserializefrontlineassignments(
+                loadeddata.get("frontlineassignmentlist")
+            )
             frontlineassignmentcounter = loadeddata.get("frontlineassignmentcounter", 0)
             researched_set = set(loadeddata.get("researched_set", []))
             researching_node_id = loadeddata.get("researching_node_id")
@@ -3355,7 +3359,9 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
             "diplomacystate": diplomacystate,
             "provincemap": savegamemodule.serializeprovincemap(provincemap),
             "movementorderlist": savegamemodule.serializemovementorders(movementorderlist),
-            "frontlineassignmentlist": frontlineassignmentlist,
+            "frontlineassignmentlist": savegamemodule.serializefrontlineassignments(
+                frontlineassignmentlist
+            ),
             "frontlineassignmentcounter": frontlineassignmentcounter,
             "researched_set": list(researched_set),
             "researching_node_id": researching_node_id,
@@ -3586,6 +3592,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
 
 
     isrunning = True
+    exitdestination = "quit_game"
     choosecountry_fit_state = {"done": False, "w": None, "h": None}
     choosecountry_intro_progress = 0.0
     while isrunning:
@@ -4525,6 +4532,11 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                 continue
 
             uiaction = runtimeui.process_event(event)
+            if uiaction == InGameUI.actionquitmainmenu:
+                exitdestination = "main_menu"
+                isrunning = False
+                continue
+
             if uiaction == InGameUI.actionquitgame:
                 isrunning = False
                 continue
@@ -4550,6 +4562,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                     screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
                 else:
                     screen = pygame.display.set_mode((defaultwindowwidth, defaultwindowheight), pygame.RESIZABLE)
+                set_window_icon()
                 newwindowwidth, newwindowheight = screen.get_size()
                 runtimeui.setwindowsize((newwindowwidth, newwindowheight))
                 runtimeui.set_fullscreen_state(is_fullscreen)
@@ -5509,6 +5522,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                 newwindowheight = max(300, event.h)
 
                 screen = pygame.display.set_mode((newwindowwidth, newwindowheight), pygame.RESIZABLE)
+                set_window_icon()
                 runtimeui.setwindowsize((newwindowwidth, newwindowheight))
                 maprect = runtimeui.map_rect
                 cameramodule.resizecamerastate(
@@ -5550,7 +5564,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
         pygame.display.flip()
 
     peaceaimanager.shutdown(wait=False)
-    pygame.quit()
+    return exitdestination
 # loading screen and main loop ends
 
 

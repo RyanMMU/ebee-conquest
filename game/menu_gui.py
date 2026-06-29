@@ -23,6 +23,7 @@ from game.animation.motion import (
     scale_rect,
 )
 from game.script_menu import ScriptMenuController
+from game.window_icon import set_window_icon
 
 
 WIDTH, HEIGHT = 1280, 720
@@ -208,6 +209,7 @@ class AnimatedMainMenu:
         self.is_fullscreen = bool(is_fullscreen)
         flags = pygame.FULLSCREEN if self.is_fullscreen else 0
         size = (0, 0) if self.is_fullscreen else (WIDTH, HEIGHT)
+        set_window_icon()
         self.screen = pygame.display.set_mode(size, flags)
         pygame.display.set_caption("Ebee Conquest - Main Menu")
         self.clock = pygame.time.Clock()
@@ -477,6 +479,38 @@ class AnimatedMainMenu:
         if self.click_sound is not None:
             self.click_sound.play()
 
+    def _handle_game_exit(self, destination):
+        if destination != "main_menu":
+            pygame.quit()
+            sys.exit()
+
+        current_surface = pygame.display.get_surface()
+        self.is_fullscreen = bool(
+            current_surface and current_surface.get_flags() & pygame.FULLSCREEN
+        )
+        flags = pygame.FULLSCREEN if self.is_fullscreen else 0
+        size = (0, 0) if self.is_fullscreen else (WIDTH, HEIGHT)
+        self.screen = pygame.display.set_mode(size, flags)
+        set_window_icon()
+        pygame.display.set_caption("Ebee Conquest - Main Menu")
+        self.clock = pygame.time.Clock()
+        self.settings = loadsettings()
+        self.volume = int(self.settings.get("volume", 50))
+        self.setup_player_name = str(self.settings.get("player_name") or "")
+        self.setup_mode = str(self.settings.get("llm_mode") or "online")
+        self.setup_api_key = str(self.settings.get("online_api_key") or "")
+        self.setup_use_demo_key = bool(self.settings.get("use_demo_key", True))
+        self.running = True
+        self.menu = "main"
+        self.menu_transition = 0.0
+        self.loadgame_open = False
+        if self.click_sound is not None:
+            self.click_sound.set_volume(self.volume / 250.0)
+        self._bg_size = None
+        self._refresh_background()
+        self.bgm_path = _play_random_bgm(self.volume / 100.0)
+        pygame.event.clear()
+
     def _set_menu(self, name):
         if name == self.menu:
             return
@@ -491,6 +525,7 @@ class AnimatedMainMenu:
         flags = pygame.FULLSCREEN if self.is_fullscreen else 0
         size = (0, 0) if self.is_fullscreen else (WIDTH, HEIGHT)
         self.screen = pygame.display.set_mode(size, flags)
+        set_window_icon()
         self._bg_size = None
         self._refresh_background()
         self.pulses.emit(self.screen.get_rect().center, _C_BLUE, radius=260, duration=0.9, width=2)
@@ -601,9 +636,11 @@ class AnimatedMainMenu:
             self._button_click(key, rect)
             if key == "new_game":
                 self._launch_transition(rect)
-                run_game(is_fullscreen=self.is_fullscreen, volume=self.volume / 100.0)
-                pygame.quit()
-                sys.exit()
+                destination = run_game(
+                    is_fullscreen=self.is_fullscreen,
+                    volume=self.volume / 100.0,
+                )
+                self._handle_game_exit(destination)
             if key == "settings":
                 self._set_menu("settings")
             elif key == "scripts":
@@ -677,9 +714,12 @@ class AnimatedMainMenu:
             if rect.collidepoint(self.mouse):
                 self._play_click()
                 self.loadgame_open = False
-                run_game(is_fullscreen=self.is_fullscreen, volume=self.volume / 100.0, load_slot=slotnumber)
-                pygame.quit()
-                sys.exit()
+                destination = run_game(
+                    is_fullscreen=self.is_fullscreen,
+                    volume=self.volume / 100.0,
+                    load_slot=slotnumber,
+                )
+                self._handle_game_exit(destination)
           
 
     def _launch_transition(self, origin_rect):

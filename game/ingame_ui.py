@@ -400,6 +400,7 @@ class InGameUI:
     actionpausemenu = "pausemenu"
     actionsavegame = "savegame"
     actiontogglesettingsfullscreen = "togglesettingsfullscreen"
+    actionquitmainmenu = "quitmainmenu"
     actionquitgame = "quitgame"
     
     actionweapon1 = "weapon_1"
@@ -475,6 +476,7 @@ class InGameUI:
         self.focusview = FocusTreeView()
         self.researchview = ResearchTreeView()
         self.pausemenuopen = False
+        self.settingsmenuopen = False
         self.active_left_tab = None
         self.warprogressopen = False
         self._warprogressdata = {}
@@ -600,19 +602,14 @@ class InGameUI:
                 "CLEAR ALL",
                 "",
                 "NOTIFICATIONS",
-                "LOGISTICS",
                 "COMBAT",
-                "INTEL",
                 "NATIONAL POLICY",
                 "DOMESTIC AFFAIRS",
-                "SETTINGS",
             ]
         )
         self.bottom_buttons.set_items(
             [
                 "RESEARCH",
-                "DIPLOMACY",
-                "TRADE",
                 "PRODUCTION",
                 "CONSTRUCTION",
                 "TROOPS",
@@ -628,6 +625,8 @@ class InGameUI:
         self.quit_menu = pygame.Rect(0,0,10,10)
         self.map_rect = pygame.Rect(0, 0, 10, 10)
         self._pausesave_rect = pygame.Rect(0, 0, 10, 10)
+        self._pausesettings_rect = pygame.Rect(0, 0, 10, 10)
+        self._pausemainmenu_rect = pygame.Rect(0, 0, 10, 10)
         self._pausesave_notice = None
         self._pausesave_notice_time = 0.0
         self.applylayout()
@@ -1336,16 +1335,10 @@ class InGameUI:
 
 
     def _settings_controls(self):
-        anchor_rect = self.leftbar.item_rects.get("SETTINGS")
-        if anchor_rect is None:
-            return None, None, None, None, None
-
-        popup_w = min(360, max(300, self.window_size[0] - anchor_rect.right - 24))
+        popup_w = min(360, max(280, self.window_size[0] - 24))
         popup_h = 300
-        popup_x = anchor_rect.right + 8
-        popup_y = anchor_rect.y
-        popup_x = max(12, min(self.window_size[0] - popup_w - 12, popup_x))
-        popup_y = max(self.topbar_height + 8, min(self.window_size[1] - popup_h - 12, popup_y))
+        popup_x = max(12, (self.window_size[0] - popup_w) // 2)
+        popup_y = max(12, (self.window_size[1] - popup_h) // 2)
         popup_rect = pygame.Rect(popup_x, popup_y, popup_w, popup_h)
 
         slider = pygame.Rect(popup_rect.x + 24, popup_rect.y + 78, popup_rect.width - 48, 12)
@@ -1474,7 +1467,7 @@ class InGameUI:
 
 
     def _draw_settings_popup(self, surface, mouse):
-        if self.active_left_tab != "SETTINGS":
+        if not self.settingsmenuopen:
             self._settings_popup_rect = pygame.Rect(0, 0, 10, 10)
             return
 
@@ -1979,11 +1972,13 @@ class InGameUI:
 
         self._research_back_rect = pygame.Rect(back_x, back_y, back_w, back_h)
         menu_w = min(320, max(220, window_width - 80))
-        menu_h = 222
+        menu_h = 326
         menu_x = max(0, (window_width - menu_w) // 2)
         menu_y = max(0, (window_height - menu_h) // 2)
         self._pausemenu_rect = pygame.Rect(menu_x, menu_y, menu_w, menu_h)
-        self._pausesave_rect = pygame.Rect(menu_x + (menu_w - 150) // 2, menu_y + menu_h - 104, 150, 40)
+        self._pausesave_rect = pygame.Rect(menu_x + (menu_w - 180) // 2, menu_y + menu_h - 208, 180, 40)
+        self._pausesettings_rect = pygame.Rect(menu_x + (menu_w - 180) // 2, menu_y + menu_h - 156, 180, 40)
+        self._pausemainmenu_rect = pygame.Rect(menu_x + (menu_w - 180) // 2, menu_y + menu_h - 104, 180, 40)
         self._pausequit_rect = pygame.Rect(menu_x + (menu_w - 150) // 2, menu_y + menu_h - 52, 150, 40)
         self._pausesave_notice = None
         self._pausesave_notice_time = 0.0
@@ -2238,6 +2233,10 @@ class InGameUI:
     def process_event(self, event):
 
         if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            if self.settingsmenuopen:
+                self.settingsmenuopen = False
+                self._settings_volume_dragging = False
+                return None
             if self.domesticaffairsopen:
                 self.domesticaffairsopen = False
                 if self.active_left_tab == "DOMESTIC AFFAIRS":
@@ -2248,6 +2247,8 @@ class InGameUI:
                 self.warprogressopen = False
                 return None
             self.pausemenuopen = not self.pausemenuopen
+            if not self.pausemenuopen:
+                self.settingsmenuopen = False
             return self.actionpausemenu
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -2378,9 +2379,41 @@ class InGameUI:
 
         if self.pausemenuopen:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if self.settingsmenuopen:
+                    pos = event.pos
+                    if self._settings_close_rect.collidepoint(pos):
+                        self.ui_click_sound.play()
+                        self.settingsmenuopen = False
+                        return None
+                    if self._settings_slider_rect.inflate(6, 24).collidepoint(pos):
+                        self._settings_volume_dragging = True
+                        self._apply_settings_volume_from_mouse(pos)
+                        return None
+                    if self._settings_fullscreen_rect.collidepoint(pos):
+                        self.ui_click_sound.play()
+                        return self.actiontogglesettingsfullscreen
+                    if self._settings_ai_mode_rect.collidepoint(pos):
+                        self.ui_click_sound.play()
+                        modes = ("online", "ollama", "graph")
+                        currentmode = self.settings_ai_mode if self.settings_ai_mode in modes else "graph"
+                        self.settings_ai_mode = modes[(modes.index(currentmode) + 1) % len(modes)]
+                        try:
+                            from engine.settings import updatesettings as _updatesettings
+                            _updatesettings({"llm_mode": self.settings_ai_mode})
+                        except OSError:
+                            pass
+                        return None
+                    return None
                 if self._pausesave_rect.collidepoint(event.pos):
                     self.ui_click_sound.play()
                     return self.actionsavegame
+                if self._pausesettings_rect.collidepoint(event.pos):
+                    self.ui_click_sound.play()
+                    self.settingsmenuopen = True
+                    return None
+                if self._pausemainmenu_rect.collidepoint(event.pos):
+                    self.ui_click_sound.play()
+                    return self.actionquitmainmenu
                 if self._pausequit_rect.collidepoint(event.pos):
                     self.ui_click_sound.play()
                     return self.actionquitgame
@@ -2452,6 +2485,19 @@ class InGameUI:
                 return self.actionchoosecountry
             return None
 
+        if (
+            self.active_left_tab == "NATIONAL POLICY"
+            and self._policy_popup_rect.collidepoint(pos)
+        ):
+            if self._policy_focus_slot_rect.collidepoint(pos):
+                self.ui_click_sound.play()
+                self.active_left_tab = None
+                self._policy_dropdown_progress = 0.0
+                self.focusview.openview()
+                self.applylayout()
+                return self.actiontogglefocuspanel
+            return None
+
         for item, rect in (self.leftbar.item_rects or {}).items():
             if rect.collidepoint(pos):
 
@@ -2490,11 +2536,6 @@ class InGameUI:
                     self.applylayout()
                     return self.actiondomesticaffairs
 
-                if item == "SETTINGS":
-                    self.domesticaffairsopen = False
-                    self.active_left_tab = None if self.active_left_tab == "SETTINGS" else "SETTINGS"
-                    self.applylayout()
-                    return None
                 self.domesticaffairsopen = False
                 self.active_left_tab = item
                 self.applylayout()
@@ -2568,33 +2609,6 @@ class InGameUI:
         
 
 
-        if self.active_left_tab == "SETTINGS":
-            if self._settings_close_rect.collidepoint(pos):
-                self.ui_click_sound.play()
-                self.active_left_tab = None
-                return None
-            if self._settings_slider_rect.inflate(6, 24).collidepoint(pos):
-                self._settings_volume_dragging = True
-                self._apply_settings_volume_from_mouse(pos)
-                return None
-            if self._settings_fullscreen_rect.collidepoint(pos):
-                self.ui_click_sound.play()
-                return self.actiontogglesettingsfullscreen
-            if self._settings_ai_mode_rect.collidepoint(pos):
-                self.ui_click_sound.play()
-                modes = ("online", "ollama", "graph")
-                currentmode = self.settings_ai_mode if self.settings_ai_mode in modes else "graph"
-                self.settings_ai_mode = modes[(modes.index(currentmode) + 1) % len(modes)]
-                try:
-                    from engine.settings import updatesettings as _updatesettings
-                    _updatesettings({"llm_mode": self.settings_ai_mode})
-                except OSError:
-                    pass
-                return None
-            if self._settings_popup_rect.collidepoint(pos):
-                return None
-
-
         if self.active_left_tab == "NOTIFICATIONS":
             for idx, card_rect in (self._notification_card_rects or {}).items():
                 if card_rect.collidepoint(pos):
@@ -2614,14 +2628,6 @@ class InGameUI:
                 self.ui_click_sound.play()
                 self.warprogressopen = not self.warprogressopen
                 return self.actionwarprogress
-        if self.active_left_tab == "NATIONAL POLICY":
-            if self._policy_focus_slot_rect.collidepoint(pos):
-                self.ui_click_sound.play()
-                self.active_left_tab = None
-                self._policy_dropdown_progress = 0.0
-                self.focusview.openview()
-                self.applylayout()
-                return self.actiontogglefocuspanel
         if self._selectedmapcountry and not self._countrymenutarget:
             if self._declarewar_rect.collidepoint(pos):
                 if (
@@ -2688,7 +2694,7 @@ class InGameUI:
         if self.active_left_tab == "COMBAT" and self._combat_popup_rect.collidepoint(mouseposition):
             return True
         
-        if self.active_left_tab == "SETTINGS" and self._settings_popup_rect.collidepoint(mouseposition):
+        if self.settingsmenuopen and self._settings_popup_rect.collidepoint(mouseposition):
             return True
         if self._policy_dropdown_progress > 0.01 and self._policy_popup_rect.collidepoint(mouseposition):
             return True
@@ -3061,7 +3067,6 @@ class InGameUI:
             self._draw_notification_popup(surface, mouse)
             self._draw_combat_popup(surface, mouse)
             self._draw_policy_popup(surface, mouse)
-            self._draw_settings_popup(surface, mouse)
             if self.warprogressopen:
                 self._draw_war_progress_popup(surface, mouse)
             if self.domesticaffairsopen:
@@ -3078,7 +3083,6 @@ class InGameUI:
             self._draw_notification_popup(surface, mouse)
             self._draw_combat_popup(surface, mouse)
             self._draw_policy_popup(surface, mouse)
-            self._draw_settings_popup(surface, mouse)
             if self.warprogressopen:
                 self._draw_war_progress_popup(surface, mouse)
             if self.domesticaffairsopen:
@@ -3094,7 +3098,6 @@ class InGameUI:
             self._draw_notification_popup(surface, mouse)
             self._draw_combat_popup(surface, mouse)
             self._draw_policy_popup(surface, mouse)
-            self._draw_settings_popup(surface, mouse)
             if self.warprogressopen:
                 self._draw_war_progress_popup(surface, mouse)
             if self.domesticaffairsopen:
@@ -3426,8 +3429,6 @@ class InGameUI:
         self._draw_notification_popup(surface, mouse)
         self._draw_combat_popup(surface, mouse)
         self._draw_policy_popup(surface, mouse)
-        self._draw_settings_popup(surface, mouse)
-
         if self.warprogressopen:
             self._draw_war_progress_popup(surface, mouse)
         if self.domesticaffairsopen:
@@ -4762,8 +4763,12 @@ class InGameUI:
         surface.blit(info, info.get_rect(center=(draw_rect.centerx, draw_rect.y + 72)))
 
         self._draw_glow_btn(surface, "pause_save", self._pausesave_rect, True, "SAVE GAME", primary=True, mouse=pygame.mouse.get_pos())
+        self._draw_glow_btn(surface, "pause_settings", self._pausesettings_rect, True, "SETTINGS", mouse=pygame.mouse.get_pos(), icon_key="settings")
+        self._draw_glow_btn(surface, "pause_main_menu", self._pausemainmenu_rect, True, "QUIT TO MAIN MENU", mouse=pygame.mouse.get_pos())
         self._draw_glow_btn(surface, "pause_quit", self._pausequit_rect, True, "QUIT GAME", mouse=pygame.mouse.get_pos())
 
         if self._pausesave_notice and self._pausesave_notice_time > 0.0:
             notice_surface = self.small_font_bold.render(self._pausesave_notice, True, _C_SUCCESS)
             surface.blit(notice_surface, notice_surface.get_rect(center=(draw_rect.centerx, self._pausesave_rect.y - 14)))
+
+        self._draw_settings_popup(surface, pygame.mouse.get_pos())

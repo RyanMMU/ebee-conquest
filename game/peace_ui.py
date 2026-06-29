@@ -22,6 +22,25 @@ _BLUE = (113, 174, 240)
 _GREEN = (91, 201, 126)
 _RED = (225, 100, 100)
 
+_PRESET_DIALOGUE_CHOICES = (
+    (
+        "SEEK COMPROMISE",
+        "We seek a fair peace that allows both nations to rebuild.",
+    ),
+    (
+        "ASK FOR AN OFFER",
+        "What do you propose as a counteroffer?",
+    ),
+    (
+        "OFFER COOPERATION",
+        "Cooperate with us and we will guarantee stability and reconstruction.",
+    ),
+    (
+        "DEMAND COMPLIANCE",
+        "You have no choice. Accept our terms.",
+    ),
+)
+
 
 class PeaceTreatyScreen:
     """Blocking in-game peace-conference modal.
@@ -57,6 +76,7 @@ class PeaceTreatyScreen:
         self.pending_final = False
         self.pending_counter = None
         self.pending_counter_response = None
+        self.pending_counter_message = ""
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="EbeePeace")
         self.backspace_held = False
         self.backspace_started = 0
@@ -102,6 +122,33 @@ class PeaceTreatyScreen:
             self.chatpanel.bottom - 48,
             self.chatpanel.width - 32,
             36,
+        )
+        choicegap = 8
+        choicewidth = max(100, (self.chatpanel.width - choicegap) // 2)
+        choicestart = self.chatpanel.bottom - 78
+        self.preset_dialogue_rects = [
+            pygame.Rect(
+                self.chatpanel.x + (index % 2) * (choicewidth + choicegap),
+                choicestart + (index // 2) * 40,
+                choicewidth,
+                34,
+            )
+            for index in range(len(_PRESET_DIALOGUE_CHOICES))
+        ]
+        counterwidth = min(520, self.chatpanel.width - 24)
+        self.counterpanel = pygame.Rect(0, 0, counterwidth, 190)
+        self.counterpanel.center = self.chatpanel.center
+        self.counteraccept = pygame.Rect(
+            self.counterpanel.centerx - 126,
+            self.counterpanel.bottom - 48,
+            112,
+            34,
+        )
+        self.counternegotiate = pygame.Rect(
+            self.counterpanel.centerx + 14,
+            self.counterpanel.bottom - 48,
+            150,
+            34,
         )
         popupwidth = min(520, width - 80)
         self.popup = pygame.Rect(0, 0, popupwidth, 230)
@@ -156,6 +203,9 @@ class PeaceTreatyScreen:
         if self.negotiation.last_provider_error:
             posturetext = f"POSTURE {score:.0f}/100 · OFFLINE POLICY ACTIVE"
             posturecolor = _RED
+        elif self._uses_preset_dialogue():
+            posturetext = f"POSTURE {score:.0f}/100 · GRAPH POLICY ACTIVE"
+            posturecolor = _GOLD_BRIGHT
         else:
             posturetext = f"AGREEMENT POSTURE {score:.0f}/100"
             posturecolor = _GOLD_BRIGHT
@@ -274,6 +324,10 @@ class PeaceTreatyScreen:
         charwidth = max(18, width // 8)
         return textwrap.wrap(str(message), width=charwidth) or [""]
 
+    def _uses_preset_dialogue(self):
+        providername = getattr(self.negotiation.ai_manager, "active_provider_name", None)
+        return providername == "graph" or not self.negotiation.provider_available
+
     def _draw_chat(self):
         pygame.draw.rect(self.screen, (10, 18, 30), self.content, border_radius=8)
         pygame.draw.rect(self.screen, _GOLD, self.content, 1, border_radius=8)
@@ -288,8 +342,13 @@ class PeaceTreatyScreen:
         for sender, message in self.chat_history[-7:]:
             lines = self._wrapped_lines(f"{sender}: {message}", self.chatpanel.width - 20)
             messages.append((sender, lines))
+        inputtop = (
+            self.preset_dialogue_rects[0].top - 28
+            if self._uses_preset_dialogue()
+            else self.chatinput.top
+        )
         totalheight = sum(len(lines) * 19 + 7 for _sender, lines in messages)
-        y = max(y, self.chatinput.top - 12 - totalheight)
+        y = max(y, inputtop - 12 - totalheight)
         for sender, lines in messages:
             color = _BLUE if sender == "PLAYER" else (_GREEN if sender == "NOTICE" else _GOLD_BRIGHT)
             for line in lines:
@@ -297,17 +356,87 @@ class PeaceTreatyScreen:
                 y += 19
             y += 7
 
-        pygame.draw.rect(self.screen, (6, 12, 22), self.chatinput, border_radius=6)
-        pygame.draw.rect(self.screen, _GOLD, self.chatinput, 1, border_radius=6)
-        if self.pending_future is not None:
-            inputtext = "The delegation is considering your words…"
-            inputcolor = _MUTED
+        if self._uses_preset_dialogue():
+            prompt = (
+                "THE DELEGATION IS CONSIDERING YOUR CHOICE…"
+                if self.pending_future is not None
+                else "CHOOSE A DIALOGUE RESPONSE"
+            )
+            promptsurface = self.mini_font.render(prompt, True, _MUTED)
+            self.screen.blit(
+                promptsurface,
+                (self.chatpanel.x, self.preset_dialogue_rects[0].y - 22),
+            )
+            mouse = pygame.mouse.get_pos()
+            for (label, _message), rect in zip(
+                _PRESET_DIALOGUE_CHOICES,
+                self.preset_dialogue_rects,
+            ):
+                enabled = self.pending_future is None and self.pending_counter is None
+                self._draw_panel(
+                    rect,
+                    hovered=enabled and rect.collidepoint(mouse),
+                    color=None if enabled else (18, 26, 38),
+                )
+                color = _GOLD_BRIGHT if enabled else _MUTED
+                labelsurface = self.mini_font.render(label, True, color)
+                self.screen.blit(labelsurface, labelsurface.get_rect(center=rect.center))
         else:
-            cursor = "|" if pygame.time.get_ticks() % 900 < 450 else ""
-            inputtext = (self.chat_input_text + cursor) or "Type a proposal and press Enter"
-            inputcolor = _TEXT if self.chat_input_text else _MUTED
-        surface = self.small_font.render(inputtext[-80:], True, inputcolor)
-        self.screen.blit(surface, (self.chatinput.x + 10, self.chatinput.centery - surface.get_height() // 2))
+            pygame.draw.rect(self.screen, (6, 12, 22), self.chatinput, border_radius=6)
+            pygame.draw.rect(self.screen, _GOLD, self.chatinput, 1, border_radius=6)
+            if self.pending_future is not None:
+                inputtext = "The delegation is considering your words…"
+                inputcolor = _MUTED
+            else:
+                cursor = "|" if pygame.time.get_ticks() % 900 < 450 else ""
+                inputtext = (self.chat_input_text + cursor) or "Type a proposal and press Enter"
+                inputcolor = _TEXT if self.chat_input_text else _MUTED
+            surface = self.small_font.render(inputtext[-80:], True, inputcolor)
+            self.screen.blit(
+                surface,
+                (self.chatinput.x + 10, self.chatinput.centery - surface.get_height() // 2),
+            )
+
+        self._draw_counteroffer()
+
+    def _draw_counteroffer(self):
+        if not self.pending_counter or not self.chat_open:
+            return
+
+        overlay = pygame.Surface(self.content.size, pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 125))
+        self.screen.blit(overlay, self.content.topleft)
+        pygame.draw.rect(self.screen, (14, 23, 37), self.counterpanel, border_radius=9)
+        pygame.draw.rect(self.screen, _GOLD, self.counterpanel, 2, border_radius=9)
+        title = self.small_font.render("COUNTEROFFER", True, _GOLD_BRIGHT)
+        self.screen.blit(title, title.get_rect(centerx=self.counterpanel.centerx, y=self.counterpanel.y + 16))
+
+        y = self.counterpanel.y + 50
+        for line in self._wrapped_lines(
+            self.pending_counter_message,
+            self.counterpanel.width - 42,
+        )[:4]:
+            surface = self.mini_font.render(line, True, _TEXT)
+            self.screen.blit(surface, surface.get_rect(centerx=self.counterpanel.centerx, y=y))
+            y += 18
+
+        mouse = pygame.mouse.get_pos()
+        self._draw_panel(
+            self.counteraccept,
+            hovered=self.counteraccept.collidepoint(mouse),
+            color=(24, 68, 40),
+        )
+        self._draw_panel(
+            self.counternegotiate,
+            hovered=self.counternegotiate.collidepoint(mouse),
+            color=(48, 38, 28),
+        )
+        for rect, label in (
+            (self.counteraccept, "AGREE"),
+            (self.counternegotiate, "KEEP NEGOTIATING"),
+        ):
+            surface = self.mini_font.render(label, True, _TEXT)
+            self.screen.blit(surface, surface.get_rect(center=rect.center))
 
     def _draw_bottom(self):
         bottom = pygame.Rect(0, self.height - BOTTOMBAR_HEIGHT, self.width, BOTTOMBAR_HEIGHT)
@@ -317,9 +446,14 @@ class PeaceTreatyScreen:
         fullyoccupied = self.negotiation.occupation_ratio >= 0.999
         exitlabel = "SUBMIT TERMS" if fullyoccupied else "LEAVE & CONTINUE WAR"
         exitcolor = _MUTED if fullyoccupied else _RED
+        dialogue_label = (
+            "DIALOGUE OPTIONS"
+            if self._uses_preset_dialogue()
+            else "CHAT WITH LEADER"
+        )
         buttons = [
             (self.exitbutton, exitlabel, exitcolor),
-            (self.chatbutton, "TERRITORY" if self.chat_open else "CHAT WITH LEADER", _GOLD),
+            (self.chatbutton, "TERRITORY" if self.chat_open else dialogue_label, _GOLD),
             (self.historybutton, "PROPOSAL HISTORY", _GOLD),
             (self.submitbutton, "SUBMIT DEMANDS", _GREEN),
         ]
@@ -347,7 +481,6 @@ class PeaceTreatyScreen:
             "history": "PROPOSAL HISTORY",
             "result": "DELEGATION RESPONSE",
             "error": "INVALID PROPOSAL",
-            "counter": "NPC COUNTEROFFER",
         }
         title = self.title_font.render(titles.get(self.active_popup, "PEACE CONFERENCE"), True, _GOLD_BRIGHT)
         self.screen.blit(title, title.get_rect(centerx=self.popup.centerx, y=self.popup.y + 24))
@@ -357,13 +490,10 @@ class PeaceTreatyScreen:
             self.screen.blit(surface, surface.get_rect(centerx=self.popup.centerx, y=y))
             y += 22
         mouse = pygame.mouse.get_pos()
-        if self.active_popup in {"confirm", "counter"}:
+        if self.active_popup == "confirm":
             self._draw_panel(self.popupconfirm, hovered=self.popupconfirm.collidepoint(mouse), color=(24, 68, 40))
             self._draw_panel(self.popupcancel, hovered=self.popupcancel.collidepoint(mouse), color=(68, 28, 32))
-            if self.active_popup == "counter":
-                buttonlabels = ((self.popupconfirm, "AGREE"), (self.popupcancel, "NEGOTIATE"))
-            else:
-                buttonlabels = ((self.popupconfirm, "SUBMIT"), (self.popupcancel, "CANCEL"))
+            buttonlabels = ((self.popupconfirm, "SUBMIT"), (self.popupcancel, "CANCEL"))
             for rect, text in buttonlabels:
                 surface = self.small_font.render(text, True, _TEXT)
                 self.screen.blit(surface, surface.get_rect(center=rect.center))
@@ -438,8 +568,10 @@ class PeaceTreatyScreen:
                 "territories": counterterritories,
             }
             self.pending_counter_response = response
-            self.popup_message = notice
-            self.active_popup = "counter"
+            self.pending_counter_message = (
+                f"Demands: {demandchanges}. State transfer: {statechanges}."
+            )
+            self.chat_open = True
             return
         if not finalproposal:
             return
@@ -493,11 +625,19 @@ class PeaceTreatyScreen:
         }
         self.pending_counter = None
         self.pending_counter_response = None
+        self.pending_counter_message = ""
         self.popup_message = "The NPC counteroffer was accepted. The treaty is ready to conclude."
         self.active_popup = "result"
 
-    def _submit_chat(self):
-        message = self.chat_input_text.strip()
+    def _dismiss_counteroffer(self):
+        if self.pending_counter:
+            self.chat_history.append(("NOTICE", "COUNTEROFFER DECLINED. Negotiations continue."))
+        self.pending_counter = None
+        self.pending_counter_response = None
+        self.pending_counter_message = ""
+
+    def _submit_chat(self, preset_message=None):
+        message = str(preset_message or self.chat_input_text).strip()
         if not message or self.pending_future is not None:
             return
         self.chat_input_text = ""
@@ -557,16 +697,16 @@ class PeaceTreatyScreen:
                     self._start_ai_request(finalproposal=True)
                 elif self.popupcancel.collidepoint(position):
                     self.active_popup = None
-            elif self.active_popup == "counter":
-                if self.popupconfirm.collidepoint(position):
-                    self._accept_counteroffer()
-                elif self.popupcancel.collidepoint(position):
-                    self.active_popup = None
-                    self.chat_open = True
             elif self.popupclose.collidepoint(position):
                 if self.result:
                     self.running = False
                 self.active_popup = None
+            return
+        if self.pending_counter and self.chat_open:
+            if self.counteraccept.collidepoint(position):
+                self._accept_counteroffer()
+            elif self.counternegotiate.collidepoint(position):
+                self._dismiss_counteroffer()
             return
         if self.exitbutton.collidepoint(position):
             if self.negotiation.occupation_ratio >= 0.999:
@@ -597,6 +737,14 @@ class PeaceTreatyScreen:
         if self.submitbutton.collidepoint(position):
             self._request_submit()
             return
+        if self.chat_open and self._uses_preset_dialogue():
+            for (_label, message), rect in zip(
+                _PRESET_DIALOGUE_CHOICES,
+                self.preset_dialogue_rects,
+            ):
+                if rect.collidepoint(position):
+                    self._submit_chat(message)
+                    return
         for demand, rect in zip(self.demands, self.demandrects):
             if not rect.collidepoint(position):
                 continue
@@ -641,6 +789,8 @@ class PeaceTreatyScreen:
         if event.key == pygame.K_ESCAPE:
             if self.active_popup:
                 self.active_popup = None
+            elif self.pending_counter and self.chat_open:
+                self._dismiss_counteroffer()
             elif self.chat_open:
                 self.chat_open = False
             else:
@@ -653,7 +803,12 @@ class PeaceTreatyScreen:
                 self.result = {"accepted": False, "reason": "conference_deferred"}
                 self.running = False
             return
-        if not self.chat_open or self.active_popup or self.pending_future is not None:
+        if (
+            not self.chat_open
+            or self.active_popup
+            or self.pending_future is not None
+            or self._uses_preset_dialogue()
+        ):
             return
         if event.key == pygame.K_RETURN:
             self._submit_chat()
@@ -675,6 +830,7 @@ class PeaceTreatyScreen:
                     self.backspace_held
                     and self.chat_open
                     and not self.active_popup
+                    and not self._uses_preset_dialogue()
                     and now - self.backspace_started >= 380
                     and now - self.backspace_last >= 45
                 ):

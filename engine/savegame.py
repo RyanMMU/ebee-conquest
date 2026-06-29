@@ -52,9 +52,17 @@ def writesaveslot(slotnumber, savedata):
     savedata["savedat"] = time.time()
     slotpath = getsaveslotpath(slotnumber)
     temppath = slotpath + ".tmp"
-    with open(temppath, "w", encoding="utf-8") as filehandle:
-        json.dump(savedata, filehandle)
-    os.replace(temppath, slotpath)
+    try:
+        with open(temppath, "w", encoding="utf-8") as filehandle:
+            json.dump(savedata, filehandle)
+        os.replace(temppath, slotpath)
+    except (OSError, TypeError, ValueError):
+        try:
+            if os.path.isfile(temppath):
+                os.remove(temppath)
+        except OSError:
+            pass
+        raise
     return slotpath
 
 
@@ -119,6 +127,46 @@ def serializemovementorders(movementorderlist):
             entry["countrycolor"] = list(entry["countrycolor"])
         serialized.append(entry)
     return serialized
+
+
+def serializefrontlineassignments(frontlineassignmentlist):
+    serialized = []
+    for assignment in frontlineassignmentlist or ():
+        if not isinstance(assignment, dict):
+            continue
+        entry = dict(assignment)
+        entry["frontlineedgekeys"] = [
+            list(edgekey)
+            for edgekey in sorted(assignment.get("frontlineedgekeys", ()))
+            if isinstance(edgekey, (list, tuple)) and len(edgekey) == 2
+        ]
+        serialized.append(entry)
+    return serialized
+
+
+def deserializefrontlineassignments(serialized):
+    assignments = []
+    for assignment in serialized or ():
+        if not isinstance(assignment, dict):
+            continue
+        entry = dict(assignment)
+        entry["frontlineedgekeys"] = {
+            (edgekey[0], edgekey[1])
+            for edgekey in assignment.get("frontlineedgekeys", ())
+            if isinstance(edgekey, (list, tuple)) and len(edgekey) == 2
+        }
+        frontlineedges = []
+        for frontlineedge in assignment.get("frontlineedges", ()):
+            if not isinstance(frontlineedge, dict):
+                continue
+            edgeentry = dict(frontlineedge)
+            edgekey = edgeentry.get("edgekey")
+            if isinstance(edgekey, (list, tuple)) and len(edgekey) == 2:
+                edgeentry["edgekey"] = (edgekey[0], edgekey[1])
+            frontlineedges.append(edgeentry)
+        entry["frontlineedges"] = frontlineedges
+        assignments.append(entry)
+    return assignments
 
 
 def serializewarpairset(warpairset):
