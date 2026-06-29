@@ -9,3 +9,5 @@ __pycache__/gui.cpython-39.pyc
 AGENTS.md
 /map/.ebee_super_optimization
 /saves
+/saves
+settings.json
