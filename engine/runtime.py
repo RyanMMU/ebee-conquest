@@ -10,46 +10,49 @@ from svgelements import Path
 import ctypes
 ctypes.windll.user32.SetProcessDPIAware()
 
+from engine.console import developmentconsole, loaddevmodeflag
+from engine import savegame as savegamemodule
+
 select_sound = None
 
 COVID_NEWS_EVENTS = {
-    10: {
+    46: {
         "title": "FIRST COVID CASES",
         "description": "Several Southeast Asian countries begin reporting their first COVID-19 cases.",
     },
-    20: {
+    96: {
         "title": "BORDER RESTRICTIONS IMPLEMENTED",
         "description": "Governments across Southeast Asia tighten border controls to contain the virus.",
     },
-    30: {
+    146: {
         "title": "NATIONAL LOCKDOWNS BEGIN",
         "description": "Movement control measures and lockdowns begin across multiple countries.",
     },
-    40: {
+    196: {
         "title": "COVID ENDEMIC IN THAILAND",
         "description": "Thailand begins transitioning toward endemic COVID management policies.",
     },
-    50: {
+    246: {
         "title": "HOSPITALS UNDER PRESSURE",
         "description": "Healthcare systems face rising pressure due to increasing infection rates.",
     },
-    60: {
+    296: {
         "title": "MASK MANDATES EXPANDED",
         "description": "Public mask mandates are expanded in major cities and transportation hubs.",
     },
-    70: {
+    346: {
         "title": "ECONOMIC SLOWDOWN",
         "description": "Regional economies experience major slowdowns due to pandemic restrictions.",
     },
-    80: {
+    396: {
         "title": "REMOTE LEARNING INTRODUCED",
         "description": "Schools and universities transition to online learning systems.",
     },
-    90: {
+    446: {
         "title": "VACCINE DEVELOPMENT PROGRESSES",
         "description": "Global vaccine development efforts begin showing positive results.",
     },
-    100: {
+    496: {
         "title": "SOUTHEAST ASIA ADAPTS TO NEW NORMAL",
         "description": "Countries continue adapting to long-term pandemic management strategies.",
     },
@@ -305,6 +308,52 @@ def parsecolorvalue(rawcolorvalue):
             return None
 
     return None
+
+
+def buildcovidcaselookup(domesticaffairsstate):
+    entries = {}
+    maxcases = 0
+    for countryid, countrydata in (domesticaffairsstate or {}).items():
+        if not isinstance(countrydata, dict):
+            continue
+        key = domesticmodule.countrykey(countrydata.get("country_id") or countrydata.get("country_name") or countryid)
+        cases = max(0, int(countrydata.get("covid_cases", 0) or 0))
+        entry = {
+            "country": countrydata.get("country_name") or countrydata.get("country_id") or countryid,
+            "cases": cases,
+            "r0": float(countrydata.get("covid_r0", 0) or 0),
+            "load": float(countrydata.get("covid_healthcare_load_pct", 0) or 0),
+        }
+        entries[key] = entry
+        maxcases = max(maxcases, cases)
+    return {"entries": entries, "maxcases": max(1, maxcases)}
+
+
+def covidcasefill(countryname, covidcaselookup):
+    if not countryname or not covidcaselookup:
+        return (68, 126, 83)
+    entry = covidcaselookup.get("entries", {}).get(domesticmodule.countrykey(countryname))
+    if not entry:
+        return (68, 126, 83)
+    ratio = max(0.0, min(1.0, entry.get("cases", 0) / max(1, covidcaselookup.get("maxcases", 1))))
+    ratio = math.sqrt(ratio)
+    return mix_color((67, 160, 91), (208, 69, 68), ratio)
+
+
+def addcovidhovertip(hovertext, countryname, covidcaselookup):
+    if not countryname or not covidcaselookup:
+        return hovertext
+    entry = covidcaselookup.get("entries", {}).get(domesticmodule.countrykey(countryname))
+    if not entry:
+        return hovertext
+    if not isinstance(hovertext, dict):
+        hovertext = {}
+    else:
+        hovertext = dict(hovertext)
+    hovertext["covid_cases"] = int(entry.get("cases", 0) or 0)
+    hovertext["covid_r0"] = float(entry.get("r0", 0) or 0)
+    hovertext["covid_load"] = float(entry.get("load", 0) or 0)
+    return hovertext
 
 
 def blackworld(nonplayablestateshapelist, mapbox):
@@ -1082,7 +1131,7 @@ def drawloadingscreen(
 
 
 
-def main(eventbus=None, is_fullscreen=False, volume=1.0):
+def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
     global select_sound
     
     if eventbus is None:
@@ -1508,6 +1557,8 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
             "edgeCount": totaledges,
         },
     )
+
+    
     if not drawloadingscreen(
         screen,
         loadingtitlefont,
@@ -1526,8 +1577,16 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
     windowwidth, windowheight = screen.get_size()
     runtimeui = InGameUI((windowwidth, windowheight))
     runtimeui.ui_click_sound.set_volume(volume * 0.4)
+    
+    runtimeui.settings_volume = int(max(0, min(100, round(volume * 100))))
+    runtimeui.set_fullscreen_state(is_fullscreen)
+    
+
+
     maprect = runtimeui.map_rect
     camerastate = cameramodule.createcamerastate(maprect.width, maprect.height, mapbox)
+
+    
 
 
 
@@ -1586,6 +1645,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
     expandedstateid = None
     selectedprovinceid = None
     selectedprovinceidset = set()
+    covidcasemapenabled = False
 
     gamephase = "choosecountry"
     pendingcountry = None
@@ -1594,6 +1654,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
 
     # Economy defaults come from economy module
     currentturnnumber = 1
+    currentsaveslot = [load_slot]
     economyconfig = getdefaulteconomyconfig()
     (
         playergold,
@@ -1621,6 +1682,11 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
         emit=eventbus.emit,
         economyconfig=economyconfig,
     )
+    from engine.ai import create_manager_from_settings
+    from engine.settings import loadsettings
+
+    gamesettings = loadsettings()
+    peaceaimanager = create_manager_from_settings(gamesettings)
 
 
     movementorderlist = []
@@ -1644,6 +1710,13 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
     occupationtransferlookup = {}
     capitulationtimer = {}
     capitulatedset = set()
+    deferredpeaceconferenceprogress = {}
+    diplomacystate = {
+        "puppets": {},
+        "military_access": {},
+        "regime_changes": {},
+        "peace_treaties": [],
+    }
     countrymenutarget = None
     researched_set: set[str] = set()
     researching_node_id: str | None = None
@@ -1653,6 +1726,113 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
     for _rcat in _research_raw.values():
         for _rn in _rcat.get("nodes", []):
             _research_cost_lookup[_rn["id"]] = _rn["cost"]
+
+
+    if load_slot is not None:
+        loadeddata = savegamemodule.readsaveslot(load_slot)
+        if loadeddata is not None:
+            playercountry = loadeddata.get("playercountry")
+            currentturnnumber = loadeddata.get("currentturnnumber", currentturnnumber)
+            playergold = loadeddata.get("playergold", playergold)
+            playerpopulation = loadeddata.get("playerpopulation", playerpopulation)
+            playerstability = loadeddata.get("playerstability", playerstability)
+            playerpp = loadeddata.get("playerpp", playerpp)
+            playerap = loadeddata.get("playerap", playerap)
+            recruitamount = loadeddata.get("recruitamount", recruitamount)
+            gamephase = loadeddata.get("gamephase", gamephase)
+            countriesatwarset = set(loadeddata.get("countriesatwarset", []))
+            warpairset = savegamemodule.deserializewarpairset(loadeddata.get("warpairset"))
+            warrecordlookup.clear()
+            warrecordlookup.update(savegamemodule.deserializewarrecordlookup(loadeddata.get("warrecordlookup")))
+            occupationtransferlookup.clear()
+            occupationtransferlookup.update(loadeddata.get("occupationtransferlookup", {}))
+            capitulationtimer.clear()
+            capitulationtimer.update(loadeddata.get("capitulationtimer", {}))
+            capitulatedset = set(loadeddata.get("capitulatedset", []))
+            deferredpeaceconferenceprogress.clear()
+            deferredpeaceconferenceprogress.update(
+                loadeddata.get("deferredpeaceconferenceprogress", {})
+            )
+            loadeddiplomacy = loadeddata.get("diplomacystate", {})
+            if isinstance(loadeddiplomacy, dict):
+                for diplomacykey in diplomacystate:
+                    loadedvalue = loadeddiplomacy.get(diplomacykey)
+                    if isinstance(loadedvalue, type(diplomacystate[diplomacykey])):
+                        diplomacystate[diplomacykey] = loadedvalue
+            for regimecountry, regimename in diplomacystate["regime_changes"].items():
+                LEADERS[regimecountry] = regimename
+            for peacetreaty in diplomacystate["peace_treaties"]:
+                if not isinstance(peacetreaty, dict):
+                    continue
+                treatyvictor = peacetreaty.get("victor")
+                for stateid in peacetreaty.get("territory_state_ids", ()):
+                    stateshape = stateobjectlookup.get(stateid)
+                    if not stateshape or not treatyvictor:
+                        continue
+                    stateshape["ownercountry"] = treatyvictor
+                    stateshape["controllercountry"] = treatyvictor
+                    stateshape["country"] = treatyvictor
+                    stateshape["countrycolor"] = countrytocolorlookup.get(treatyvictor, (85, 85, 85))
+                    statetocountrylookup[stateid] = treatyvictor
+            savegamemodule.applyserializedprovincemap(loadeddata.get("provincemap"), provincemap)
+            movementorderlist = loadeddata.get("movementorderlist", [])
+            for order in movementorderlist:
+                if order.get("countrycolor") is not None:
+                    order["countrycolor"] = tuple(order["countrycolor"])
+            frontlineassignmentlist = loadeddata.get("frontlineassignmentlist", [])
+            frontlineassignmentcounter = loadeddata.get("frontlineassignmentcounter", 0)
+            researched_set = set(loadeddata.get("researched_set", []))
+            researching_node_id = loadeddata.get("researching_node_id")
+            researching_turns_remaining = loadeddata.get("researching_turns_remaining", 0)
+            domesticaffairsstate = loadeddata.get("domesticaffairsstate", domesticaffairsstate)
+            notifications = loadeddata.get("notifications", [])
+            covidcasemapenabled = loadeddata.get("covidcasemapenabled", False)
+            if playercountry:
+                npcdirector.setplayercountry(playercountry)
+                npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
+                focustree = loadfocustreeforcountry(playercountry)
+                savedfocusid = loadeddata.get("focusid")
+                if savedfocusid:
+                    focustree.startfocus(savedfocusid)
+                    savedfocus = focustree.getfocus(savedfocusid)
+                    if savedfocus:
+                        savedfocus.progress = loadeddata.get("focusprogress", 0)
+            countrybordersdirty = True
+            npcdirector.rebuildcountryindexes()
+
+
+            if playercountry:
+                ownedminx = ownedminy = float("inf")
+                ownedmaxx = ownedmaxy = float("-inf")
+                for stateshape in playablestateshapelist:
+                    if stateshape.get("controllercountry") != playercountry:
+                        continue
+                    rect = stateshape.get("rectangle")
+                    if rect is None:
+                        continue
+                    ownedminx = min(ownedminx, float(rect.left))
+                    ownedminy = min(ownedminy, float(rect.top))
+                    ownedmaxx = max(ownedmaxx, float(rect.right))
+                    ownedmaxy = max(ownedmaxy, float(rect.bottom))
+
+                if ownedminx < float("inf") and ownedmaxx > float("-inf"):
+                    ownedboxwidth = max(1.0, ownedmaxx - ownedminx)
+                    ownedboxheight = max(1.0, ownedmaxy - ownedminy)
+                    ownedmargin = 80.0
+                    ownedboxwidth += ownedmargin * 2
+                    ownedboxheight += ownedmargin * 2
+
+                    loadzoomx = maprect.width / ownedboxwidth
+                    loadzoomy = maprect.height / ownedboxheight
+                    loadtargetzoom = max(minimumzoomvalue, min(maximumzoomvalue, min(loadzoomx, loadzoomy)))
+                    camerastate.zoom = loadtargetzoom
+                    camerastate.targetzoom = loadtargetzoom
+
+                    loadcenterworldx = (ownedminx + ownedmaxx) * 0.5
+                    loadcenterworldy = (ownedminy + ownedmaxy) * 0.5
+                    camerastate.x = maprect.width * 0.5 - loadcenterworldx * loadtargetzoom
+                    camerastate.y = maprect.height * 0.5 - loadcenterworldy * loadtargetzoom
+                    cameramodule.clampcamerastate(camerastate, maprect.height, mapbox)
 
     def normalizewarpair(firstcountry, secondcountry):
         if not firstcountry or not secondcountry:
@@ -2244,39 +2424,236 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
         data["active_pair_count"] = len(pairwars)
         return data
 
-    def executecapitulation(defeatedcountry, victoriouscountry):
-        if defeatedcountry in capitulatedset:
-            return
-        capitulatedset.add(defeatedcountry)
-
-        aggressorcolor = countrytocolorlookup.get(victoriouscountry, (85, 85, 85))
-        for province in provincemap.values():
-            owner = getprovinceowner(province)
-            prevcontroller = getprovincecontroller(province)
-
-            if owner == defeatedcountry:
-                setprovincecontroller(province, victoriouscountry, aggressorcolor)
-            elif prevcontroller == defeatedcountry:
-                actualowner = getprovinceowner(province)
-                ownercolor = countrytocolorlookup.get(actualowner, (85, 85, 85))
-                setprovincecontroller(province, actualowner, ownercolor)
-            else:
+    def buildpeaceterritoryoptions(defeatedcountry):
+        optionlookup = {}
+        for provinceid, province in provincemap.items():
+            if getprovinceowner(province) != defeatedcountry:
                 continue
+            stateid = (
+                province.get("parentid")
+                or province.get("parentstateid")
+                or coremodule.getparentstateidfromprovinceid(provinceid)
+            )
+            option = optionlookup.setdefault(
+                str(stateid),
+                {
+                    "id": str(stateid),
+                    "label": str(stateid).replace("_", " "),
+                    "province_ids": [],
+                },
+            )
+            option["province_ids"].append(provinceid)
+        return sorted(optionlookup.values(), key=lambda option: option["label"])
 
+    def getcountryeconomyforstrength(countryname):
+        if countryname == playercountry:
+            return {
+                "gold": playergold,
+                "population": playerpopulation,
+                "stability": playerstability,
+            }
+        return npcdirector.countryeconomy.get(countryname, {})
+
+    def setprovinceafterpeace(province, newcontroller, newowner=None):
+        previouscontroller = getprovincecontroller(province)
+        if newowner is not None:
+            province["ownercountry"] = newowner
+        controllercolor = countrytocolorlookup.get(newcontroller, (85, 85, 85))
+        setprovincecontroller(province, newcontroller, controllercolor)
+        if previouscontroller != newcontroller:
             eventbus.emit(EngineEventType.PROVINCECONTROLCHANGED, {
                 "provinceId": province.get("id"),
-                "previousController": prevcontroller,
-                "newController": getprovincecontroller(province),
+                "previousController": previouscontroller,
+                "newController": newcontroller,
             })
+
+    def applyplayerpeacesettlement(defeatedcountry, victoriouscountry, result, territoryoptions):
+        accepted = bool(result and result.get("accepted"))
+        proposal = result.get("proposal", {}) if accepted else {}
+        demands = set(proposal.get("demands", ()))
+        selectedstates = set(proposal.get("territory_state_ids", ()))
+        validstates = {option["id"] for option in territoryoptions}
+        selectedstates &= validstates
+
+        for provinceid, province in provincemap.items():
+            owner = getprovinceowner(province)
+            controller = getprovincecontroller(province)
+            stateid = str(
+                province.get("parentid")
+                or province.get("parentstateid")
+                or coremodule.getparentstateidfromprovinceid(provinceid)
+            )
+            if owner == defeatedcountry:
+                if accepted and "STATE TRANSFER" in demands and stateid in selectedstates:
+                    setprovinceafterpeace(province, victoriouscountry, newowner=victoriouscountry)
+                else:
+                    setprovinceafterpeace(province, defeatedcountry, newowner=defeatedcountry)
+            elif controller == defeatedcountry:
+                setprovinceafterpeace(province, owner, newowner=owner)
+
+        for stateid in selectedstates:
+            stateshape = stateobjectlookup.get(stateid)
+            if stateshape is None:
+                continue
+            stateshape["ownercountry"] = victoriouscountry
+            stateshape["controllercountry"] = victoriouscountry
+            stateshape["country"] = victoriouscountry
+            stateshape["countrycolor"] = countrytocolorlookup.get(victoriouscountry, (85, 85, 85))
+            statetocountrylookup[stateid] = victoriouscountry
+
+        if accepted and "PUPPET STATE" in demands:
+            diplomacystate["puppets"][defeatedcountry] = victoriouscountry
+        if accepted and "MILITARY ACCESS" in demands:
+            accesslist = diplomacystate["military_access"].setdefault(victoriouscountry, [])
+            if defeatedcountry not in accesslist:
+                accesslist.append(defeatedcountry)
+        if accepted and "REGIME CHANGE" in demands:
+            regimename = f"{defeatedcountry} Provisional Council"
+            diplomacystate["regime_changes"][defeatedcountry] = regimename
+            LEADERS[defeatedcountry] = regimename
+        if accepted:
+            diplomacystate["peace_treaties"].append({
+                "turn": currentturnnumber,
+                "victor": victoriouscountry,
+                "defeated": defeatedcountry,
+                "demands": sorted(demands),
+                "territory_state_ids": sorted(selectedstates),
+            })
+
+    def runplayerpeaceconference(defeatedcountry, victoriouscountry):
+        from engine.peace import PeaceNegotiation, calculate_country_strength
+        from game.peace_ui import PeaceTreatyScreen
+
+        territoryoptions = buildpeaceterritoryoptions(defeatedcountry)
+        victorstrength = calculate_country_strength(
+            provincemap,
+            victoriouscountry,
+            getcountryeconomyforstrength(victoriouscountry),
+        )
+        defeatedstrength = calculate_country_strength(
+            provincemap,
+            defeatedcountry,
+            getcountryeconomyforstrength(defeatedcountry),
+        )
+        defeatedprovincecount = 0
+        occupiedprovincecount = 0
+        for province in provincemap.values():
+            if getprovinceowner(province) != defeatedcountry:
+                continue
+            defeatedprovincecount += 1
+            if getprovincecontroller(province) == victoriouscountry:
+                occupiedprovincecount += 1
+        occupationratio = (
+            occupiedprovincecount / defeatedprovincecount
+            if defeatedprovincecount
+            else 1.0
+        )
+        negotiation = PeaceNegotiation(
+            ai_manager=peaceaimanager,
+            victor=victoriouscountry,
+            defeated=defeatedcountry,
+            player_name=gamesettings.get("player_name") or "Player",
+            personality=npcdirector.getpersonality(defeatedcountry),
+            victor_strength=victorstrength,
+            defeated_strength=defeatedstrength,
+            available_state_ids=[option["id"] for option in territoryoptions],
+            occupation_ratio=occupationratio,
+        )
+        conferencescreen = pygame.display.get_surface()
+        conference = PeaceTreatyScreen(
+            conferencescreen,
+            negotiation,
+            territoryoptions,
+            volume=runtimeui.settings_volume / 100.0,
+        )
+        result = conference.run()
+        pygame.event.clear()
+        if result.get("reason") == "window_closed":
+            pygame.event.post(pygame.event.Event(pygame.QUIT))
+        return result, territoryoptions
+
+    def executecapitulation(
+        defeatedcountry,
+        victoriouscountry,
+        capitulationprogress=None,
+        occupationprogress=None,
+    ):
+        nonlocal countrybordersdirty
+        if defeatedcountry in capitulatedset:
+            return
+
+        playerconference = (
+            victoriouscountry == playercountry
+            and defeatedcountry != playercountry
+            and not perfenabled
+        )
+        conferenceresult = None
+        territoryoptions = None
+        if playerconference:
+            conferenceresult, territoryoptions = runplayerpeaceconference(
+                defeatedcountry,
+                victoriouscountry,
+            )
+            if not conferenceresult.get("accepted"):
+                capitulationtimer.pop(defeatedcountry, None)
+                deferredpeaceconferenceprogress[defeatedcountry] = {
+                    "capitulation_progress": float(capitulationprogress or 0.0),
+                    "occupation_progress": float(occupationprogress or 0.0),
+                    "aggressor": victoriouscountry,
+                    "turn": currentturnnumber,
+                }
+                pushnotification(
+                    "PEACE TALKS ADJOURNED",
+                    f"{victoriouscountry} left talks with {defeatedcountry}. "
+                    "The war continues; capturing more territory will reopen negotiations.",
+                )
+                return
+
+        capitulatedset.add(defeatedcountry)
+        deferredpeaceconferenceprogress.pop(defeatedcountry, None)
 
         for pair in list(warpairset):
             if defeatedcountry in pair:
                 warrecordlookup.pop(pair, None)
                 warpairset.discard(pair)
 
-        countriesatwarset.discard(defeatedcountry)
+        countriesatwarset.clear()
+        if playercountry:
+            for activepair in warpairset:
+                if playercountry == activepair[0]:
+                    countriesatwarset.add(activepair[1])
+                elif playercountry == activepair[1]:
+                    countriesatwarset.add(activepair[0])
         capitulationtimer.pop(defeatedcountry, None)
-        nonlocal countrybordersdirty
+        movementorderlist[:] = [
+            order for order in movementorderlist
+            if order.get("controllercountry", order.get("country")) != defeatedcountry
+        ]
+
+        if playerconference:
+            applyplayerpeacesettlement(
+                defeatedcountry,
+                victoriouscountry,
+                conferenceresult,
+                territoryoptions,
+            )
+            acceptedmessage = " The negotiated treaty has been applied."
+        else:
+            acceptedmessage = ""
+            for province in provincemap.values():
+                owner = getprovinceowner(province)
+                controller = getprovincecontroller(province)
+                if owner == defeatedcountry:
+                    setprovinceafterpeace(province, victoriouscountry)
+                elif controller == defeatedcountry:
+                    setprovinceafterpeace(province, owner)
+
+        npcdirector.rebuildcountryindexes()
+        npcdirector.sync_player_wars(
+            playercountry,
+            countriesatwarset,
+            warpairset=warpairset,
+        )
         countrybordersdirty = True
 
         eventbus.emit(EngineEventType.CAPITULATED, {
@@ -2287,13 +2664,15 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
 
         pushnotification(
             "CAPITULATION",
-            f"{defeatedcountry} has capitulated to {victoriouscountry}!",
+            f"{defeatedcountry} has capitulated to {victoriouscountry}!{acceptedmessage}",
         )
 
     def checkcapitulations():
         metrics = buildwarcountrymetrics()
         totalvp = metrics["totalvp"]
         ownedcontrolledvp = metrics["ownedcontrolledvp"]
+        totalprovinces = metrics["totalprovinces"]
+        ownedcontrolledprovinces = metrics["ownedcontrolledprovinces"]
 
         def check_victim_capitulation(victimpairs):
             for victim, enemies in victimpairs.items():
@@ -2301,16 +2680,39 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                 if victimtotalvp <= 0:
                     continue
                 totalcapturedvp = 0.0
+                totalcapturedprovinces = 0
                 leader = None
                 leadercapturedvp = 0.0
                 for enemy in enemies:
                     capturedvp = ownedcontrolledvp.get((victim, enemy), 0.0)
+                    totalcapturedprovinces += ownedcontrolledprovinces.get(
+                        (victim, enemy),
+                        0,
+                    )
                     totalcapturedvp += capturedvp
                     if capturedvp > leadercapturedvp:
                         leadercapturedvp = capturedvp
                         leader = enemy
                 progress = (totalcapturedvp / victimtotalvp) * 100.0
+                victimprovincecount = max(1, totalprovinces.get(victim, 0))
+                occupationprogress = (
+                    totalcapturedprovinces / victimprovincecount
+                ) * 100.0
                 if progress >= 80.0 and leader:
+                    deferredconference = deferredpeaceconferenceprogress.get(victim)
+                    if deferredconference:
+                        previousoccupation = float(
+                            deferredconference.get("occupation_progress", 0.0)
+                        )
+                        if occupationprogress > previousoccupation + 0.01:
+                            deferredpeaceconferenceprogress.pop(victim, None)
+                            executecapitulation(
+                                victim,
+                                leader,
+                                capitulationprogress=progress,
+                                occupationprogress=occupationprogress,
+                            )
+                        continue
                     if victim not in capitulationtimer:
                         stability = playerstability if victim == playercountry else npcdirector.countryeconomy.get(victim, {}).get("stability", 50.0)
                         graceturns = int(10 + (stability / 100.0) * 10)
@@ -2323,7 +2725,12 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                             f"{victim} is at risk of capitulation in {graceturns} turns.",
                         )
                     elif currentturnnumber >= capitulationtimer[victim]["capitulateturn"]:
-                        executecapitulation(victim, capitulationtimer[victim]["aggressor"])
+                        executecapitulation(
+                            victim,
+                            capitulationtimer[victim]["aggressor"],
+                            capitulationprogress=progress,
+                            occupationprogress=occupationprogress,
+                        )
 
         defenderpairs = {}
         aggressorpairs = {}
@@ -2924,6 +3331,52 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
         if playercountry and not playercountrychanged:
             npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
 
+
+    def buildsavesnapshot():
+        return {
+            "playercountry": playercountry,
+            "currentturnnumber": currentturnnumber,
+            "playergold": playergold,
+            "playerpopulation": playerpopulation,
+            "playerstability": playerstability,
+            "playerpp": playerpp,
+            "playerap": playerap,
+            "recruitamount": recruitamount,
+            "recruitgoldcostperunit": recruitgoldcostperunit,
+            "recruitpopulationcostperunit": recruitpopulationcostperunit,
+            "gamephase": gamephase,
+            "countriesatwarset": list(countriesatwarset),
+            "warpairset": savegamemodule.serializewarpairset(warpairset),
+            "warrecordlookup": savegamemodule.serializewarrecordlookup(warrecordlookup),
+            "occupationtransferlookup": occupationtransferlookup,
+            "capitulationtimer": capitulationtimer,
+            "capitulatedset": list(capitulatedset),
+            "deferredpeaceconferenceprogress": deferredpeaceconferenceprogress,
+            "diplomacystate": diplomacystate,
+            "provincemap": savegamemodule.serializeprovincemap(provincemap),
+            "movementorderlist": savegamemodule.serializemovementorders(movementorderlist),
+            "frontlineassignmentlist": frontlineassignmentlist,
+            "frontlineassignmentcounter": frontlineassignmentcounter,
+            "researched_set": list(researched_set),
+            "researching_node_id": researching_node_id,
+            "researching_turns_remaining": researching_turns_remaining,
+            "domesticaffairsstate": domesticaffairsstate,
+            "focusid": focustree.activeid,
+            "focusprogress": focustree.getfocus(focustree.activeid).progress if focustree.activeid and focustree.getfocus(focustree.activeid) else 0,
+            "notifications": notifications,
+            "covidcasemapenabled": covidcasemapenabled,
+        }
+
+    def performsavegame():
+        targetslot = currentsaveslot[0]
+        if targetslot is None:
+            targetslot = savegamemodule.getnextavailableslot()
+            if targetslot is None:
+                targetslot = 1
+            currentsaveslot[0] = targetslot
+        savegamemodule.writesaveslot(targetslot, buildsavesnapshot())
+        return targetslot
+
     devconsole = developmentconsole(enabled=developmentmode)
     notifications = []
     _notif_id_counter = 0
@@ -3076,6 +3529,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
         )
 
     def advancedomesticturneffects():
+        nonlocal playergold
         nonlocal playerstability
         nonlocal playerpp
         nonlocal playerap
@@ -3089,6 +3543,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
             countriesatwarset=countriesatwarset,
         )
         effects = result.get("effects", {})
+        playergold = max(0, playergold + int(effects.get("player_gold_delta", 0) or 0))
         playerstability = max(0.0, min(100.0, playerstability + float(effects.get("player_stability_delta", 0.0) or 0.0)))
         playerpp = max(0, playerpp + int(effects.get("player_pp_delta", 0) or 0))
         playerap = max(0, playerap + int(effects.get("player_ap_delta", 0) or 0))
@@ -3159,9 +3614,10 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
         updatescriptengine()
         esomodule.updaterollingfpshistory(fpshistory, clock.get_fps(), fpshistorymaxsamples)
         mouseposition_full = pygame.mouse.get_pos()
-        #this gives x and y (0 and 1)
+        
         mainwindowwidth, mainwindowheight = screen.get_size()
         runtimeui.setwindowsize((mainwindowwidth, mainwindowheight))
+        runtimeui.set_fullscreen_state(is_fullscreen)
         maprect = runtimeui.map_rect
 
         screen_main = screen
@@ -3427,6 +3883,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
         countrymenupulsevalue = None
         if gamephase == "play" and countrymenutarget:
             countrymenupulsevalue = 0.35 + 0.45 * (0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.008))
+        covidcaselookup = buildcovidcaselookup(domesticaffairsstate) if covidcasemapenabled and gamephase == "play" else None
 
         for copyshift in copyshiftlist:
             drawcamerax = camerax + copyshift
@@ -3494,6 +3951,9 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                                     hovertext = dict(hovertext)
                                     if hoveredprovinceid:
                                         hovertext["provinceid"] = hoveredprovinceid
+                                    if covidcasemapenabled:
+                                        hovercountry = drawitem.get("controllercountry", drawitem.get("country", stateshape.get("country")))
+                                        hovertext = addcovidhovertip(hovertext, hovercountry, covidcaselookup)
                             
                             else:
                                 hovertext = None
@@ -3571,6 +4031,17 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
 
                     if (
                         gamephase == "play"
+                        and covidcasemapenabled
+                        and drawitem.get("id") not in selectedprovinceidset
+                        and drawitem.get("id") not in routepreviewset
+                        and drawitem.get("id") not in movingprovinceidset
+                    ):
+                        drawcountry = drawitem.get("controllercountry", drawitem.get("country", stateshape.get("country")))
+                        basefillcolor = covidcasefill(drawcountry, covidcaselookup)
+
+                    if (
+                        gamephase == "play"
+                        and not covidcasemapenabled
                         and drawitem.get("id") not in selectedprovinceidset
                         and drawitem.get("id") not in routepreviewset
                         and drawitem.get("id") not in movingprovinceidset
@@ -3956,8 +4427,14 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                 "latency_ms": elapsedseconds * 1000.0,
             },
             notifications=notifications,
+            covidcasemapenabled=covidcasemapenabled,
         )
         runtimeui.update(elapsedseconds)
+        currentuivolume = runtimeui.settings_volume / 100.0
+        if select_sound is not None:
+            select_sound.set_volume(currentuivolume * 0.5)
+        move_sound.set_volume(currentuivolume * 0.5)
+        mahathir_speech.set_volume(currentuivolume * 0.7)
         runtimeui.draw(screen)
         scriptengine.draw_script_ui(screen)
         if perfidlecollecting:
@@ -4052,6 +4529,11 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                 isrunning = False
                 continue
 
+            if uiaction == InGameUI.actionsavegame:
+                savedslot = performsavegame()
+                runtimeui.shownsavenotice(f"Saved to Game {savedslot}")
+                continue
+
             if uiaction == InGameUI.actionpausemenu:
                 continue
 
@@ -4059,6 +4541,32 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                 continue
 
             if uiaction == "notification_scroll":
+                continue
+
+            if uiaction == InGameUI.actiontogglesettingsfullscreen:
+                is_fullscreen = not is_fullscreen
+                oldmaprect = maprect
+                if is_fullscreen:
+                    screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+                else:
+                    screen = pygame.display.set_mode((defaultwindowwidth, defaultwindowheight), pygame.RESIZABLE)
+                newwindowwidth, newwindowheight = screen.get_size()
+                runtimeui.setwindowsize((newwindowwidth, newwindowheight))
+                runtimeui.set_fullscreen_state(is_fullscreen)
+                maprect = runtimeui.map_rect
+                cameramodule.resizecamerastate(
+                    camerastate,
+                    oldmaprect.width,
+                    oldmaprect.height,
+                    maprect.width,
+                    maprect.height,
+                    mapbox,
+                )
+                cameramodule.clampcamerastate(camerastate, maprect.height, mapbox)
+                sea_gradient_cache = None
+                sea_gradient_cache_size = None
+                map_vignette_cache = None
+                map_vignette_cache_size = None
                 continue
 
             if runtimeui.pausemenuopen:
@@ -4209,11 +4717,42 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                 countrydata = domesticaffairsstate.get(playercountry)
 
                 if countrydata:
-                    countrydata["mco_enabled"] = not countrydata.get(
-                        "mco_enabled",
-                         False
+                    mcoenabled = domesticmodule.toggle_mco(countrydata)
+                    pushnotification(
+                        "MCO ENACTED" if mcoenabled else "MCO LIFTED",
+                        (
+                            "Movement controls reduce COVID transmission but hurt the economy and public patience."
+                            if mcoenabled
+                            else "Movement controls are lifted; economic activity recovers while transmission risk rises."
+                        ),
                     )
 
+                continue
+
+            if (
+                isinstance(uiaction, tuple)
+                and len(uiaction) == 2
+                and uiaction[0] == InGameUI.actiontogglecovidpolicy
+            ):
+                countrydata = domesticaffairsstate.get(playercountry)
+                policyid = uiaction[1]
+                policyinfo = domesticmodule.get_covid_policy_definition(policyid) or {}
+                if countrydata:
+                    policyenabled = domesticmodule.toggle_covid_policy(countrydata, policyid)
+                    policylabel = str(policyinfo.get("label") or policyid).upper()
+                    pushnotification(
+                        f"{policylabel} {'ENABLED' if policyenabled else 'DISABLED'}",
+                        "COVID response settings updated. Transmission, public patience and economic pressure will adjust next turn.",
+                    )
+                continue
+
+            if uiaction == InGameUI.actiontogglecovidmap:
+                covidcasemapenabled = not covidcasemapenabled
+                runtimeui.covidcasemapenabled = covidcasemapenabled
+                pushnotification(
+                    "COVID CASE MAP ENABLED" if covidcasemapenabled else "COVID CASE MAP DISABLED",
+                    "Map colors now show relative active COVID cases." if covidcasemapenabled else "Map colors returned to the normal tactical view.",
+                )
                 continue
 
 
@@ -4658,11 +5197,18 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                 dragselectstart = None
                 dragselectcurrent = None
 
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3: # right click for move orders
+            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 3:
                 if devconsole.visible or gamephase != "play" or frontlineplacementmode:
                     continue
-
-
+                if runtimeui.bottom_buttons.selected == "CONSTRUCTION" and runtimeui._selected_construction:
+                    if hoveredstateid is not None:
+                        runtimeui.set_construction_target(hoveredstateid)
+                        countrymenutarget = None
+                        runtimeui.select_map_country(None)
+                        emitmappulse(eventmappos, (72, 183, 123), radius=140, duration=0.7, width=3)
+                    else:
+                        runtimeui.set_construction_target(None)
+                    continue
                 if hoveredstateid is not None and hoveredprovinceid is None:
                     selectedstateobject = stateobjectlookup.get(hoveredstateid)
                     if selectedstateobject:
@@ -4672,12 +5218,9 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                             countrymenutarget = None
                             emitmappulse(eventmappos, (74, 143, 231), radius=120, duration=0.65, width=2)
                             continue
-
                 if hoveredstateid is None and hoveredprovinceid is None:
                     runtimeui.select_map_country(None)
                     countrymenutarget = None
-
-                # Only open the country interaction menu when the click is on a state (no hovered province).
                 if hoveredprovinceid is None:
                     if hoveredstateid is not None:
                         selectedstateobject = stateobjectlookup.get(hoveredstateid)
@@ -4861,6 +5404,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                                 "appliedEffects": [dict(effect) for effect in focusturnresult.appliedeffects],
                             },
                         )
+                    countrydata = domesticaffairsstate.get(playercountry, {})
                     playergold, playerpopulation, playerstability, playerpp, playerap = applyendturneconomy(
                         playercountry,
                         provincemap,
@@ -4869,6 +5413,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                         playerstability,
                         playerpp,
                         playerap,
+                        mco_enabled=countrydata.get("mco_enabled", False),
                     )
                     npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
                     npcdirector.executeturn(
@@ -5004,6 +5549,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
 
         pygame.display.flip()
 
+    peaceaimanager.shutdown(wait=False)
     pygame.quit()
 # loading screen and main loop ends
 

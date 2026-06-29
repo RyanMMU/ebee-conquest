@@ -58,7 +58,7 @@ class LeftBar:
         self.items: list[str] = []
         self.item_rects: dict[str, pygame.Rect] = {}
         self._hover_glow = {}
-        # rolling FPS history for status graph (42 samples)
+       
         self._fps_history: list[float] = [0.0] * 42
 
     def set_items(self, items: list[str]):
@@ -246,7 +246,7 @@ class LeftBar:
             for offset in range(1, 4):
                 gy = graph_rect.y + offset * graph_rect.height // 4
                 pygame.draw.line(surface, (26, 37, 51), (graph_rect.x, gy), (graph_rect.right, gy), 1)
-            # update fps history from statusdata then draw graph from samples
+           
             try:
                 fps_sample = float(statusdata.get("fps", 0.0) or 0.0)
             except Exception:
@@ -258,14 +258,14 @@ class LeftBar:
             samples = list(self._fps_history or [])
             if not samples:
                 samples = [0.0] * 42
-            # autoscale: at least 60 FPS range so small variations are visible
+         
             max_scale = max(60.0, max(samples) if samples else 60.0)
             points = []
             sample_count = max(2, len(samples))
             for idx, sample in enumerate(samples):
                 px = graph_rect.x + int(idx * graph_rect.width / (sample_count - 1))
                 normalized = min(1.0, max(0.0, float(sample) / max_scale))
-                # map normalized (0..1) so 0 is bottom, 1 is top of graph rect
+               
                 py = graph_rect.bottom - int(normalized * graph_rect.height)
                 points.append((px, py))
             if len(points) >= 2:
@@ -395,12 +395,21 @@ class InGameUI:
     actionstartfocus = "startfocus"
     actiondomesticaffairs = "domesticaffairs"
     actiontogglemco = "togglemco"
+    actiontogglecovidpolicy = "togglecovidpolicy"
+    actiontogglecovidmap = "togglecovidmap"
     actionpausemenu = "pausemenu"
+    actionsavegame = "savegame"
+    actiontogglesettingsfullscreen = "togglesettingsfullscreen"
     actionquitgame = "quitgame"
+    
     actionweapon1 = "weapon_1"
     actionweapon2 = "weapon_2"
     actionweapon3 = "weapon_3"
     actionweapon4 = "weapon_4"
+
+
+
+    
 
     def __init__(self, window_size):
         self.window_size = window_size
@@ -416,7 +425,7 @@ class InGameUI:
 
         self.leftbar_width = 256
         self.topbar_height = 80
-        # widened so troop/country panels fit "seamlessly" in the right tab
+       
         self.rightbar_width = 380
         self.bottombar_height = 104
 
@@ -462,6 +471,7 @@ class InGameUI:
         self._troopbadgelist = []
         self._hovertext = None
         self._hovermousepos = (0, 0)
+        self.covidcasemapenabled = False
         self.focusview = FocusTreeView()
         self.researchview = ResearchTreeView()
         self.pausemenuopen = False
@@ -481,16 +491,45 @@ class InGameUI:
         self._notification_max_scroll = 0
         self._notification_card_rects = {}
         self._notification_popup_rect = pygame.Rect(0, 0, 10, 10)
+        self._marquee_queue = []
+        self._marquee_seen_keys = set()
+        self._marquee_current = None
+        self._marquee_text = ""
+        self._marquee_text_width = 0
+        self._marquee_phase = "idle"
+        self._marquee_progress = 0.0
+        self._marquee_elapsed = 0.0
+        self._marquee_scroll = 0.0
+        self._marquee_center_paused = False
+        self._marquee_pause_remaining = 0.0
+        self._marquee_rect = pygame.Rect(0, 0, 10, 10)
         self._combat_popup_rect = pygame.Rect(0, 0, 10, 10)
         self._policy_popup_rect = pygame.Rect(0, 0, 10, 10)
         self._policy_focus_slot_rect = pygame.Rect(0, 0, 10, 10)
         self._policy_dropdown_progress = 0.0
+        self._covid_policy_button_rects = {}
+
+        try:
+            from engine.settings import loadsettings as _loadsettings
+            _savedsettings = _loadsettings()
+        except Exception:
+            _savedsettings = {}
+        self.settings_volume = int(_savedsettings.get("volume", 50))
+        self.settings_ai_mode = str(_savedsettings.get("llm_mode") or "graph")
+        self.is_fullscreen = False
+        self._settings_volume_dragging = False
+        self._settings_popup_rect = pygame.Rect(0, 0, 10, 10)
+        self._settings_slider_rect = pygame.Rect(0, 0, 10, 10)
+        self._settings_fullscreen_rect = pygame.Rect(0, 0, 10, 10)
+        self._settings_ai_mode_rect = pygame.Rect(0, 0, 10, 10)
+        self._settings_close_rect = pygame.Rect(0, 0, 10, 10)
+        self._covid_case_map_rect = pygame.Rect(0, 0, 10, 10)
         self._notificationcount = 0
         self._startdate = date(2020, 1, 1)
-        self._daysperturn = 5
+        self._daysperturn = 1
         
 
-        # rolling FPS history for status graph (42 samples)
+       
         self._fps_history: list[float] = [0.0] * 42
 
         self._flags = self._load_flags()
@@ -502,7 +541,7 @@ class InGameUI:
         self._topbar_icons = self._load_topbar_icons()
 
         self._choose_rect = pygame.Rect(0, 0, 160, 34)
-        self._endturn_rect = pygame.Rect(0, 0, 10, 10)  # placed near map bottom-right
+        self._endturn_rect = pygame.Rect(0, 0, 10, 10)  
         self._endturn_glow = 0.0
         self._button_glows: dict[str, float] = {}
         self._topbar_metric_rects = {}
@@ -513,8 +552,10 @@ class InGameUI:
         self._topbar_metric_snapshot = {}
         self._topbar_metric_rates = {}
         self._topbar_metric_rate_turn = None
-
-        # right panel interactive rects (computed in applylayout)
+        self._selected_construction = None
+        self._construction_target = None
+        self._construction_btn_rects = {}
+   
         self._recruit_action_rect = pygame.Rect(0, 0, 10, 10)
         self._declarewar_rect = pygame.Rect(0, 0, 10, 10)
         self._split_rect = pygame.Rect(0, 0, 10, 10)
@@ -541,6 +582,7 @@ class InGameUI:
         self._domestic_drag_offset = (0, 0)
         self.production_popup_open = False
         self._production_popup_back_rect = pygame.Rect(0, 0, 10, 10)
+        self._production_popup_select_rect = pygame.Rect(0, 0, 10, 10)
         self._production_popup_rect = pygame.Rect(0, 0, 10, 10)
         self._production_item_rects = {}
         self._production_scroll = 0
@@ -548,14 +590,8 @@ class InGameUI:
         self._production_item_count = 44
         self.production_selected = None
         self._researched_weapon_nodes: list[dict] = []
-        self._recruit_action_rect = pygame.Rect(0, 0, 10, 10)
-        self._declarewar_rect = pygame.Rect(0, 0, 10, 10)
-        self._split_rect = pygame.Rect(0, 0, 10, 10)
-        self._merge_rect = pygame.Rect(0, 0, 10, 10)
-        self._frontline_rect = pygame.Rect(0, 0, 10, 10)
         self._production_blank_rect = pygame.Rect(0, 0, 10, 10)
-        self._research_btn_rects = [pygame.Rect(0, 0, 10, 10) for _ in range(4)]
-
+        
         self.leftbar = LeftBar(pygame.Rect(0, 0, 10, 10))
         self.bottom_buttons = BottomButtons(pygame.Rect(0, 0, 10, 10))
 
@@ -568,7 +604,8 @@ class InGameUI:
                 "COMBAT",
                 "INTEL",
                 "NATIONAL POLICY",
-                "DOMESTIC AFFAIRS"
+                "DOMESTIC AFFAIRS",
+                "SETTINGS",
             ]
         )
         self.bottom_buttons.set_items(
@@ -579,6 +616,7 @@ class InGameUI:
                 "PRODUCTION",
                 "CONSTRUCTION",
                 "TROOPS",
+                
             ]
         )
         self.bottom_buttons.set_selected(None)
@@ -589,10 +627,17 @@ class InGameUI:
         self.pause_menu = pygame.Rect(0,0,10,10)
         self.quit_menu = pygame.Rect(0,0,10,10)
         self.map_rect = pygame.Rect(0, 0, 10, 10)
+        self._pausesave_rect = pygame.Rect(0, 0, 10, 10)
+        self._pausesave_notice = None
+        self._pausesave_notice_time = 0.0
         self.applylayout()
 
 
-    
+    def set_construction_target(self, country_name: str | None):
+        self._construction_target = country_name
+
+    def set_fullscreen_state(self, is_fullscreen: bool):
+        self.is_fullscreen = bool(is_fullscreen)
 
     def _load_flags(self):
         flags = {}
@@ -620,7 +665,7 @@ class InGameUI:
             try:
                 img = pygame.image.load(filepath).convert_alpha()
 
-                # Store ORIGINAL high-resolution image
+              
                 flags[country_key] = img
 
             except pygame.error:
@@ -703,6 +748,8 @@ class InGameUI:
             "war_progress": "war_progress.svg",
             "occupation": "occupation.svg",
             "close": "close.svg",
+            "SETTINGS": "settings.png",
+            "settings": "settings.png",
         }
 
         for key, filename in icon_files.items():
@@ -771,7 +818,7 @@ class InGameUI:
 
     @staticmethod
     def _fit_text(font, text, max_width):
-        # trim long labels before they enter fixed-width war columns.
+      
         text = str(text)
         if font.size(text)[0] <= max_width:
             return text
@@ -891,6 +938,174 @@ class InGameUI:
         draw_light_sweep(surface, rect, self._motion_time * 0.72, _C_GOLD_BRIGHT, alpha=16)
         draw_scanlines(surface, rect, self._motion_time, color=(74, 143, 231), alpha=6, spacing=30)
 
+    @staticmethod
+    def _marquee_notification_key(notification):
+        notificationid = notification.get("id")
+        if notificationid is not None:
+            return ("id", str(notificationid))
+        return (
+            "content",
+            str(notification.get("title", "")),
+            str(notification.get("description", "")),
+            str(notification.get("turn", "")),
+        )
+
+    def _enqueue_marquee_notifications(self, notifications):
+        newnotifications = []
+        for notification in notifications:
+            if not isinstance(notification, dict):
+                continue
+            key = self._marquee_notification_key(notification)
+            if key in self._marquee_seen_keys:
+                continue
+            self._marquee_seen_keys.add(key)
+            newnotifications.append(dict(notification))
+
+        if len(self._marquee_seen_keys) > 512:
+            self._marquee_seen_keys = {
+                self._marquee_notification_key(notification)
+                for notification in notifications[-256:]
+                if isinstance(notification, dict)
+            }
+        self._marquee_queue.extend(newnotifications[-6:])
+
+    def _start_next_marquee(self):
+        if self._marquee_current is not None or not self._marquee_queue:
+            return
+        self._marquee_current = self._marquee_queue.pop(0)
+        title = " ".join(str(self._marquee_current.get("title") or "NEWS UPDATE").split())
+        description = " ".join(str(self._marquee_current.get("description") or "").split())
+        title = title[:72]
+        description = description[:240]
+        self._marquee_text = f"{title.upper()}  •  {description}" if description else title.upper()
+        self._marquee_text_width = self.font_bold.size(self._marquee_text)[0]
+        self._marquee_phase = "enter"
+        self._marquee_progress = 0.0
+        self._marquee_elapsed = 0.0
+        self._marquee_scroll = 0.0
+        self._marquee_center_paused = False
+        self._marquee_pause_remaining = 0.0
+
+    def _update_live_marquee(self, dt):
+        if self._marquee_current is None:
+            self._start_next_marquee()
+            return
+
+        if self._marquee_phase == "enter":
+            self._marquee_progress = min(1.0, self._marquee_progress + dt * 4.8)
+            if self._marquee_progress >= 1.0:
+                self._marquee_phase = "active"
+            return
+
+        if self._marquee_phase == "exit":
+            self._marquee_progress = max(0.0, self._marquee_progress - dt * 4.2)
+            if self._marquee_progress <= 0.0:
+                self._marquee_current = None
+                self._marquee_text = ""
+                self._marquee_phase = "idle"
+                self._start_next_marquee()
+            return
+
+        self._marquee_elapsed += dt
+        tickerleft = self.leftbar.rect.right if self.leftbar.rect.width else 0
+        availablewidth = max(180, self.window_size[0] - tickerleft - 100)
+        traveldistance = availablewidth + self._marquee_text_width + 24
+        scrollspeed = max(110.0, traveldistance / 9.0)
+        centerposition = (availablewidth + self._marquee_text_width) * 0.5 + 8
+
+        if self._marquee_pause_remaining > 0.0:
+            self._marquee_pause_remaining = max(0.0, self._marquee_pause_remaining - dt)
+            return
+
+        nextscroll = self._marquee_scroll + scrollspeed * dt
+        if (
+            not self._marquee_center_paused
+            and self._marquee_scroll <= centerposition <= nextscroll
+        ):
+            self._marquee_scroll = centerposition
+            self._marquee_center_paused = True
+            self._marquee_pause_remaining = 2.0
+            return
+
+        self._marquee_scroll = nextscroll
+        if self._marquee_scroll >= traveldistance:
+            self._marquee_phase = "exit"
+
+    def _draw_live_marquee(self, surface):
+        if self._marquee_current is None or self._marquee_progress <= 0.0:
+            self._marquee_rect = pygame.Rect(0, 0, 10, 10)
+            return
+
+        tickerheight = 34
+        eased = ease_out_cubic(self._marquee_progress)
+        tickerleft = self.leftbar.rect.right if self.leftbar.rect.width else 0
+        tickerrect = pygame.Rect(
+            tickerleft,
+            self.topbar.rect.bottom - int((1.0 - eased) * tickerheight),
+            max(0, min(surface.get_width(), self.topbar.rect.width) - tickerleft),
+            tickerheight,
+        )
+        self._marquee_rect = tickerrect
+        if tickerrect.width <= 0:
+            return
+
+        self._draw_vertical_gradient_rect(
+            surface,
+            tickerrect,
+            (12, 19, 30),
+            (5, 10, 18),
+        )
+        pygame.draw.line(surface, (57, 68, 84), tickerrect.topleft, tickerrect.topright, 1)
+        pygame.draw.line(surface, (95, 75, 40), tickerrect.bottomleft, tickerrect.bottomright, 1)
+
+        livepulse = 0.55 + 0.45 * pulse(self._motion_time, 2.8)
+        livewidth = 82
+        liverect = pygame.Rect(tickerrect.x + 8, tickerrect.y + 5, livewidth - 12, tickerheight - 10)
+        redfill = (
+            64 + int(34 * livepulse),
+            12 + int(10 * livepulse),
+            18 + int(10 * livepulse),
+        )
+        pygame.draw.rect(surface, redfill, liverect, border_radius=4)
+        pygame.draw.rect(surface, _C_DANGER, liverect, 1, border_radius=4)
+        pygame.draw.circle(
+            surface,
+            (255, 72, 72),
+            (liverect.x + 12, liverect.centery),
+            4 + int(livepulse * 2),
+        )
+        livetext = self.small_font_bold.render("LIVE", True, (255, 102, 102))
+        surface.blit(livetext, (liverect.x + 23, liverect.centery - livetext.get_height() // 2))
+
+        pygame.draw.line(
+            surface,
+            (78, 62, 39),
+            (tickerrect.x + livewidth, tickerrect.y + 6),
+            (tickerrect.x + livewidth, tickerrect.bottom - 6),
+            1,
+        )
+        viewport = pygame.Rect(
+            tickerrect.x + livewidth + 10,
+            tickerrect.y + 2,
+            max(1, tickerrect.width - livewidth - 18),
+            tickerrect.height - 4,
+        )
+
+        headline = self.font_bold.render(self._marquee_text, True, _C_TEXT)
+        headline.set_alpha(int(255 * eased))
+        headline_x = viewport.right + 8 - int(self._marquee_scroll)
+        headline_y = viewport.centery - headline.get_height() // 2 + int((1.0 - eased) * 16)
+        previousclip = surface.get_clip()
+        surface.set_clip(viewport)
+        surface.blit(headline, (headline_x, headline_y))
+        surface.set_clip(previousclip)
+
+        if self._marquee_phase == "enter":
+            flashalpha = int(70 * (1.0 - self._marquee_progress))
+            flash = pygame.Surface(viewport.size, pygame.SRCALPHA)
+            flash.fill((*_C_GOLD_BRIGHT, flashalpha))
+            surface.blit(flash, viewport.topleft)
+
     def _draw_map_edge_shadows(self, surface):
         rect = self.map_rect.clip(surface.get_rect())
         if rect.width <= 0 or rect.height <= 0:
@@ -920,7 +1135,7 @@ class InGameUI:
         surface.blit(shadow, rect.topleft)
         surface.blit(right_shadow, (rect.right - edge_w, rect.y))
 
-        # A narrow contact shadow under fixed panels gives depth without a boxed vignette.
+       
         surface.blit(contact, rect.topleft)
 
     def _draw_resource_chip(
@@ -1119,6 +1334,27 @@ class InGameUI:
             "accent": data.get("accent", _C_GOLD),
         }
 
+
+    def _settings_controls(self):
+        anchor_rect = self.leftbar.item_rects.get("SETTINGS")
+        if anchor_rect is None:
+            return None, None, None, None, None
+
+        popup_w = min(360, max(300, self.window_size[0] - anchor_rect.right - 24))
+        popup_h = 300
+        popup_x = anchor_rect.right + 8
+        popup_y = anchor_rect.y
+        popup_x = max(12, min(self.window_size[0] - popup_w - 12, popup_x))
+        popup_y = max(self.topbar_height + 8, min(self.window_size[1] - popup_h - 12, popup_y))
+        popup_rect = pygame.Rect(popup_x, popup_y, popup_w, popup_h)
+
+        slider = pygame.Rect(popup_rect.x + 24, popup_rect.y + 78, popup_rect.width - 48, 12)
+        fullscreen = pygame.Rect(popup_rect.x + 24, popup_rect.y + 122, popup_rect.width - 48, 48)
+        aimode = pygame.Rect(popup_rect.x + 24, popup_rect.y + 184, popup_rect.width - 48, 48)
+        close_size = 28
+        close = pygame.Rect(popup_rect.right - close_size - 14, popup_rect.y + 14, close_size, close_size)
+        return popup_rect, slider, fullscreen, aimode, close
+
     def _draw_notification_popup(self, surface, mouse):
         if self.active_left_tab != "NOTIFICATIONS":
             self._notification_popup_rect = pygame.Rect(0, 0, 10, 10)
@@ -1234,6 +1470,100 @@ class InGameUI:
             thumb_h = max(28, int(max_visible * (max_visible / max(total_h, 1))))
             thumb_y = track_rect.y + int((track_rect.height - thumb_h) * (self._notification_scroll / max_scroll))
             pygame.draw.rect(surface, _C_GOLD, pygame.Rect(track_rect.x, thumb_y, track_rect.width, thumb_h), border_radius=2)
+
+
+
+    def _draw_settings_popup(self, surface, mouse):
+        if self.active_left_tab != "SETTINGS":
+            self._settings_popup_rect = pygame.Rect(0, 0, 10, 10)
+            return
+
+        popup_rect, slider, fullscreen, aimode, close = self._settings_controls()
+        if popup_rect is None:
+            self._settings_popup_rect = pygame.Rect(0, 0, 10, 10)
+            return
+
+        self._settings_popup_rect = popup_rect
+        self._settings_slider_rect = slider
+        self._settings_fullscreen_rect = fullscreen
+        self._settings_ai_mode_rect = aimode
+        self._settings_close_rect = close
+
+        self._draw_glass_panel(surface, popup_rect, radius=8, border=_C_GOLD, glow=True)
+
+        title = self.font_bold.render("SETTINGS", True, _C_GOLD_BRIGHT)
+        surface.blit(title, (popup_rect.x + 16, popup_rect.y + 14))
+
+        close_hovered = close.collidepoint(mouse)
+        close_top = (45, 55, 68) if close_hovered else (23, 32, 48)
+        self._draw_vertical_gradient_rect(surface, close, close_top, (10, 16, 25), radius=6)
+        pygame.draw.rect(surface, (_C_DANGER if close_hovered else (62, 76, 95)), close, 1, border_radius=6)
+        close_icon = self._topbar_icons.get("close")
+        if close_icon is not None:
+            surface.blit(close_icon, close_icon.get_rect(center=close.center))
+        else:
+            close_label = self.small_font_bold.render("X", True, _C_TEXT)
+            surface.blit(close_label, close_label.get_rect(center=close.center))
+
+        volume_label = self.font.render(f"Volume: {self.settings_volume}%", True, _C_TEXT)
+        surface.blit(volume_label, (slider.x, slider.y - 28))
+
+        pygame.draw.rect(surface, (36, 45, 60), slider, border_radius=6)
+        fill = slider.copy()
+        fill.width = int(slider.width * self.settings_volume / 100)
+        self._draw_vertical_gradient_rect(surface, fill, (83, 199, 132), (39, 130, 82), radius=6)
+        knob_x = slider.x + fill.width
+        knob_hover = abs(mouse[0] - knob_x) < 18 and abs(mouse[1] - slider.centery) < 18
+        knob_radius = 10 + int((knob_hover or self._settings_volume_dragging) * 3)
+        pygame.draw.circle(surface, _C_TEXT, (knob_x, slider.centery), knob_radius)
+        pygame.draw.circle(surface, _C_GOLD, (knob_x, slider.centery), knob_radius + 4, 1)
+
+        fs_label = "FULLSCREEN: ON" if self.is_fullscreen else "FULLSCREEN: OFF"
+        self._draw_glow_btn(
+            surface, "settings_fullscreen", fullscreen,
+            True, fs_label, primary=self.is_fullscreen, selected=self.is_fullscreen, mouse=mouse,
+        )
+        aimodelabels = {
+            "online": "AI: ONLINE LLM (ILMU)",
+            "ollama": "AI: OLLAMA LOCAL",
+            "graph": "AI: GRAPH-BASED",
+        }
+        self._draw_glow_btn(
+            surface,
+            "settings_ai_mode",
+            aimode,
+            True,
+            aimodelabels.get(self.settings_ai_mode, "AI: GRAPH-BASED"),
+            primary=self.settings_ai_mode == "online",
+            selected=self.settings_ai_mode == "online",
+            mouse=mouse,
+        )
+        modenote = self.small_font.render(
+            "AI changes apply to the next campaign.",
+            True,
+            _C_TEXT_MUTED,
+        )
+        surface.blit(modenote, (aimode.x, aimode.bottom + 10))
+
+
+    def _apply_settings_volume_from_mouse(self, mouse):
+        slider = self._settings_slider_rect
+        if slider.width <= 0:
+            return
+        ratio = (mouse[0] - slider.x) / max(1, slider.width)
+        self.settings_volume = int(max(0.0, min(1.0, ratio)) * 100)
+        vol = self.settings_volume / 100.0
+        try:
+            pygame.mixer.music.set_volume(vol)
+        except pygame.error:
+            pass
+        if self.ui_click_sound is not None:
+            self.ui_click_sound.set_volume(vol * 0.4)
+        try:
+            from engine.settings import updatesettings as _updatesettings
+            _updatesettings({"volume": self.settings_volume})
+        except OSError:
+            pass
 
     def _draw_combat_popup(self, surface, mouse):
         if self.active_left_tab != "COMBAT":
@@ -1571,11 +1901,10 @@ class InGameUI:
             show_left = True
             show_bottom = True
             show_right = bool(
-                self._countrymenutarget
-                or self.bottom_buttons.selected == "PRODUCTION"
-                or self.bottom_buttons.selected == "TROOPS"
-                or self._selectedmapcountry
-            )
+            self._countrymenutarget
+            or self.bottom_buttons.selected in ("PRODUCTION", "TROOPS", "CONSTRUCTION")
+            or self._selectedmapcountry
+        )
 
         left_w = self.leftbar_width if show_left else 0
         bottom_h = self.bottombar_height if show_bottom else 0
@@ -1601,7 +1930,7 @@ class InGameUI:
         center_h = max(1, window_height - self.topbar_height)
         self.map_rect = pygame.Rect(center_x, center_y, center_w, center_h)
 
-        # End turn sits above the command dock while the map renders beneath it.
+        
         end_w = 196
         end_h = 74
         end_x = self.map_rect.right - end_w - 18
@@ -1609,9 +1938,9 @@ class InGameUI:
         end_y = max(self.map_rect.y + 12, end_limit_y - end_h - 16)
         self._endturn_rect = pygame.Rect(end_x, end_y, end_w, end_h)
 
-        # choose button near bottom-right of map in choosecountry (draw will override)
+        
 
-        # right panel content layout (play phase; safe even if right panel hidden)
+       
         content_x = self.rightbar.rect.x + 12
         content_y = self.rightbar.rect.y + 12
         content_w = max(1, self.rightbar.rect.width - 24)
@@ -1619,7 +1948,7 @@ class InGameUI:
         self._declarewar_rect = pygame.Rect(content_x, content_y + 82, content_w, 34)
         self._production_blank_rect = pygame.Rect(content_x, content_y + 40, content_w, 90)
 
-        # troop decision buttons at the bottom of right panel
+        
         btn_w = max(1, (content_w - 30) // 4)
         btn_h = 50
         btn_y = (self.rightbar.rect.bottom - 12 - btn_h) if self.rightbar.rect.width else (self.map_rect.bottom - 12 - btn_h)
@@ -1650,11 +1979,14 @@ class InGameUI:
 
         self._research_back_rect = pygame.Rect(back_x, back_y, back_w, back_h)
         menu_w = min(320, max(220, window_width - 80))
-        menu_h = 170
+        menu_h = 222
         menu_x = max(0, (window_width - menu_w) // 2)
         menu_y = max(0, (window_height - menu_h) // 2)
         self._pausemenu_rect = pygame.Rect(menu_x, menu_y, menu_w, menu_h)
+        self._pausesave_rect = pygame.Rect(menu_x + (menu_w - 150) // 2, menu_y + menu_h - 104, 150, 40)
         self._pausequit_rect = pygame.Rect(menu_x + (menu_w - 150) // 2, menu_y + menu_h - 52, 150, 40)
+        self._pausesave_notice = None
+        self._pausesave_notice_time = 0.0
         self._war_progress_rect = pygame.Rect(content_x, content_y + 40, content_w, 34)
 
     def _current_layout_key(self):
@@ -1761,6 +2093,7 @@ class InGameUI:
         selected_country_stats=None,
         systemstatus=None,
         notifications=None,
+        covidcasemapenabled=False,
     ):
         previous_notification_count = self._notificationcount
         previous_turn = self._last_turn_seen
@@ -1782,6 +2115,7 @@ class InGameUI:
         self._troopbadgelist = list(troopbadgelist or [])
         self._hovertext = hovertext
         self._hovermousepos = tuple(mouseposition or (0, 0))
+        self.covidcasemapenabled = bool(covidcasemapenabled)
         if focusview is not None:
             self.focusview.setdata(focusview)
         if researchdata is not None:
@@ -1808,7 +2142,9 @@ class InGameUI:
             if len(self._fps_history) > 42:
                 self._fps_history = self._fps_history[-42:]
         if notifications is not None:
-            self.notifications = list(notifications)
+            incomingnotifications = list(notifications)
+            self._enqueue_marquee_notifications(incomingnotifications)
+            self.notifications = incomingnotifications
         self._notificationcount = len([n for n in self.notifications if not n.get("read")])
         if self._notificationcount > previous_notification_count:
             self._ui_pulses.emit(self.leftbar.rect.center, _C_GOLD_BRIGHT, radius=120, duration=0.8, width=3)
@@ -1823,7 +2159,7 @@ class InGameUI:
 
         self.applylayout()
 
-        # cache active manpower (sum troops controlled by player) only when inputs change
+        
         cache_key = (id(provincemap), self.playercountry, int(currentturnnumber or 0))
         if cache_key != self._manpower_cache_key:
             self._manpower_cache_key = cache_key
@@ -1869,6 +2205,7 @@ class InGameUI:
             dt = 0.0
         self._motion_time += dt
         self._ui_pulses.update(dt)
+        self._update_live_marquee(dt)
         self._drawer_progress = exp_lerp(self._drawer_progress, 1.0 if self.rightbar.rect.width else 0.0, 6.8, dt)
         self._choose_progress = exp_lerp(self._choose_progress, 1.0 if self.gamephase == "choosecountry" else 0.0, 6.0, dt)
         self._tooltip_progress = exp_lerp(self._tooltip_progress, 1.0 if self._hovertext else 0.0, 11.0, dt)
@@ -1883,6 +2220,12 @@ class InGameUI:
             self._policy_dropdown_progress = min(target, self._policy_dropdown_progress + dt * speed)
         elif self._policy_dropdown_progress > target:
             self._policy_dropdown_progress = max(target, self._policy_dropdown_progress - dt * speed)
+
+
+        if self._pausesave_notice_time > 0.0:
+            self._pausesave_notice_time = max(0.0, self._pausesave_notice_time - dt)
+            if self._pausesave_notice_time <= 0.0:
+                self._pausesave_notice = None
 
     def _get_selected_division_entry(self):
         for entry in self._selectedtroopentries or ():
@@ -1909,6 +2252,13 @@ class InGameUI:
 
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             self._ui_pulses.emit(event.pos, _C_GOLD_BRIGHT, radius=82, duration=0.42, width=2)
+
+        if event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self._settings_volume_dragging = False
+
+        if event.type == pygame.MOUSEMOTION and self._settings_volume_dragging:
+            self._apply_settings_volume_from_mouse(event.pos)
+            return None
 
         if event.type == pygame.MOUSEWHEEL and self.active_left_tab == "NOTIFICATIONS":
             mouse_pos = pygame.mouse.get_pos()
@@ -1944,12 +2294,10 @@ class InGameUI:
                     if tab_rect.collidepoint(event.pos):
                         self._domestic_active_tab = tab_name
                         return None
-                if (
-                    self._domestic_active_tab == "Health"
-                    and hasattr(self, "_mco_button_rect")
-                    and self._mco_button_rect.collidepoint(event.pos)
-                ):
-                    return self.actiontogglemco
+                if self._domestic_active_tab == "Health":
+                    for action, rect in (self._covid_policy_button_rects or {}).items():
+                        if rect.collidepoint(event.pos):
+                            return action
                 segment = self._get_domestic_segment_at_pos(event.pos)
                 if segment is not None:
                     self._domestic_selected_party_id = segment.get("party_id")
@@ -1977,13 +2325,21 @@ class InGameUI:
                 if self._production_popup_back_rect.collidepoint(event.pos):
                     self.production_popup_open = False
                     return None
+                if self._production_popup_select_rect.collidepoint(event.pos):  
+                    if self.production_selected:
+                        self.ui_click_sound.play()
+                        self.production_popup_open = False
+                        return f"production_confirm_{self.production_selected}"
+                    return None
                 for idx, rect in self._production_item_rects.items():
                     if rect.collidepoint(event.pos):
+                        researched = self._researched_weapon_nodes
+                        if idx >= len(researched):
+                            return None  
                         self.production_selected = idx + 1
                         self.ui_click_sound.play()
-                        # DO NOT close – keep popup open
                         return f"production_select_{idx+1}"
-                # click outside = close
+               
                 if not self._production_popup_rect.collidepoint(event.pos):
                     self.production_popup_open = False
                     return None
@@ -2022,6 +2378,9 @@ class InGameUI:
 
         if self.pausemenuopen:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if self._pausesave_rect.collidepoint(event.pos):
+                    self.ui_click_sound.play()
+                    return self.actionsavegame
                 if self._pausequit_rect.collidepoint(event.pos):
                     self.ui_click_sound.play()
                     return self.actionquitgame
@@ -2130,6 +2489,12 @@ class InGameUI:
                         self._domestic_active_tab = self._domestic_active_tab or "Executive"
                     self.applylayout()
                     return self.actiondomesticaffairs
+
+                if item == "SETTINGS":
+                    self.domesticaffairsopen = False
+                    self.active_left_tab = None if self.active_left_tab == "SETTINGS" else "SETTINGS"
+                    self.applylayout()
+                    return None
                 self.domesticaffairsopen = False
                 self.active_left_tab = item
                 self.applylayout()
@@ -2144,19 +2509,26 @@ class InGameUI:
                 if self.active_left_tab == "DOMESTIC AFFAIRS":
                     self.active_left_tab = None
                 self.bottom_buttons.set_selected(item)
+                if item != "CONSTRUCTION":
+                    self._selected_construction = None
+                    self._construction_target = None
                 self.applylayout()
+
+                if item != "CONSTRUCTION":
+                    self._selected_construction = None
+                    self._construction_target = None
                 if item == "RESEARCH":
                     self.researchview.toggleview()
+
+                if item == "CONSTRUCTION":
+                    self.production_popup_open = False 
                 return None
             
-        if (
-            self.domesticaffairsopen
-            and self._domestic_active_tab == "Health"
-            and hasattr(self, "_mco_button_rect")
-            and self._mco_button_rect.collidepoint(pos)
-        ):
-            self.ui_click_sound.play()
-            return self.actiontogglemco
+        if self.domesticaffairsopen and self._domestic_active_tab == "Health":
+            for action, rect in (self._covid_policy_button_rects or {}).items():
+                if rect.collidepoint(pos):
+                    self.ui_click_sound.play()
+                    return action
 
       
         if self._endturn_rect.collidepoint(pos):
@@ -2164,6 +2536,17 @@ class InGameUI:
             return self.actionendturn
 
         selected_tab = self.bottom_buttons.selected
+
+        if selected_tab == "CONSTRUCTION" and not self._countrymenutarget:
+            for label, rect in (self._construction_btn_rects or {}).items():
+                if rect.collidepoint(pos):
+                    self.ui_click_sound.play()
+                    if label == "construct":
+                        if self._construction_target and self._selected_construction:
+                            return f"construction_build_{self._selected_construction}_{self._construction_target}"
+                        return None
+                    self._selected_construction = label
+                    return f"construction_select_{label}"
 
         if selected_tab == "PRODUCTION" and not self._countrymenutarget:
             if self._production_blank_rect.collidepoint(pos):
@@ -2182,6 +2565,34 @@ class InGameUI:
                     return getattr(self, f"actionweapon{i+1}")
 
             return None
+        
+
+
+        if self.active_left_tab == "SETTINGS":
+            if self._settings_close_rect.collidepoint(pos):
+                self.ui_click_sound.play()
+                self.active_left_tab = None
+                return None
+            if self._settings_slider_rect.inflate(6, 24).collidepoint(pos):
+                self._settings_volume_dragging = True
+                self._apply_settings_volume_from_mouse(pos)
+                return None
+            if self._settings_fullscreen_rect.collidepoint(pos):
+                self.ui_click_sound.play()
+                return self.actiontogglesettingsfullscreen
+            if self._settings_ai_mode_rect.collidepoint(pos):
+                self.ui_click_sound.play()
+                modes = ("online", "ollama", "graph")
+                currentmode = self.settings_ai_mode if self.settings_ai_mode in modes else "graph"
+                self.settings_ai_mode = modes[(modes.index(currentmode) + 1) % len(modes)]
+                try:
+                    from engine.settings import updatesettings as _updatesettings
+                    _updatesettings({"llm_mode": self.settings_ai_mode})
+                except OSError:
+                    pass
+                return None
+            if self._settings_popup_rect.collidepoint(pos):
+                return None
 
 
         if self.active_left_tab == "NOTIFICATIONS":
@@ -2276,6 +2687,9 @@ class InGameUI:
             return True
         if self.active_left_tab == "COMBAT" and self._combat_popup_rect.collidepoint(mouseposition):
             return True
+        
+        if self.active_left_tab == "SETTINGS" and self._settings_popup_rect.collidepoint(mouseposition):
+            return True
         if self._policy_dropdown_progress > 0.01 and self._policy_popup_rect.collidepoint(mouseposition):
             return True
         if self.bottombar.rect.collidepoint(mouseposition):
@@ -2291,14 +2705,15 @@ class InGameUI:
 
         if self.gamephase == "choosecountry":
             self._draw_command_atmosphere(surface)
-            # minimal UI only during choosecountry
+           
             self._draw_topbar_background(surface)
+            self._draw_live_marquee(surface)
             title = self.title_font.render("EBEE COMMAND", True, _C_GOLD_BRIGHT)
             subtitle = self.small_font.render("SELECT THEATER COMMAND", True, _C_TEXT_MUTED)
             surface.blit(title, (20, 16))
             surface.blit(subtitle, (20, 45))
 
-            # clear non-map areas so the screen doesn't keep old UI pixels
+            
             bg = (10, 10, 10)
             if self.map_rect.x > 0:
                 pygame.draw.rect(surface, bg, pygame.Rect(0, self.topbar_height, self.map_rect.x, surface.get_height() - self.topbar_height))
@@ -2307,7 +2722,7 @@ class InGameUI:
             if self.map_rect.bottom < surface.get_height():
                 pygame.draw.rect(surface, bg, pygame.Rect(0, self.map_rect.bottom, surface.get_width(), surface.get_height() - self.map_rect.bottom))
 
-            # place choose button near bottom-right of the map viewport
+            
             bw = 220
             bh = 34
             bx = self.map_rect.right - bw - 12
@@ -2333,7 +2748,7 @@ class InGameUI:
 
                 
 
-        # full UI chrome (play)
+       
         self._draw_map_edge_shadows(surface)
         self._draw_command_atmosphere(surface)
         if self.leftbar.rect.width:
@@ -2351,8 +2766,9 @@ class InGameUI:
         self._draw_bottombar_background(surface)
         self.bottom_buttons.draw(surface, self.font, mouse, font_bold=self.font_bold, icons=self._topbar_icons)
         self._draw_topbar_background(surface)
+        self._draw_live_marquee(surface)
 
-        # end turn button (bottom-right of map)
+        
         hovered = self._endturn_rect.collidepoint(mouse)
         if hovered:
             self._endturn_glow = min(1.0, self._endturn_glow + 0.12)
@@ -2390,7 +2806,7 @@ class InGameUI:
         arrow = self.title_font.render(">", True, (200, 244, 221))
         surface.blit(arrow, arrow.get_rect(center=(self._endturn_rect.right - 26, self._endturn_rect.centery)))
 
-        # top title + stats line (with mini flag)
+        
         base_title = "EBEE COMMAND"
         info_x = 18
         info_y = 12
@@ -2445,7 +2861,7 @@ class InGameUI:
             if not did_draw:
                 break
 
-        # troop badges on top of the map (map-local centers need viewport offset)
+        
         visiblebadgelist = self._get_visible_troop_badges()
         for entry in visiblebadgelist:
             if not isinstance(entry, dict):
@@ -2481,29 +2897,36 @@ class InGameUI:
                 rows=entry.get("rows"),
             )
 
-        # hover tooltip (full-window coords) must be on top of badges
+       
         if self._hovertext:
             tooltip_lines = []
             if isinstance(self._hovertext, dict):
-                name = self._hovertext.get("name", "unknown")
-                provinceid = self._hovertext.get("provinceid", "unknown")
-                population = self._hovertext.get("population", "unknown")
-                country = self._hovertext.get("country", "unknown")
-                terrain = self._hovertext.get("terrain", "unknown")
-                province_count = self._hovertext.get("province_count", "unknown")
-                vp = self._hovertext.get("victory_points", 0)
-                
-                tooltip_lines = [
-                    f"State: {name}",
-                    f"Province: {provinceid}",
-                    f"Population: {population}",
-                    f"Country: {country}",
-                    f"Terrain Type: {terrain}",
-                    f"Number of states: {province_count}",
-                ]
-                
-                if vp > 0:
-                    tooltip_lines.append(f"Victory Points: {vp}")
+                if self._hovertext.get("tooltip_lines"):
+                    tooltip_lines = [str(line) for line in self._hovertext.get("tooltip_lines", ())]
+                else:
+                    name = self._hovertext.get("name", "unknown")
+                    provinceid = self._hovertext.get("provinceid", "unknown")
+                    population = self._hovertext.get("population", "unknown")
+                    country = self._hovertext.get("country", "unknown")
+                    terrain = self._hovertext.get("terrain", "unknown")
+                    province_count = self._hovertext.get("province_count", "unknown")
+                    vp = self._hovertext.get("victory_points", 0)
+
+                    tooltip_lines = [
+                        f"State: {name}",
+                        f"Province: {provinceid}",
+                        f"Population: {population}",
+                        f"Country: {country}",
+                        f"Terrain Type: {terrain}",
+                        f"Number of states: {province_count}",
+                    ]
+
+                    if vp > 0:
+                        tooltip_lines.append(f"Victory Points: {vp}")
+                    if "covid_cases" in self._hovertext:
+                        tooltip_lines.append(f"COVID Cases: {self._hovertext.get('covid_cases', 0):,}")
+                        tooltip_lines.append(f"COVID R0: {float(self._hovertext.get('covid_r0', 0) or 0):.2f}")
+                        tooltip_lines.append(f"Healthcare Load: {float(self._hovertext.get('covid_load', 0) or 0):.1f}%")
                 
             else:
                 tooltip_lines = [str(self._hovertext)]
@@ -2539,7 +2962,7 @@ class InGameUI:
             overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
             overlay.fill((0, 0, 0, 140))
             surface.blit(overlay, (0, 0))
-            popup_rect = pygame.Rect(0, 0, 640, 520)
+            popup_rect = pygame.Rect(0, 0, 720, 620)
             popup_rect.center = surface.get_rect().center
             self._production_popup_rect = popup_rect
             self._draw_glass_panel(surface, popup_rect, radius=8, border=(72, 86, 108), glow=True)
@@ -2550,13 +2973,14 @@ class InGameUI:
             surface.blit(subtitle, subtitle.get_rect(center=(popup_rect.centerx, popup_rect.y + 58)))
 
             list_top = popup_rect.y + 80
-            list_bottom = popup_rect.bottom - 70
+            list_bottom = popup_rect.bottom - 80
+
             list_rect = pygame.Rect(popup_rect.x + 24, list_top, popup_rect.width - 48, list_bottom - list_top)
             pygame.draw.rect(surface, (7, 12, 20), list_rect, border_radius=6)
             pygame.draw.rect(surface, (43, 56, 73), list_rect, 1, border_radius=6)
 
-            row_h = 44
-            gap = 6
+            row_h =52
+            gap = 10
             total_h = self._production_item_count * (row_h + gap)
             visible_h = list_rect.height
             self._production_max_scroll = max(0, total_h - visible_h + gap)
@@ -2580,18 +3004,29 @@ class InGameUI:
                         cat_tag = node.get("category", "")
                         display_label = f"{label}  [{cat_tag}]" if cat_tag else label
                     else:
-                        display_label = f"Production Item {i + 1}"
+                        display_label = f"Production Item {i + 1}                                                                                                                  ✓s LOCKED"
                         is_unlocked = False
 
-                    self._draw_glow_btn(
-                        surface, f"prod_item_{i}", row_rect, True, display_label,
-                        primary=selected or is_unlocked, selected=selected, mouse=mouse,
-                        align='left'
-                    )
+                    if is_unlocked and selected:
+                            
+                            pygame.draw.rect(surface, (18, 120, 65), row_rect, border_radius=8)
+                            pygame.draw.rect(surface, (100, 255, 160), row_rect, 2, border_radius=8)
+                            draw_soft_glow(surface, row_rect, (100, 255, 160), 0.85, radius=8, rings=4)
+                            pygame.draw.line(surface, (140, 255, 190), (row_rect.x + 10, row_rect.y + 2), (row_rect.right - 10, row_rect.y + 2), 2)
+                            txt = self.font_bold.render(display_label, True, (210, 255, 225))
+                            surface.blit(txt, (row_rect.x + 16, row_rect.centery - txt.get_height() // 2))
+                    else:
+                            self._draw_glow_btn(
+                                surface, f"prod_item_{i}", row_rect, is_unlocked or selected, display_label,
+                                primary=is_unlocked, selected=False, mouse=mouse,
+                                align='left'
+                            )
+
+
 
                     
                     if is_unlocked and row_rect.width >= 120:
-                        badge_text = self.small_font_bold.render("✓ RESEARCHED", True, (67, 181, 129))
+                        badge_text = self.small_font_bold.render("✓ UNLOCKED", True, (67, 181, 129))
                         badge_x = row_rect.right - badge_text.get_width() - 12
                         badge_y = row_rect.centery - badge_text.get_height() // 2
                         if badge_x > row_rect.x + row_rect.width // 2:
@@ -2607,17 +3042,26 @@ class InGameUI:
                 pygame.draw.rect(surface, _C_GOLD, pygame.Rect(track_rect.x, thumb_y, track_rect.width, thumb_h), border_radius=2)
 
             back_w, back_h = 140, 40
-            self._production_popup_back_rect = pygame.Rect(0, 0, back_w, back_h)
-            self._production_popup_back_rect.centerx = popup_rect.centerx
-            self._production_popup_back_rect.y = popup_rect.bottom - back_h - 18
+            gap = 20
+            total_w = back_w * 2 + gap
+            start_x = popup_rect.centerx - total_w // 2
+            y_pos = popup_rect.bottom - back_h - 20
+
+            self._production_popup_back_rect = pygame.Rect(start_x, y_pos, back_w, back_h)
+            self._production_popup_select_rect = pygame.Rect(start_x + back_w + gap, y_pos, back_w, back_h)
+
             self._draw_glow_btn(surface, "prod_back", self._production_popup_back_rect, True, "BACK", mouse=mouse)
 
+            
+            select_enabled = self.production_selected is not None
+            self._draw_glow_btn(surface, "prod_select", self._production_popup_select_rect, select_enabled, "SELECT", mouse=mouse)
         if self.focusview.isopen:
             self.focusview.draw(surface, self.title_font, self.font, mouse)
             self._draw_topbar_metric_popup(surface, mouse)
             self._draw_notification_popup(surface, mouse)
             self._draw_combat_popup(surface, mouse)
             self._draw_policy_popup(surface, mouse)
+            self._draw_settings_popup(surface, mouse)
             if self.warprogressopen:
                 self._draw_war_progress_popup(surface, mouse)
             if self.domesticaffairsopen:
@@ -2627,12 +3071,14 @@ class InGameUI:
             self._ui_pulses.draw(surface)
             return
 
+
         if self.researchview.isopen:
             self.researchview.draw(surface, self.title_font, self.font, mouse)
             self._draw_topbar_metric_popup(surface, mouse)
             self._draw_notification_popup(surface, mouse)
             self._draw_combat_popup(surface, mouse)
             self._draw_policy_popup(surface, mouse)
+            self._draw_settings_popup(surface, mouse)
             if self.warprogressopen:
                 self._draw_war_progress_popup(surface, mouse)
             if self.domesticaffairsopen:
@@ -2648,6 +3094,7 @@ class InGameUI:
             self._draw_notification_popup(surface, mouse)
             self._draw_combat_popup(surface, mouse)
             self._draw_policy_popup(surface, mouse)
+            self._draw_settings_popup(surface, mouse)
             if self.warprogressopen:
                 self._draw_war_progress_popup(surface, mouse)
             if self.domesticaffairsopen:
@@ -2695,7 +3142,7 @@ class InGameUI:
             )
             y_cursor += 130
 
-        elif self._selectedmapcountry and not self._countrymenutarget:
+        if self._selectedmapcountry and not self._countrymenutarget:
             big_flag = self._get_big_flag(self._selectedmapcountry, size=(240, 144))
             y_cursor = content_rect.y + 45
             if big_flag:
@@ -2758,7 +3205,83 @@ class InGameUI:
             )
             y_cursor += 100
 
-        # Troop info + decision buttons only show in TROOPS tab, and only when troops > 0
+
+        elif selected_tab == "CONSTRUCTION" and not self._countrymenutarget:
+            surface.blit(self.font.render("Select ", True, _C_TEXT_MUTED), 
+                        (content_rect.x, content_rect.y + 26))
+
+            btn_y = content_rect.y + 60
+            btn_h = 52
+            gap = 12
+            labels = ("FACTORY", "INFRASTRUCTURE", "PORT")
+
+            self._construction_btn_rects = {}
+            for i, label in enumerate(labels):
+                btn_rect = pygame.Rect(content_rect.x, btn_y + i * (btn_h + gap), content_rect.width, btn_h)
+                self._construction_btn_rects[label.lower()] = btn_rect
+                is_selected = self._selected_construction == label.lower()
+                if is_selected:
+                    self._button_glows[f"construction_{label.lower()}"] = 1.0
+                self._draw_glow_btn(
+                    surface,
+                    f"construction_{label.lower()}",
+                    btn_rect,
+                    True,
+                    label,
+                    selected=is_selected,
+                    mouse=mouse,
+                )
+            
+
+
+
+            
+            if self._selected_construction:
+                prompt_y = btn_y + len(labels) * (btn_h + gap) + 16
+                prompt_surf = self.font_bold.render('RIGHT CLICK A STATE TO CONSTRUCT', True, _C_GOLD_BRIGHT)
+                prompt_bg = pygame.Rect(content_rect.x, prompt_y - 4, content_rect.width, prompt_surf.get_height() + 8)
+                self._draw_vertical_gradient_rect(surface, prompt_bg, (28, 38, 20), (12, 18, 10), radius=4)
+                pygame.draw.rect(surface, _C_GOLD, prompt_bg, 1, border_radius=4)
+                surface.blit(prompt_surf, (content_rect.x + 8, prompt_y))
+
+                target_y = prompt_y + prompt_surf.get_height() + 12
+                selection_name = self._construction_target or "None"
+                target_surf = self.font.render(f"SELECTED: {selection_name}", True, _C_TEXT if self._construction_target else _C_TEXT_MUTED)
+                surface.blit(target_surf, (content_rect.x + 8, target_y))
+
+                btn_y2 = target_y + target_surf.get_height() + 14
+                construct_rect = pygame.Rect(content_rect.x, btn_y2, content_rect.width, 44)
+
+                self._construction_btn_rects["construct"] = construct_rect
+                enabled = bool(self._construction_target)
+
+                self._draw_glow_btn(surface, "construct", construct_rect, enabled, "CONSTRUCT", primary=True, mouse=mouse)
+
+                text_y = construct_rect.bottom + 10
+                max_w = content_rect.width - 16
+                for desc in (
+                    "FACTORY: Boost of 1+ gold per constructed factory.",
+                    "INFRASTRUCTURE: Make troop move faster.",
+                    "PORT: Allows troops to move from land to water.",
+                ):
+                    words = desc.split(" ")
+                    line = ""
+                    for word in words:
+                        test = f"{line} {word}".strip()
+                        if self.font.size(test)[0] <= max_w:
+                            line = test
+                        else:
+                            surf = self.font.render(line, True, _C_TEXT)
+                            surface.blit(surf, (content_rect.x + 8, text_y))
+                            text_y += surf.get_height() + 4
+                            line = word
+                    if line:
+                        surf = self.font.render(line, True, _C_TEXT)
+                        surface.blit(surf, (content_rect.x + 8, text_y))
+                        text_y += surf.get_height() + 6
+                            
+
+       
         if selected_tab == "TROOPS" and not self._countrymenutarget and self.active_left_tab != "COMBAT" and not self._selectedmapcountry:
             self._detach_regiment_rects = {}
             selected = [e for e in (self._selectedtroopentries or []) if isinstance(e, dict)]
@@ -2903,6 +3426,7 @@ class InGameUI:
         self._draw_notification_popup(surface, mouse)
         self._draw_combat_popup(surface, mouse)
         self._draw_policy_popup(surface, mouse)
+        self._draw_settings_popup(surface, mouse)
 
         if self.warprogressopen:
             self._draw_war_progress_popup(surface, mouse)
@@ -2972,11 +3496,12 @@ class InGameUI:
 
     def _draw_value_bar(self, surface, rect, label, value, accent=_C_GOLD, suffix="%"):
         try:
-            numeric = max(0.0, min(100.0, float(value or 0.0)))
+            raw_numeric = max(0.0, float(value or 0.0))
         except (TypeError, ValueError):
-            numeric = 0.0
+            raw_numeric = 0.0
+        numeric = max(0.0, min(100.0, raw_numeric))
         self._draw_text_fit(surface, label, _C_TEXT_MUTED, rect.x, rect.y, rect.width - 64, self.small_font_bold)
-        value_text = f"{numeric:.0f}{suffix}"
+        value_text = f"{raw_numeric:.0f}{suffix}"
         value_surface = self.small_font_bold.render(value_text, True, _C_TEXT)
         surface.blit(value_surface, (rect.right - value_surface.get_width(), rect.y))
         bar_rect = pygame.Rect(rect.x, rect.y + 18, rect.width, 9)
@@ -3424,6 +3949,67 @@ class InGameUI:
             surface.blit(text, (tooltip_rect.x + padding, draw_y))
             draw_y += text.get_height()
 
+    def _draw_hover_infobox(self, surface, mouse, lines, border=(126, 102, 58)):
+        if not lines:
+            return
+        padding = 10
+        text_surfs = []
+        for index, line in enumerate(lines):
+            font = self.small_font_bold if index == 0 else self.small_font
+            color = _C_GOLD_BRIGHT if index == 0 else (_C_TEXT if index <= 2 else _C_TEXT_MUTED)
+            text_surfs.append(font.render(str(line), True, color))
+        width = max(text.get_width() for text in text_surfs) + padding * 2
+        height = sum(text.get_height() for text in text_surfs) + padding * 2 + 3
+        x = min(surface.get_width() - width - 8, mouse[0] + 16)
+        y = min(surface.get_height() - height - 8, mouse[1] + 16)
+        tooltip_rect = pygame.Rect(max(8, x), max(self.topbar_height + 8, y), width, height)
+        draw_soft_glow(surface, tooltip_rect, _C_GOLD, 0.34, radius=7, rings=4)
+        self._draw_glass_panel(surface, tooltip_rect, radius=5, border=border, glow=False)
+        draw_y = tooltip_rect.y + padding
+        for text in text_surfs:
+            surface.blit(text, (tooltip_rect.x + padding, draw_y))
+            draw_y += text.get_height()
+
+    def _covid_response_tooltip_lines(self, action, active):
+        if action == self.actiontogglemco:
+            return [
+                "Movement Control Order",
+                "Cuts transmission heavily; can push R0 below 1.",
+                "Debuffs: lower gold and population growth, -AP, stability strain.",
+                "Daily pressure: unrest rises, approval and investor confidence fall.",
+            ]
+        if isinstance(action, tuple) and len(action) == 2 and action[0] == self.actiontogglecovidpolicy:
+            policy = action[1]
+            if policy == "mask_mandate":
+                return [
+                    "Mask Mandate",
+                    "Reduces beta with a light unrest cost.",
+                    "Useful before hospitals are strained.",
+                    "Status: active" if active else "Status: inactive",
+                ]
+            if policy == "testing_program":
+                return [
+                    "Mass Testing",
+                    "Reduces spread and increases removal/recovery rate.",
+                    "Costs AP each day while active, but improves public confidence.",
+                    "Status: active" if active else "Status: inactive",
+                ]
+            if policy == "border_controls":
+                return [
+                    "Border Controls",
+                    "Reduces imported cluster pressure and slightly lowers beta.",
+                    "Costs AP and investor confidence while active.",
+                    "Status: active" if active else "Status: inactive",
+                ]
+        if action == self.actiontogglecovidmap:
+            return [
+                "COVID Case Map",
+                "Colors countries by relative active cases.",
+                "Low cases show green; the highest active case count shows red.",
+                "Status: active" if active else "Status: inactive",
+            ]
+        return []
+
     def _draw_domestic_economy_tab(self, surface, rect, data, mouse):
         effects = data.get("economy_effects", {}) if isinstance(data.get("economy_effects", {}), dict) else {}
         chip_gap = 10
@@ -3513,11 +4099,12 @@ class InGameUI:
     def _draw_domestic_health_tab(self, surface, rect, data, mouse):
 
        health = data.get("health", {}) if isinstance(data.get("health", {}), dict) else {}
+       self._covid_policy_button_rects = {}
 
        chip_gap = 10
        chip_w = (rect.width - chip_gap * 2) // 3
 
-       # Top chips (summary)
+       
        self._draw_metric_chip(
            surface,
            pygame.Rect(rect.x, rect.y, chip_w, 58),
@@ -3549,7 +4136,7 @@ class InGameUI:
        left_rect = pygame.Rect(rect.x, body_y, rect.width // 2 - 7, rect.bottom - body_y)
        right_rect = pygame.Rect(left_rect.right + 14, body_y, rect.width - left_rect.width - 14, rect.bottom - body_y)
 
-       # LEFT PANEL
+       
        self._draw_vertical_gradient_rect(surface, left_rect, (15, 24, 38), (8, 13, 22), radius=6)
        pygame.draw.rect(surface, (52, 65, 82), left_rect, 1, border_radius=6)
 
@@ -3598,11 +4185,14 @@ class InGameUI:
        y = left_rect.y + 60
 
        rows = (
-          ("Hospitalisation", f"{int(health.get('hospitalisation', 0) or 0)}"),
-          ("Mortality Rate", f"{float(health.get('mortality', 0) or 0):.2f}%"),
-          ("Healthcare Load", health.get("healthcare_load", "Normal")),
-          ("Risk Level", risk),
-       )
+           ("New Cases", f"{int(health.get('new_cases', 0) or 0):,}"),
+           ("Recovered", f"{int(health.get('recovered', 0) or 0):,}"),
+           ("Hospitalisation", f"{int(health.get('hospitalisation', 0) or 0)}"),
+           ("Mortality Rate", f"{float(health.get('mortality', 0) or 0):.2f}%"),
+           ("Healthcare Load", health.get("healthcare_load", "Normal")),
+           ("R0", f"{float(health.get('r0', 0) or 0):.2f}"),
+           ("Risk Level", risk),
+        )
 
        for label, value in rows:
            self._draw_domestic_info_row(
@@ -3648,7 +4238,7 @@ class InGameUI:
 
        self._draw_text_fit(
            surface,
-           "EPIDEMIC NOTES",
+           "RESPONSE OPTIONS",
            _C_GOLD_BRIGHT,
            right_rect.x + 14,
            right_rect.y + 12,
@@ -3656,11 +4246,16 @@ class InGameUI:
            self.font_bold
         )
 
+       mco_enabled = bool(data.get("mco_enabled", False))
+       mask_enabled = bool(health.get("mask_mandate_enabled", data.get("mask_mandate_enabled", False)))
+       testing_enabled = bool(health.get("testing_program_enabled", data.get("testing_program_enabled", False)))
+       borders_enabled = bool(health.get("border_controls_enabled", data.get("border_controls_enabled", False)))
        notes = [
-           "Epidemics reduce population growth and stability.",
-           "High hospitalisation increases economic pressure.",
-           "Outbreak severity depends on healthcare capacity.",
-           "Government response can reduce spread rate.",
+           f"First case: {health.get('first_case_date') or 'not recorded'}",
+           f"Susceptible: {int(health.get('susceptible', 0) or 0):,}",
+           f"Beta/Gamma: {float(health.get('beta', 0) or 0):.3f} / {float(health.get('gamma', 0) or 0):.3f}",
+           f"Economic drag: -{int(health.get('economy_drag', 0) or 0)} gold/day",
+           str(health.get("momentum_note") or "No major cluster momentum detected."),
         ]
 
        y = right_rect.y + 44
@@ -3676,40 +4271,72 @@ class InGameUI:
            )
            y += 25
 
-       # Optional bar 
+       button_area_top = max(y + 6, right_rect.y + 144)
+       button_gap = 8
+       button_w = max(84, (right_rect.width - 28 - button_gap) // 2)
+       button_h = 34
+       option_specs = [
+           (self.actiontogglemco, "MCO", mco_enabled, "national_policy"),
+           ((self.actiontogglecovidpolicy, "mask_mandate"), "Masks", mask_enabled, "domestic_affairs"),
+           ((self.actiontogglecovidpolicy, "testing_program"), "Testing", testing_enabled, "intel"),
+           ((self.actiontogglecovidpolicy, "border_controls"), "Borders", borders_enabled, "trade"),
+       ]
+       hovered_response = None
+       for index, (action, label, active, icon_key) in enumerate(option_specs):
+           col = index % 2
+           row = index // 2
+           button_rect = pygame.Rect(
+               right_rect.x + 14 + col * (button_w + button_gap),
+               button_area_top + row * (button_h + button_gap),
+               button_w,
+               button_h,
+           )
+           self._covid_policy_button_rects[action] = button_rect
+           if action == self.actiontogglemco:
+               self._mco_button_rect = button_rect
+           self._draw_glow_btn(
+               surface,
+               f"covid_{label.lower()}",
+               button_rect,
+               True,
+               f"{label} {'ON' if active else 'OFF'}",
+               primary=active,
+               selected=active,
+               mouse=mouse,
+               icon_key=icon_key,
+           )
+           if button_rect.collidepoint(mouse):
+               hovered_response = (action, active)
+
+       map_button_y = button_area_top + 2 * (button_h + button_gap)
+       self._covid_case_map_rect = pygame.Rect(right_rect.x + 14, map_button_y, right_rect.width - 28, button_h)
+       self._covid_policy_button_rects[self.actiontogglecovidmap] = self._covid_case_map_rect
+       self._draw_glow_btn(
+           surface,
+           "covid_case_map",
+           self._covid_case_map_rect,
+           True,
+           f"Case Map {'ON' if self.covidcasemapenabled else 'OFF'}",
+           primary=self.covidcasemapenabled,
+           selected=self.covidcasemapenabled,
+           mouse=mouse,
+           icon_key="date",
+       )
+       if self._covid_case_map_rect.collidepoint(mouse):
+           hovered_response = (self.actiontogglecovidmap, self.covidcasemapenabled)
+
+       load_value = float(health.get("healthcare_load_pct", 0) or 0)
+       load_accent = _C_DANGER if load_value >= 100 else (_C_GOLD if load_value >= 70 else _C_INFO)
        self._draw_value_bar(
            surface,
            pygame.Rect(right_rect.x + 14, right_rect.bottom - 48, right_rect.width - 28, 32),
-           "Healthcare Capacity",
-           health.get("healthcare_capacity", 0),
-           _C_INFO
+           "Healthcare Load",
+           load_value,
+           load_accent
         )
-       
-       mco_enabled = bool(data.get("mco_enabled", False))
-
-       self._mco_button_rect = pygame.Rect(
-           right_rect.x + 14,
-           right_rect.bottom - 95,
-           180,
-           36
-        )
-
-       pygame.draw.rect(
-           surface,
-           (60, 160, 80) if mco_enabled else (180, 70, 70),
-           self._mco_button_rect,
-           border_radius=6
-        )
-
-       self._draw_text_fit(
-           surface,
-           f"MCO: {'ON' if mco_enabled else 'OFF'}",
-           (255,255,255),
-           self._mco_button_rect.x,
-           self._mco_button_rect.y + 8,
-           self._mco_button_rect.width,
-           self.small_font
-        )
+       if hovered_response:
+           action, active = hovered_response
+           self._draw_hover_infobox(surface, mouse, self._covid_response_tooltip_lines(action, active))
         
 
     def _draw_war_progress_popup(self, surface, mouse):
@@ -4037,8 +4664,8 @@ class InGameUI:
             mouse = pygame.mouse.get_pos()
         hovered = rect.collidepoint(mouse) and enabled
         glow = self._button_glows.get(key, 0.0)
-        if hovered:
-            glow = min(1.0, glow + 0.12)
+        if hovered or selected: 
+            glow = min(1.0, glow + 0.14)
         else:
             glow = max(0.0, glow - 0.08)
         self._button_glows[key] = glow
@@ -4056,7 +4683,7 @@ class InGameUI:
         else:
             top = (31, 48, 74) if hovered else ((22, 34, 53) if enabled else (48, 53, 60))
             bottom = (11, 17, 27) if enabled else (35, 38, 43)
-            border = _C_GOLD if hovered and enabled else ((69, 84, 104) if enabled else (69, 75, 84))
+            border = _C_GOLD if (hovered or selected) and enabled else ((69, 84, 104) if enabled else (69, 75, 84))
 
         self._draw_vertical_gradient_rect(surface, drawrect, top, bottom, radius=radius)
         pygame.draw.rect(surface, border, drawrect, 1, border_radius=radius)
@@ -4103,7 +4730,7 @@ class InGameUI:
                 )
                 text_x += icon.get_width() + 8
             surface.blit(txt, (text_x, drawrect.centery - txt.get_height() // 2))
-        else:  
+        else:
             if icon is not None and drawrect.width >= 80:
                 gap = 6
                 total_width = icon.get_width() + gap + txt.get_width()
@@ -4112,6 +4739,11 @@ class InGameUI:
                 surface.blit(txt, (start_x + icon.get_width() + gap, drawrect.centery - txt.get_height() // 2))
             else:
                 surface.blit(txt, txt.get_rect(center=drawrect.center))
+
+
+    def shownsavenotice(self, text):
+        self._pausesave_notice = str(text)
+        self._pausesave_notice_time = 1.8
 
     def _draw_pausemenu(self, surface: pygame.Surface):
         overlay = pygame.Surface(surface.get_size(), pygame.SRCALPHA)
@@ -4129,4 +4761,9 @@ class InGameUI:
         info = self.font.render("Press ESC to resume", True, (200, 200, 200))
         surface.blit(info, info.get_rect(center=(draw_rect.centerx, draw_rect.y + 72)))
 
+        self._draw_glow_btn(surface, "pause_save", self._pausesave_rect, True, "SAVE GAME", primary=True, mouse=pygame.mouse.get_pos())
         self._draw_glow_btn(surface, "pause_quit", self._pausequit_rect, True, "QUIT GAME", mouse=pygame.mouse.get_pos())
+
+        if self._pausesave_notice and self._pausesave_notice_time > 0.0:
+            notice_surface = self.small_font_bold.render(self._pausesave_notice, True, _C_SUCCESS)
+            surface.blit(notice_surface, notice_surface.get_rect(center=(draw_rect.centerx, self._pausesave_rect.y - 14)))

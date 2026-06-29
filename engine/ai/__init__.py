@@ -1,5 +1,5 @@
 from .deepseek import DeepSeekProvider
-from .manager import AIManager, AIRequest, create_default_manager
+from .manager import AIManager, AIRequest, create_default_manager, create_manager_from_settings
 from .provider import AIProvider, AIProviderError
 
 __all__ = [
@@ -9,4 +9,5 @@ __all__ = [
     "AIRequest",
     "DeepSeekProvider",
     "create_default_manager",
+    "create_manager_from_settings",
 ]

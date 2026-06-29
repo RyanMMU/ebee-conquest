@@ -1,1 +1,12 @@
-{"volume": 77}
+{
+  "volume": 58,
+  "setup_complete": true,
+  "player_name": "ryfried",
+  "llm_mode": "online",
+  "online_api_key": "",
+  "use_demo_key": true,
+  "online_base_url": "https://api.ilmu.ai/v1",
+  "online_model": "ilmu-mini-v3.3",
+  "ollama_base_url": "http://localhost:11434/v1",
+  "ollama_model": "llama3.2"
+}

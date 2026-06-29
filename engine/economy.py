@@ -111,9 +111,12 @@ def applyendturneconomy(
         getendturneconomydelta(ownedprovincecount)
     )
 
-    # MCO freezes gold growth
+    # MCO suppresses activity while freeing capacity for public-health control.
     if mco_enabled:
-        goldincome = 0
+        goldincome = int(goldincome * 0.35)
+        populationgrowth = int(populationgrowth * 0.60)
+        stabilitydelta -= 0.2
+        apincome = max(0, apincome - 1)
 
     playergold += goldincome
     playerpopulation += populationgrowth

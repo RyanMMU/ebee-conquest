@@ -1,514 +1,688 @@
-import pygame
-import sys
-import ctypes
+from concurrent.futures import ThreadPoolExecutor
+import textwrap
 
-WIDTH, HEIGHT = 1280, 720
-STATUS_BAR_HEIGHT = 60 
+import pygame
+from pydantic import ValidationError
+
+
+STATUS_BAR_HEIGHT = 60
 LEFTBAR_WIDTH = 230
-RIGHTBAR_WIDTH = 250
+RIGHTBAR_WIDTH = 260
 BOTTOMBAR_HEIGHT = 70
 
-ctypes.windll.user32.SetProcessDPIAware()
+_BG = (8, 14, 24)
+_PANEL = (12, 20, 33)
+_PANEL_HOVER = (25, 39, 60)
+_BORDER = (58, 73, 93)
+_GOLD = (212, 169, 77)
+_GOLD_BRIGHT = (240, 198, 116)
+_TEXT = (235, 239, 244)
+_MUTED = (153, 164, 178)
+_BLUE = (113, 174, 240)
+_GREEN = (91, 201, 126)
+_RED = (225, 100, 100)
 
 
 class PeaceTreatyScreen:
-    
-    def __init__(self):
-        pygame.init()
-        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    """Blocking in-game peace-conference modal.
+
+    It reuses the active display and returns a validated settlement dictionary;
+    it never mutates campaign state itself.
+    """
+
+    def __init__(self, screen, negotiation, territory_options, volume=1.0):
+        self.screen = screen
+        self.negotiation = negotiation
+        self.territory_options = list(territory_options or ())
         self.clock = pygame.time.Clock()
-        self.title_font = pygame.font.SysFont("bahnschrift", 20, bold=True)  
-        self.mini_font= pygame.font.SysFont("bahnschrift", 12)  
+        self.title_font = pygame.font.SysFont("bahnschrift", 20, bold=True)
         self.small_font = pygame.font.SysFont("bahnschrift", 15)
-        self.backspace_held = False
-        self.backspace_timer = 0
-        self.backspace_delay = 400 
-        self.backspace_interval = 50 
-                
+        self.mini_font = pygame.font.SysFont("bahnschrift", 12)
         self.running = True
-        
-        self.exit_btn_rect = pygame.Rect(20, HEIGHT - BOTTOMBAR_HEIGHT + 15, 180, 40)
-        self.clear_btn_rect = pygame.Rect(WIDTH - RIGHTBAR_WIDTH + (RIGHTBAR_WIDTH - 140) // 2, HEIGHT - BOTTOMBAR_HEIGHT - 52, 140, 32)
-        self.chat_btn_rect = pygame.Rect((WIDTH // 2) - 210, HEIGHT - BOTTOMBAR_HEIGHT + 15, 200, 40)
-        self.history_btn_rect = pygame.Rect((WIDTH // 2) + 10, HEIGHT - BOTTOMBAR_HEIGHT + 15, 200, 40)
-        self.submit_btn_rect = pygame.Rect(WIDTH - 200, HEIGHT - BOTTOMBAR_HEIGHT + 15, 180, 40)
-
-        self.demands = ["CEASEFIRE", "STATE TRANSFER", "PUPPET STATE", "MILITARY ACCESS", "REGIME CHANGE"]
-        self.demand_rects = []
-        for i in range(len(self.demands)):
-            rect = pygame.Rect(WIDTH - RIGHTBAR_WIDTH + 14, STATUS_BAR_HEIGHT + 60 + (i * 66), RIGHTBAR_WIDTH - 28, 52)
-            self.demand_rects.append(rect)
-        
-        self.countries = ["Malaysia", "Thailand", "Vietnam", "Indonesia", "Philippines", "Laos"]
-        self.country_rects = []
-        for i in range(len(self.countries)):
-            rect = pygame.Rect(14, STATUS_BAR_HEIGHT + 60 + (i * 66), LEFTBAR_WIDTH - 28, 52)
-            self.country_rects.append(rect)
-
+        self.result = None
         self.chat_open = False
         self.chat_input_text = ""
-        self.chat_history = [
-            ("LEADER", "Welcome to the Peace Conference."),
-        ]
-        
-        self.chat_panel_rect = pygame.Rect(LEFTBAR_WIDTH + 40, STATUS_BAR_HEIGHT + 40, 
-                                           WIDTH - LEFTBAR_WIDTH - RIGHTBAR_WIDTH - 80, 
-                                           HEIGHT - STATUS_BAR_HEIGHT - BOTTOMBAR_HEIGHT - 80)
-        self.chat_input_rect = pygame.Rect(self.chat_panel_rect.x + 20, self.chat_panel_rect.bottom - 60, 
-                                           self.chat_panel_rect.width - 40, 40)
-        
-        self.selected_demand = ""
-        self.popup_rect = pygame.Rect((WIDTH // 2) - 200, (HEIGHT // 2) - 100, 400, 200)
-        self.popup_close_btn = pygame.Rect(self.popup_rect.centerx - 50, self.popup_rect.bottom - 50, 100, 35)
-        self.selected_demands_set = set()
-        self.selected_country = None
+        self.chat_history = self.negotiation.chat_history
+        if not self.chat_history:
+            self.chat_history.append((
+                self.negotiation.defeated,
+                "Our armed resistance has ended. State the peace you intend to impose.",
+            ))
+        self.selected_demands = {"CEASEFIRE"}
+        self.selected_territories = set()
+        self.proposal_history = []
         self.active_popup = None
-        self.popup_confirm_btn = pygame.Rect(self.popup_rect.centerx - 120, self.popup_rect.bottom - 50, 100, 35)
-        self.popup_cancel_btn = pygame.Rect(self.popup_rect.centerx + 20, self.popup_rect.bottom - 50, 100, 35)
-        self._hover_glow = {}
+        self.popup_message = ""
+        self.pending_future = None
+        self.pending_final = False
+        self.pending_counter = None
+        self.pending_counter_response = None
+        self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="EbeePeace")
+        self.backspace_held = False
+        self.backspace_started = 0
+        self.backspace_last = 0
+        self.territory_scroll = 0
+        self.demands = [
+            "CEASEFIRE",
+            "STATE TRANSFER",
+            "PUPPET STATE",
+            "MILITARY ACCESS",
+            "REGIME CHANGE",
+        ]
+        self._layout()
 
-    def draw_status_bar(self):
-        status_rect = pygame.Rect(0, 0, WIDTH, STATUS_BAR_HEIGHT)
-        pygame.draw.rect(self.screen, (12, 18, 29), status_rect)
-        pygame.draw.line(self.screen, (76, 64, 38), (0, STATUS_BAR_HEIGHT - 2), (WIDTH, STATUS_BAR_HEIGHT - 2), 1)
-        pygame.draw.line(self.screen, (240, 198, 116), (0, STATUS_BAR_HEIGHT - 1), (WIDTH, STATUS_BAR_HEIGHT - 1), 1)
-        
-        ebee_surf = self.title_font.render("EBEE COMMAND", True, (240, 198, 116))
-        ebee_rect = ebee_surf.get_rect(midleft=(16, STATUS_BAR_HEIGHT // 2))
-        self.screen.blit(ebee_surf, ebee_rect)
-        
-        title_surf = self.title_font.render("PEACE CONFERENCE", True, (255, 255,255))
-        title_rect = title_surf.get_rect(center=(WIDTH // 2, STATUS_BAR_HEIGHT // 2))
-        self.screen.blit(title_surf, title_rect)
+    def _layout(self):
+        width, height = self.screen.get_size()
+        self.width = width
+        self.height = height
+        leftwidth = min(LEFTBAR_WIDTH, max(190, width // 6))
+        rightwidth = min(RIGHTBAR_WIDTH, max(220, width // 5))
+        self.leftbar = pygame.Rect(
+            0, STATUS_BAR_HEIGHT, leftwidth, height - STATUS_BAR_HEIGHT - BOTTOMBAR_HEIGHT
+        )
+        self.rightbar = pygame.Rect(
+            width - rightwidth,
+            STATUS_BAR_HEIGHT,
+            rightwidth,
+            height - STATUS_BAR_HEIGHT - BOTTOMBAR_HEIGHT,
+        )
+        self.content = pygame.Rect(
+            self.leftbar.right + 22,
+            STATUS_BAR_HEIGHT + 22,
+            self.rightbar.left - self.leftbar.right - 44,
+            height - STATUS_BAR_HEIGHT - BOTTOMBAR_HEIGHT - 44,
+        )
+        self.exitbutton = pygame.Rect(18, height - 54, 180, 40)
+        self.chatbutton = pygame.Rect(width // 2 - 210, height - 54, 200, 40)
+        self.historybutton = pygame.Rect(width // 2 + 10, height - 54, 200, 40)
+        self.submitbutton = pygame.Rect(width - 202, height - 54, 184, 40)
+        self.chatpanel = self.content.inflate(-24, -24)
+        self.chatinput = pygame.Rect(
+            self.chatpanel.x + 16,
+            self.chatpanel.bottom - 48,
+            self.chatpanel.width - 32,
+            36,
+        )
+        popupwidth = min(520, width - 80)
+        self.popup = pygame.Rect(0, 0, popupwidth, 230)
+        self.popup.center = (width // 2, height // 2)
+        self.popupconfirm = pygame.Rect(self.popup.centerx - 124, self.popup.bottom - 54, 108, 36)
+        self.popupcancel = pygame.Rect(self.popup.centerx + 16, self.popup.bottom - 54, 108, 36)
+        self.popupclose = pygame.Rect(self.popup.centerx - 60, self.popup.bottom - 54, 120, 36)
+        self.countryrects = [
+            pygame.Rect(self.leftbar.x + 14, self.leftbar.y + 58 + index * 64, self.leftbar.width - 28, 50)
+            for index in range(2)
+        ]
+        self.demandrects = [
+            pygame.Rect(self.rightbar.x + 14, self.rightbar.y + 58 + index * 58, self.rightbar.width - 28, 46)
+            for index in range(len(self.demands))
+        ]
 
+    def _draw_panel(self, rect, selected=False, hovered=False, color=None):
+        base = color or ((46, 42, 28) if selected else (_PANEL_HOVER if hovered else _PANEL))
+        pygame.draw.rect(self.screen, base, rect, border_radius=6)
+        pygame.draw.rect(
+            self.screen,
+            _GOLD if selected else (_MUTED if hovered else _BORDER),
+            rect,
+            2 if selected else 1,
+            border_radius=6,
+        )
+        if selected:
+            pygame.draw.rect(
+                self.screen,
+                _GOLD,
+                pygame.Rect(rect.x, rect.y + 7, 3, rect.height - 14),
+                border_radius=2,
+            )
 
-
-        points_surf = self.mini_font.render("CONFERENCE POINTS:", True, (255,255,255))
-        points_rect = points_surf.get_rect(midright=(WIDTH - 16, STATUS_BAR_HEIGHT // 2))
-        self.screen.blit(points_surf, points_rect)
-
-    def draw_left_bar(self):
-        leftbar_rect = pygame.Rect(0, STATUS_BAR_HEIGHT, LEFTBAR_WIDTH, HEIGHT - STATUS_BAR_HEIGHT - BOTTOMBAR_HEIGHT)
-        pygame.draw.rect(self.screen, (12, 18, 29), leftbar_rect)
-        pygame.draw.rect(self.screen, (28, 38, 52), leftbar_rect, 1)
-        pygame.draw.line(self.screen, (76, 64, 38), leftbar_rect.topright, leftbar_rect.bottomright, 1)
-        
-        left_title = self.small_font.render("PARTICIPANTS", True, (240, 198, 116))
-        left_rect = left_title.get_rect(centerx=leftbar_rect.centerx, y=leftbar_rect.y + 16)
-        self.screen.blit(left_title, left_rect)
-
-        mouse_pos = pygame.mouse.get_pos()
-        motion_time = pygame.time.get_ticks() / 1000.0
-
-        for i, rect in enumerate(self.country_rects):
-            country_name = self.countries[i]
-            hovered = rect.collidepoint(mouse_pos)
-            is_selected = (self.selected_country == country_name)
-
-            glow = self._hover_glow.get(f"c_{country_name}", 0.0)
-            if hovered:
-                glow = min(1.0, glow + 0.16)
-            else:
-                glow = max(0.0, glow - 0.10)
-            self._hover_glow[f"c_{country_name}"] = glow
-
-            self.draw_interactive_panel(self.screen, rect, hovered, is_selected, glow, motion_time)
-
-            text_x = rect.x + 18 + int(glow * 4)
-            text_color = (239, 224, 185) if is_selected else ((224, 228, 231) if hovered else (202, 207, 211))
-            
-            country_text = self.small_font.render(country_name.upper(), True, text_color)
-            self.screen.blit(country_text, (text_x, rect.y + (rect.height - country_text.get_height()) // 2))
-    
-
-    def draw_right_bar(self):
-        rightbar_rect = pygame.Rect(WIDTH - RIGHTBAR_WIDTH, STATUS_BAR_HEIGHT, RIGHTBAR_WIDTH, HEIGHT - STATUS_BAR_HEIGHT - BOTTOMBAR_HEIGHT)
-        pygame.draw.rect(self.screen, (12, 18, 29), rightbar_rect)
-        pygame.draw.rect(self.screen, (28, 38, 52), rightbar_rect, 1)
-        pygame.draw.line(self.screen, (76, 64, 38), rightbar_rect.topleft, rightbar_rect.bottomleft, 1)
-        
-         
-        right_title = self.small_font.render("                 DEMANDS", True, (240, 198, 116))
-        right_rect = right_title.get_rect(left=rightbar_rect.left + 20, y=rightbar_rect.y + 16)
-        self.screen.blit(right_title, right_rect)
-
-        mouse_pos = pygame.mouse.get_pos()
-        motion_time = pygame.time.get_ticks() / 1000.0
-
-        for i, rect in enumerate(self.demand_rects):
-            demand_name = self.demands[i]
-            hovered = rect.collidepoint(mouse_pos)
-            is_selected = (demand_name in self.selected_demands_set)
-
-            glow = self._hover_glow.get(f"d_{demand_name}", 0.0)
-            if hovered:
-                glow = min(1.0, glow + 0.16)
-            else:
-                glow = max(0.0, glow - 0.10)
-            self._hover_glow[f"d_{demand_name}"] = glow
-
-            self.draw_interactive_panel(self.screen, rect, hovered, is_selected, glow, motion_time)
-
-            text_x = rect.x + 18 + int(glow * 4)
-            text_color = (239, 224, 185) if is_selected else ((224, 228, 231) if hovered else (202, 207, 211))
-            
-            txt_surf = self.small_font.render(demand_name, True, text_color)
-            self.screen.blit(txt_surf, (text_x, rect.y + (rect.height - txt_surf.get_height()) // 2))
-
-        count_val = len(self.selected_demands_set)
-        count_str = f"{count_val} DEMAND SELECTED" if count_val == 1 else f"{count_val} DEMANDS SELECTED"
-        count_surf = self.small_font.render(count_str, True, (240, 198, 116))
-        count_rect = count_surf.get_rect(centerx=rightbar_rect.centerx, bottom=self.clear_btn_rect.top - 12)
-        self.screen.blit(count_surf, count_rect)
-
-       
-        clear_hovered = self.clear_btn_rect.collidepoint(mouse_pos)
-        clear_glow = self._hover_glow.get("b_clear", 0.0)
-        clear_glow = min(1.0, clear_glow + 0.16) if clear_hovered else max(0.0, clear_glow - 0.10)
-        self._hover_glow["b_clear"] = clear_glow
-
-        self.draw_interactive_panel(self.screen, self.clear_btn_rect, clear_hovered, False, clear_glow, motion_time)
-
-        clear_text_color = (239, 224, 185) if clear_hovered else (202, 207, 211)
-        clear_surf = self.small_font.render("CLEAR ALL", True, clear_text_color)
-        self.screen.blit(clear_surf, clear_surf.get_rect(center=self.clear_btn_rect.center))
-
-
-    def draw_bottom_bar(self):
-        bottombar_rect = pygame.Rect(0, HEIGHT - BOTTOMBAR_HEIGHT, WIDTH, BOTTOMBAR_HEIGHT)
-        pygame.draw.rect(self.screen, (5, 10, 17), bottombar_rect)
-        pygame.draw.line(self.screen, (240, 198, 116), bottombar_rect.topleft, bottombar_rect.topright, 1)
-        
-        mouse_pos = pygame.mouse.get_pos()
-        motion_time = pygame.time.get_ticks() / 1000.0
-        for btn_name in ["exit", "chat", "history", "submit"]:
-            if f"b_{btn_name}" not in self._hover_glow:
-                self._hover_glow[f"b_{btn_name}"] = 0.0
-
-        exit_hovered = self.exit_btn_rect.collidepoint(mouse_pos)
-        exit_glow = self._hover_glow["b_exit"]
-        exit_glow = min(1.0, exit_glow + 0.16) if exit_hovered else max(0.0, exit_glow - 0.10)
-        self._hover_glow["b_exit"] = exit_glow
-        
-        if exit_hovered:
-            exit_colors = ((80, 15, 15, 150), (255, 50, 50, 255))
-            exit_text_color = (255, 180, 180)
+    def _draw_status(self):
+        status = pygame.Rect(0, 0, self.width, STATUS_BAR_HEIGHT)
+        pygame.draw.rect(self.screen, (7, 13, 22), status)
+        pygame.draw.line(self.screen, _GOLD_BRIGHT, status.bottomleft, status.bottomright, 1)
+        self.screen.blit(
+            self.title_font.render("EBEE COMMAND", True, _GOLD_BRIGHT),
+            (16, 19),
+        )
+        title = self.title_font.render(
+            f"PEACE CONFERENCE · {self.negotiation.defeated.upper()} CAPITULATED",
+            True,
+            _TEXT,
+        )
+        self.screen.blit(title, title.get_rect(center=status.center))
+        score = self.negotiation.posture_score(
+            self.selected_demands, self.selected_territories
+        )
+        if self.negotiation.last_provider_error:
+            posturetext = f"POSTURE {score:.0f}/100 · OFFLINE POLICY ACTIVE"
+            posturecolor = _RED
         else:
-            exit_colors = ((45, 10, 10, 100), (200, 30, 30, 200))
-            exit_text_color = (220, 120, 120)
-            
-        self.draw_interactive_panel(self.screen, self.exit_btn_rect, exit_hovered, False, exit_glow, motion_time, custom_colors=exit_colors)
-        
-        btn_text = self.small_font.render("EXIT CONFERENCE", True, exit_text_color)
-        self.screen.blit(btn_text, btn_text.get_rect(center=self.exit_btn_rect.center))
+            posturetext = f"AGREEMENT POSTURE {score:.0f}/100"
+            posturecolor = _GOLD_BRIGHT
+        posture = self.mini_font.render(posturetext, True, posturecolor)
+        self.screen.blit(posture, posture.get_rect(midright=(self.width - 16, status.centery)))
 
-        chat_hovered = self.chat_btn_rect.collidepoint(mouse_pos)
-        chat_glow = self._hover_glow["b_chat"]
-        chat_glow = min(1.0, chat_glow + 0.16) if chat_hovered else max(0.0, chat_glow - 0.10)
-        self._hover_glow["b_chat"] = chat_glow
-        self.draw_interactive_panel(self.screen, self.chat_btn_rect, chat_hovered, self.chat_open, chat_glow, motion_time)
-        chat_text_color = (239, 224, 185) if self.chat_open or chat_hovered else (202, 207, 211)
-        chat_text = self.small_font.render("CHAT WITH LEADERS", True, chat_text_color)
-        self.screen.blit(chat_text, chat_text.get_rect(center=self.chat_btn_rect.center))
+    def _draw_sidebar(self):
+        pygame.draw.rect(self.screen, (8, 15, 25), self.leftbar)
+        pygame.draw.rect(self.screen, _BORDER, self.leftbar, 1)
+        heading = self.small_font.render("PARTICIPANTS", True, _GOLD_BRIGHT)
+        self.screen.blit(heading, heading.get_rect(centerx=self.leftbar.centerx, y=self.leftbar.y + 18))
+        countries = [self.negotiation.victor, self.negotiation.defeated]
+        roles = [
+            f"VICTOR · {self.negotiation.player_name.upper()}"[:28],
+            "CAPITULATED",
+        ]
+        mouse = pygame.mouse.get_pos()
+        for index, rect in enumerate(self.countryrects):
+            self._draw_panel(rect, selected=index == 1, hovered=rect.collidepoint(mouse))
+            country = self.small_font.render(countries[index].upper(), True, _TEXT)
+            role = self.mini_font.render(roles[index], True, _GOLD if index == 1 else _MUTED)
+            self.screen.blit(country, (rect.x + 14, rect.y + 8))
+            self.screen.blit(role, (rect.x + 14, rect.y + 29))
 
-        history_hovered = self.history_btn_rect.collidepoint(mouse_pos)
-        history_glow = self._hover_glow["b_history"]
-        history_glow = min(1.0, history_glow + 0.16) if history_hovered else max(0.0, history_glow - 0.10)
-        self._hover_glow["b_history"] = history_glow
-        self.draw_interactive_panel(self.screen, self.history_btn_rect, history_hovered, False, history_glow, motion_time)
-        history_text_color = (239, 224, 185) if history_hovered else (202, 207, 211)
-        history_text = self.small_font.render("PROPOSAL HISTORY", True, history_text_color)
-        self.screen.blit(history_text, history_text.get_rect(center=self.history_btn_rect.center))
+        ratio = self.negotiation.victor_strength / self.negotiation.defeated_strength
+        ratio_lines = [
+            "BALANCE OF POWER",
+            f"{self.negotiation.victor}: {ratio:.2f}×",
+            f"{self.negotiation.defeated}: 1.00×",
+            "",
+            "NPC PERSONALITY",
+            getattr(self.negotiation.personality, "name", "default").replace("_", " ").upper(),
+        ]
+        y = self.countryrects[-1].bottom + 30
+        for line in ratio_lines:
+            color = _GOLD_BRIGHT if line in {"BALANCE OF POWER", "NPC PERSONALITY"} else _MUTED
+            surface = self.mini_font.render(line, True, color)
+            self.screen.blit(surface, (self.leftbar.x + 16, y))
+            y += 20
 
-        submit_hovered = self.submit_btn_rect.collidepoint(mouse_pos)
-        submit_glow = self._hover_glow["b_submit"]
-        submit_glow = min(1.0, submit_glow + 0.16) if submit_hovered else max(0.0, submit_glow - 0.10)
-        self._hover_glow["b_submit"] = submit_glow
-        submit_colors = ((10, 50, 15), (0, 255, 0)) if submit_hovered else ((5, 35, 10), (0, 200, 0))
-        self.draw_interactive_panel(self.screen, self.submit_btn_rect, submit_hovered, False, submit_glow, motion_time, custom_colors=submit_colors)
-        submit_text_color = (150, 255, 150) if submit_hovered else (0, 220, 0)
-        submit_text = self.small_font.render("SUBMIT DEMANDS", True, submit_text_color)
-        self.screen.blit(submit_text, submit_text.get_rect(center=self.submit_btn_rect.center))
+    def _draw_demands(self):
+        pygame.draw.rect(self.screen, (8, 15, 25), self.rightbar)
+        pygame.draw.rect(self.screen, _BORDER, self.rightbar, 1)
+        heading = self.small_font.render("TREATY DEMANDS", True, _GOLD_BRIGHT)
+        self.screen.blit(heading, heading.get_rect(centerx=self.rightbar.centerx, y=self.rightbar.y + 18))
+        mouse = pygame.mouse.get_pos()
+        for demand, rect in zip(self.demands, self.demandrects):
+            selected = demand in self.selected_demands
+            self._draw_panel(rect, selected=selected, hovered=rect.collidepoint(mouse))
+            text = self.small_font.render(demand, True, _TEXT if selected else _MUTED)
+            self.screen.blit(text, text.get_rect(center=rect.center))
 
-    def draw_chat_window(self):
-        if not self.chat_open:
+        summaryy = self.demandrects[-1].bottom + 22
+        territorycount = len(self.selected_territories)
+        for line in (
+            f"{len(self.selected_demands)} DEMANDS SELECTED",
+            f"{territorycount} STATES CLAIMED",
+            "Terms are not applied until",
+            "the NPC accepts the proposal.",
+        ):
+            color = _GOLD_BRIGHT if "SELECTED" in line or "CLAIMED" in line else _MUTED
+            surface = self.mini_font.render(line, True, color)
+            self.screen.blit(surface, (self.rightbar.x + 16, summaryy))
+            summaryy += 20
+
+    def _state_rows(self):
+        rowheight = 45
+        top = self.content.y + 70
+        visibleheight = self.content.bottom - top - 18
+        visiblecount = max(1, visibleheight // rowheight)
+        maxscroll = max(0, len(self.territory_options) - visiblecount)
+        self.territory_scroll = max(0, min(maxscroll, self.territory_scroll))
+        rows = []
+        for displayindex in range(visiblecount):
+            optionindex = self.territory_scroll + displayindex
+            if optionindex >= len(self.territory_options):
+                break
+            rect = pygame.Rect(
+                self.content.x + 18,
+                top + displayindex * rowheight,
+                self.content.width - 36,
+                rowheight - 7,
+            )
+            rows.append((self.territory_options[optionindex], rect))
+        return rows
+
+    def _draw_territory(self):
+        pygame.draw.rect(self.screen, (10, 18, 30), self.content, border_radius=8)
+        pygame.draw.rect(self.screen, _BORDER, self.content, 1, border_radius=8)
+        title = self.title_font.render("SELECT TERRITORY TO REQUEST", True, _GOLD_BRIGHT)
+        self.screen.blit(title, (self.content.x + 18, self.content.y + 15))
+        description = self.mini_font.render(
+            "Each additional state lowers the chance of agreement. Only validated state IDs can be transferred.",
+            True,
+            _MUTED,
+        )
+        self.screen.blit(description, (self.content.x + 18, self.content.y + 43))
+        mouse = pygame.mouse.get_pos()
+        if not self.territory_options:
+            empty = self.small_font.render("No territory is available for transfer.", True, _MUTED)
+            self.screen.blit(empty, empty.get_rect(center=self.content.center))
             return
-            
-        pygame.draw.rect(self.screen, (16, 24, 38), self.chat_panel_rect,border_radius=10)
-        pygame.draw.rect(self.screen, (240, 198, 116), self.chat_panel_rect, 2,border_radius=10)
-        
-        header_surf = self.title_font.render("NEGOTIATE PLACE", True, (240, 198, 116))
-        self.screen.blit(header_surf, (self.chat_panel_rect.x + 20, self.chat_panel_rect.y + 15))
-        pygame.draw.line(self.screen, (40, 52, 72), 
-                         (self.chat_panel_rect.x+10, self.chat_panel_rect.y + 50), 
-                         (self.chat_panel_rect.right-10, self.chat_panel_rect.y + 50), 2)
-        
-        start_y = self.chat_panel_rect.y + 70
-        for sender, msg in self.chat_history[-8:]:
-            color = (150, 200, 255) if sender == "You" else (240, 198, 116)
-            display_line = f"{sender}: {msg}"
-            msg_surf = self.small_font.render(display_line, True, color)
-            self.screen.blit(msg_surf, (self.chat_panel_rect.x + 20, start_y))
-            start_y += 30
+        for option, rect in self._state_rows():
+            stateid = option["id"]
+            selected = stateid in self.selected_territories
+            self._draw_panel(rect, selected=selected, hovered=rect.collidepoint(mouse))
+            checkbox = pygame.Rect(rect.x + 12, rect.centery - 8, 16, 16)
+            pygame.draw.rect(self.screen, _GOLD if selected else _MUTED, checkbox, 2, border_radius=2)
+            if selected:
+                pygame.draw.circle(self.screen, _GOLD_BRIGHT, checkbox.center, 4)
+            label = str(option.get("label") or stateid).replace("_", " ")
+            text = self.small_font.render(label[:54], True, _TEXT)
+            self.screen.blit(text, (rect.x + 40, rect.y + 10))
 
-        pygame.draw.rect(self.screen, (24, 33, 46), self.chat_input_rect,border_radius=8)
-        pygame.draw.rect(self.screen, (76, 64, 38), self.chat_input_rect, 1,border_radius=8)
-        
-        text_to_render = self.chat_input_text + ("|" if pygame.time.get_ticks() % 1000 < 500 else "")
-        input_surf = self.small_font.render(text_to_render, True, (255, 255, 255))
-        self.screen.blit(input_surf, (self.chat_input_rect.x + 10, self.chat_input_rect.y + 10))
+    def _wrapped_lines(self, message, width):
+        charwidth = max(18, width // 8)
+        return textwrap.wrap(str(message), width=charwidth) or [""]
 
-    def handle_events(self):
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                self.running = False
-            
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    self.running = False
-                
-                if self.chat_open and not self.active_popup:
-                    if event.key == pygame.K_RETURN:
-                        if self.chat_input_text.strip():
-                            user_msg = self.chat_input_text
-                            self.chat_history.append(("You", user_msg))
-                            reply = f"....AI to be implemented...."
-                            self.chat_history.append(("LEADER", reply))
-                            self.chat_input_text = ""
-                    elif event.key == pygame.K_BACKSPACE:
-                        self.chat_input_text = self.chat_input_text[:-1]
+    def _draw_chat(self):
+        pygame.draw.rect(self.screen, (10, 18, 30), self.content, border_radius=8)
+        pygame.draw.rect(self.screen, _GOLD, self.content, 1, border_radius=8)
+        title = self.title_font.render(
+            f"NEGOTIATE WITH {self.negotiation.defeated.upper()}",
+            True,
+            _GOLD_BRIGHT,
+        )
+        self.screen.blit(title, (self.chatpanel.x, self.chatpanel.y))
+        y = self.chatpanel.y + 38
+        messages = []
+        for sender, message in self.chat_history[-7:]:
+            lines = self._wrapped_lines(f"{sender}: {message}", self.chatpanel.width - 20)
+            messages.append((sender, lines))
+        totalheight = sum(len(lines) * 19 + 7 for _sender, lines in messages)
+        y = max(y, self.chatinput.top - 12 - totalheight)
+        for sender, lines in messages:
+            color = _BLUE if sender == "PLAYER" else (_GREEN if sender == "NOTICE" else _GOLD_BRIGHT)
+            for line in lines:
+                self.screen.blit(self.mini_font.render(line, True, color), (self.chatpanel.x, y))
+                y += 19
+            y += 7
 
-
-                    
-                        self.backspace_held = True
-                        self.backspace_timer = pygame.time.get_ticks()
-
-                   
-                    else:
-                        if event.unicode.isprintable():
-                            self.chat_input_text += event.unicode
-
-
-            if event.type == pygame.KEYUP:
-                        if event.key == pygame.K_BACKSPACE:
-                            self.backspace_held = False
-
-
-                
-
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                if event.button == 1:
-                    if self.active_popup in ["demand", "history"]:
-                        if self.popup_close_btn.collidepoint(event.pos):
-                            self.active_popup = None
-                        return
-                    elif self.active_popup == "submit":
-                        
-                        if self.popup_confirm_btn.collidepoint(event.pos):
-                            print("Demands Submitted!")
-                            self.active_popup = None
-                        elif self.popup_cancel_btn.collidepoint(event.pos):
-                            self.active_popup = None
-                        return
-                    
-                    elif self.active_popup == "remove_demand":
-                        if self.popup_confirm_btn.collidepoint(event.pos):
-                            self.selected_demands_set.discard(self.selected_demand)
-                            self.active_popup = None
-                        elif self.popup_cancel_btn.collidepoint(event.pos):
-                            self.active_popup = None
-                        return
-
-                    if self.chat_btn_rect.collidepoint(event.pos):
-                        self.chat_open = not self.chat_open
-                    if self.exit_btn_rect.collidepoint(event.pos):
-                        self.running = False
-
-                    if self.history_btn_rect.collidepoint(event.pos):
-                        self.active_popup = "history"
-                    if self.submit_btn_rect.collidepoint(event.pos):
-                        self.active_popup = "submit"
-                    if self.clear_btn_rect.collidepoint(event.pos):
-                        self.selected_demands_set.clear()
-
-                    for i, rect in enumerate(self.country_rects):
-                        if rect.collidepoint(event.pos):
-                            self.selected_country = self.countries[i]
-
-                    for i, rect in enumerate(self.demand_rects):
-                        if rect.collidepoint(event.pos):
-                            label = self.demands[i]
-                            self.selected_demand = label
-                            if label in self.selected_demands_set:
-                                self.active_popup = "remove_demand"
-                            else:
-                                self.selected_demands_set.add(label)
-                                self.active_popup = "demand"
-                    
-
-    def draw_interactive_panel(self, surface, rect, is_hovered, is_selected, glow_strength, motion_time, radius=6, custom_colors=None):
-        if custom_colors:
-            base_color, border_color = custom_colors
-            base_color = base_color if len(base_color) == 4 else (*base_color, 255)
-            border_color = border_color if len(border_color) == 4 else (*border_color, 255)
-        elif is_selected:
-            base_color = (37, 35, 28, 255) if not is_hovered else (50, 44, 30, 255)
-            border_color = (212, 169, 77, 255)
+        pygame.draw.rect(self.screen, (6, 12, 22), self.chatinput, border_radius=6)
+        pygame.draw.rect(self.screen, _GOLD, self.chatinput, 1, border_radius=6)
+        if self.pending_future is not None:
+            inputtext = "The delegation is considering your words…"
+            inputcolor = _MUTED
         else:
-            base_color = (28, 39, 59, 255) if is_hovered else (14, 22, 33, 255)
-            border_color = (42, 55, 72, 255) if not is_hovered else (88, 101, 118, 255)
+            cursor = "|" if pygame.time.get_ticks() % 900 < 450 else ""
+            inputtext = (self.chat_input_text + cursor) or "Type a proposal and press Enter"
+            inputcolor = _TEXT if self.chat_input_text else _MUTED
+        surface = self.small_font.render(inputtext[-80:], True, inputcolor)
+        self.screen.blit(surface, (self.chatinput.x + 10, self.chatinput.centery - surface.get_height() // 2))
 
-        shadow = pygame.Surface((rect.width + 8, rect.height + 8), pygame.SRCALPHA)
-        pygame.draw.rect(shadow, (0, 0, 0, 75), shadow.get_rect(), border_radius=radius + 2)
-        surface.blit(shadow, (rect.x - 3, rect.y - 1))
+    def _draw_bottom(self):
+        bottom = pygame.Rect(0, self.height - BOTTOMBAR_HEIGHT, self.width, BOTTOMBAR_HEIGHT)
+        pygame.draw.rect(self.screen, (5, 10, 17), bottom)
+        pygame.draw.line(self.screen, _GOLD_BRIGHT, bottom.topleft, bottom.topright, 1)
+        mouse = pygame.mouse.get_pos()
+        fullyoccupied = self.negotiation.occupation_ratio >= 0.999
+        exitlabel = "SUBMIT TERMS" if fullyoccupied else "LEAVE & CONTINUE WAR"
+        exitcolor = _MUTED if fullyoccupied else _RED
+        buttons = [
+            (self.exitbutton, exitlabel, exitcolor),
+            (self.chatbutton, "TERRITORY" if self.chat_open else "CHAT WITH LEADER", _GOLD),
+            (self.historybutton, "PROPOSAL HISTORY", _GOLD),
+            (self.submitbutton, "SUBMIT DEMANDS", _GREEN),
+        ]
+        for rect, label, color in buttons:
+            selected = rect == self.chatbutton and self.chat_open
+            self._draw_panel(
+                rect,
+                selected=selected,
+                hovered=rect.collidepoint(mouse),
+                color=(25, 48, 33) if color == _GREEN else None,
+            )
+            surface = self.small_font.render(label, True, color if not selected else _GOLD_BRIGHT)
+            self.screen.blit(surface, surface.get_rect(center=rect.center))
 
-        top_color = base_color
-        bottom_color = (int(top_color[0] * 0.4), int(top_color[1] * 0.4), int(top_color[2] * 0.4), top_color[3])
-        
-        gradient_surf = pygame.Surface(rect.size, pygame.SRCALPHA)
-        for y_offset in range(rect.height):
-            t = y_offset / max(1, rect.height - 1)
-            blended_rgba = tuple(int(top_color[i] + (bottom_color[i] - top_color[i]) * t) for i in range(4))
-            pygame.draw.line(gradient_surf, blended_rgba, (0, y_offset), (rect.width, y_offset))
-        
-        mask = pygame.Surface(rect.size, pygame.SRCALPHA)
-        pygame.draw.rect(mask, (255, 255, 255, 255), mask.get_rect(), border_radius=radius)
-        gradient_surf.blit(mask, (0, 0), special_flags=pygame.BLEND_RGBA_MULT)
-        surface.blit(gradient_surf, rect.topleft)
-
-        border_surf = pygame.Surface(rect.size, pygame.SRCALPHA)
-        pygame.draw.rect(border_surf, border_color, border_surf.get_rect(), 1, border_radius=radius)
-        surface.blit(border_surf, rect.topleft)
-
-        if glow_strength > 0.01:
-            glow_color = border_color[:3]
-            glow_surf = pygame.Surface((rect.width + 20, rect.height + 20), pygame.SRCALPHA)
-            
-            for ring in range(4):
-                alpha = int(glow_strength * (36 - ring * 7))
-                if alpha <= 0:
-                    continue
-                offset = ring * 2 + 2
-                pygame.draw.rect(
-                    glow_surf,
-                    (*glow_color, alpha),
-                    (10 - offset, 10 - offset, rect.width + offset * 2, rect.height + offset * 2),
-                    border_radius=radius + offset,
-                    width=2,
-                )
-            surface.blit(glow_surf, (rect.x - 10, rect.y - 10))
-
-        if is_selected:
-            pygame.draw.rect(surface, (212, 169, 77), pygame.Rect(rect.x, rect.y + 8, 3, rect.height - 16), border_radius=2)
-
-    def draw_popup(self):
+    def _draw_popup(self):
         if not self.active_popup:
             return
-        
-        surf = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
-        surf.fill((0, 0, 0, 150))
-        self.screen.blit(surf, (0, 0))
+        overlay = pygame.Surface(self.screen.get_size(), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 175))
+        self.screen.blit(overlay, (0, 0))
+        pygame.draw.rect(self.screen, (14, 23, 37), self.popup, border_radius=10)
+        pygame.draw.rect(self.screen, _GOLD, self.popup, 2, border_radius=10)
+        titles = {
+            "confirm": "CONFIRM FINAL PROPOSAL",
+            "history": "PROPOSAL HISTORY",
+            "result": "DELEGATION RESPONSE",
+            "error": "INVALID PROPOSAL",
+            "counter": "NPC COUNTEROFFER",
+        }
+        title = self.title_font.render(titles.get(self.active_popup, "PEACE CONFERENCE"), True, _GOLD_BRIGHT)
+        self.screen.blit(title, title.get_rect(centerx=self.popup.centerx, y=self.popup.y + 24))
+        y = self.popup.y + 70
+        for line in self._wrapped_lines(self.popup_message, self.popup.width - 56)[:5]:
+            surface = self.small_font.render(line, True, _TEXT)
+            self.screen.blit(surface, surface.get_rect(centerx=self.popup.centerx, y=y))
+            y += 22
+        mouse = pygame.mouse.get_pos()
+        if self.active_popup in {"confirm", "counter"}:
+            self._draw_panel(self.popupconfirm, hovered=self.popupconfirm.collidepoint(mouse), color=(24, 68, 40))
+            self._draw_panel(self.popupcancel, hovered=self.popupcancel.collidepoint(mouse), color=(68, 28, 32))
+            if self.active_popup == "counter":
+                buttonlabels = ((self.popupconfirm, "AGREE"), (self.popupcancel, "NEGOTIATE"))
+            else:
+                buttonlabels = ((self.popupconfirm, "SUBMIT"), (self.popupcancel, "CANCEL"))
+            for rect, text in buttonlabels:
+                surface = self.small_font.render(text, True, _TEXT)
+                self.screen.blit(surface, surface.get_rect(center=rect.center))
+        else:
+            self._draw_panel(self.popupclose, hovered=self.popupclose.collidepoint(mouse))
+            surface = self.small_font.render(
+                "CONCLUDE" if self.result else "CLOSE",
+                True,
+                _GOLD_BRIGHT,
+            )
+            self.screen.blit(surface, surface.get_rect(center=self.popupclose.center))
 
-        pygame.draw.rect(self.screen, (16, 24, 38), self.popup_rect,border_radius=10)
-        pygame.draw.rect(self.screen, (240, 198, 116), self.popup_rect, 2,border_radius=10)
-        mouse_pos = pygame.mouse.get_pos()
-
-        if self.active_popup == "demand":
-            p_title = self.title_font.render("DEMAND SELECTED", True, (240, 198, 116))
-            self.screen.blit(p_title, p_title.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 25))
-
-            p_msg = self.small_font.render(f"You chose: {self.selected_demand}", True, (255, 255, 255))
-            self.screen.blit(p_msg, p_msg.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 75))
-
-            b_color = (40, 52, 72) if self.popup_close_btn.collidepoint(mouse_pos) else (24, 33, 46)
-            pygame.draw.rect(self.screen, b_color, self.popup_close_btn,border_radius=6)
-            pygame.draw.rect(self.screen, (240, 198, 116), self.popup_close_btn, 1, border_radius=6)
-            
-            btn_txt = self.small_font.render("CLOSE", True, (240, 198, 116))
-            self.screen.blit(btn_txt, btn_txt.get_rect(center=self.popup_close_btn.center))
-
-        elif self.active_popup == "submit":
-            p_title = self.title_font.render("CONFIRM SUBMISSION", True, (240, 198, 116))
-            self.screen.blit(p_title, p_title.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 25))
-
-            count_val = len(self.selected_demands_set)
-            p_msg = self.small_font.render(f"You selected {count_val} demands, do you want to submit?", True, (255, 255, 255))
-            self.screen.blit(p_msg, p_msg.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 75))
-
-            confirm_color = (40, 120, 40) if self.popup_confirm_btn.collidepoint(mouse_pos) else (30, 90, 30)
-            pygame.draw.rect(self.screen, confirm_color, self.popup_confirm_btn)
-            pygame.draw.rect(self.screen, (255, 255, 255), self.popup_confirm_btn, 1)
-            confirm_txt = self.small_font.render("SUBMIT", True, (255, 255, 255))
-            self.screen.blit(confirm_txt, confirm_txt.get_rect(center=self.popup_confirm_btn.center))
-
-            cancel_color = (120, 40, 40) if self.popup_cancel_btn.collidepoint(mouse_pos) else (90, 30, 30)
-            pygame.draw.rect(self.screen, cancel_color, self.popup_cancel_btn)
-            pygame.draw.rect(self.screen, (255, 255, 255), self.popup_cancel_btn, 1)
-            cancel_txt = self.small_font.render("CANCEL", True, (255, 255, 255))
-            self.screen.blit(cancel_txt, cancel_txt.get_rect(center=self.popup_cancel_btn.center))
-
-
-        elif self.active_popup == "history":
-            p_title = self.title_font.render("PROPOSAL HISTORY", True, (240, 198, 116))
-            self.screen.blit(p_title, p_title.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 25))
-
-            p_msg1 = self.small_font.render("No previous proposals found.", True, (170, 180, 190))
-            self.screen.blit(p_msg1, p_msg1.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 75))
-            
-            
-
-            b_color = (40, 52, 72) if self.popup_close_btn.collidepoint(mouse_pos) else (24, 33, 46)
-            pygame.draw.rect(self.screen, b_color, self.popup_close_btn)
-            pygame.draw.rect(self.screen, (240, 198, 116), self.popup_close_btn, 1)
-            
-            btn_txt = self.small_font.render("CLOSE", True, (240, 198, 116))
-            self.screen.blit(btn_txt, btn_txt.get_rect(center=self.popup_close_btn.center))
-
-
-        elif self.active_popup == "remove_demand":
-            p_title = self.title_font.render("REMOVE DEMAND", True, (240, 198, 116))
-            self.screen.blit(p_title, p_title.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 25))
-
-            p_msg = self.small_font.render(f"Remove demand: {self.selected_demand}?", True, (255, 255, 255))
-            self.screen.blit(p_msg, p_msg.get_rect(centerx=self.popup_rect.centerx, y=self.popup_rect.y + 75))
-
-            confirm_color = (40, 120, 40) if self.popup_confirm_btn.collidepoint(mouse_pos) else (30, 90, 30)
-            pygame.draw.rect(self.screen, confirm_color, self.popup_confirm_btn, border_radius=6)
-            pygame.draw.rect(self.screen, (255, 255, 255), self.popup_confirm_btn, 1, border_radius=6)
-            confirm_txt = self.small_font.render("CONFIRM", True, (255, 255, 255))
-            self.screen.blit(confirm_txt, confirm_txt.get_rect(center=self.popup_confirm_btn.center))
-
-            cancel_color = (120, 40, 40) if self.popup_cancel_btn.collidepoint(mouse_pos) else (90, 30, 30)
-            pygame.draw.rect(self.screen, cancel_color, self.popup_cancel_btn, border_radius=6)
-            pygame.draw.rect(self.screen, (255, 255, 255), self.popup_cancel_btn, 1, border_radius=6)
-            cancel_txt = self.small_font.render("CANCEL", True, (255, 255, 255))
-            self.screen.blit(cancel_txt, cancel_txt.get_rect(center=self.popup_cancel_btn.center))
-            
     def draw(self):
-        self.screen.fill((11, 18, 32))
-        self.draw_status_bar()
-        self.draw_left_bar()
-        self.draw_right_bar()
-        self.draw_bottom_bar()
-        self.draw_chat_window()
-        
-        self.draw_popup()
-        
+        self.screen.fill(_BG)
+        self._draw_status()
+        self._draw_sidebar()
+        self._draw_demands()
+        if self.chat_open:
+            self._draw_chat()
+        else:
+            self._draw_territory()
+        self._draw_bottom()
+        self._draw_popup()
         pygame.display.flip()
 
-    def run(self):
-        while self.running:
-            self.handle_events()
-            now = pygame.time.get_ticks()
-            if self.backspace_held and self.chat_open and not self.active_popup:
-                if now - self.backspace_timer > self.backspace_delay:
-                    if (now - self.backspace_timer - self.backspace_delay) % self.backspace_interval < 20:
-                        self.chat_input_text = self.chat_input_text[:-1]
-            self.draw()
-            self.clock.tick(60)
-        pygame.quit()
-        sys.exit()
+    def _start_ai_request(self, finalproposal=False):
+        if self.pending_future is not None:
+            return
+        demands = set(self.selected_demands)
+        territories = set(self.selected_territories)
+        self.pending_final = bool(finalproposal)
+        self.pending_future = self.executor.submit(
+            self.negotiation.ask,
+            demands,
+            territories,
+            finalproposal,
+        )
 
-if __name__ == "__main__":
-    app = PeaceTreatyScreen()
-    app.run()
+    def _poll_ai(self):
+        if self.pending_future is None or not self.pending_future.done():
+            return
+        future = self.pending_future
+        finalproposal = self.pending_final
+        self.pending_future = None
+        self.pending_final = False
+        try:
+            response = future.result()
+        except Exception as error:
+            self.popup_message = f"Negotiation failed safely: {error}"
+            self.active_popup = "error"
+            return
+        if response.decision.value == "COUNTER":
+            self.proposal_history.append({
+                "demands": sorted(self.selected_demands),
+                "territories": sorted(self.selected_territories),
+                "decision": response.decision.value,
+                "message": response.message,
+            })
+            counterdemands = set(response.suggested_demands)
+            counterterritories = set(response.suggested_territory_state_ids)
+            statechanges = ", ".join(
+                stateid.replace("_", " ") for stateid in sorted(counterterritories)
+            ) or "none"
+            demandchanges = ", ".join(sorted(counterdemands)) or "CEASEFIRE"
+            notice = (
+                "NPC SUGGESTED THE FOLLOWING: "
+                f"Demands: {demandchanges}. State change: {statechanges}. AGREE?"
+            )
+            self.chat_history.append(("NOTICE", notice))
+            self.pending_counter = {
+                "demands": counterdemands,
+                "territories": counterterritories,
+            }
+            self.pending_counter_response = response
+            self.popup_message = notice
+            self.active_popup = "counter"
+            return
+        if not finalproposal:
+            return
+
+        proposalrecord = {
+            "demands": sorted(self.selected_demands),
+            "territories": sorted(self.selected_territories),
+            "decision": response.decision.value,
+            "message": response.message,
+        }
+        self.proposal_history.append(proposalrecord)
+        if response.decision.value == "ACCEPT":
+            try:
+                proposal = self.negotiation.validate_proposal(
+                    self.selected_demands,
+                    self.selected_territories,
+                )
+            except (ValidationError, ValueError) as error:
+                self.popup_message = str(error)
+                self.active_popup = "error"
+                return
+            self.result = {
+                "accepted": True,
+                "proposal": proposal.model_dump(mode="json"),
+                "decision": response.model_dump(mode="json"),
+            }
+        self.popup_message = response.message
+        self.active_popup = "result"
+
+    def _accept_counteroffer(self):
+        if not self.pending_counter or self.pending_counter_response is None:
+            self.popup_message = "The counteroffer is no longer available."
+            self.active_popup = "error"
+            return
+        try:
+            proposal = self.negotiation.validate_proposal(
+                self.pending_counter["demands"],
+                self.pending_counter["territories"],
+            )
+        except (ValidationError, ValueError) as error:
+            self.popup_message = str(error)
+            self.active_popup = "error"
+            return
+        self.selected_demands = set(proposal.demands)
+        self.selected_territories = set(proposal.territory_state_ids)
+        self.result = {
+            "accepted": True,
+            "counteroffer": True,
+            "proposal": proposal.model_dump(mode="json"),
+            "decision": self.pending_counter_response.model_dump(mode="json"),
+        }
+        self.pending_counter = None
+        self.pending_counter_response = None
+        self.popup_message = "The NPC counteroffer was accepted. The treaty is ready to conclude."
+        self.active_popup = "result"
+
+    def _submit_chat(self):
+        message = self.chat_input_text.strip()
+        if not message or self.pending_future is not None:
+            return
+        self.chat_input_text = ""
+        self.negotiation.record_player_message(message)
+        previousdemands = set(self.selected_demands)
+        previousterritories = set(self.selected_territories)
+        self.selected_demands, self.selected_territories = (
+            self.negotiation.interpret_player_message(
+                message,
+                self.selected_demands,
+                self.selected_territories,
+            )
+        )
+        if (
+            self.selected_demands != previousdemands
+            or self.selected_territories != previousterritories
+        ):
+            territorylabels = [
+                stateid.replace("_", " ")
+                for stateid in sorted(self.selected_territories)
+            ]
+            visibleterritories = ", ".join(territorylabels[:6])
+            if len(territorylabels) > 6:
+                visibleterritories += f", +{len(territorylabels) - 6} more"
+            notice = "FORMAL DEMANDS UPDATED: " + ", ".join(sorted(self.selected_demands))
+            if visibleterritories:
+                notice += f". Territory: {visibleterritories}"
+            self.chat_history.append(("NOTICE", notice))
+        self._start_ai_request(finalproposal=False)
+
+    def _request_submit(self):
+        try:
+            self.negotiation.validate_proposal(
+                self.selected_demands,
+                self.selected_territories,
+            )
+        except (ValidationError, ValueError) as error:
+            self.popup_message = str(error)
+            self.active_popup = "error"
+            return
+        score = self.negotiation.posture_score(
+            self.selected_demands,
+            self.selected_territories,
+        )
+        self.popup_message = (
+            f"Submit {len(self.selected_demands)} demand(s) and "
+            f"{len(self.selected_territories)} territorial claim(s)? "
+            f"Current agreement posture is {score:.0f}/100."
+        )
+        self.active_popup = "confirm"
+
+    def _handle_click(self, position):
+        if self.active_popup:
+            if self.active_popup == "confirm":
+                if self.popupconfirm.collidepoint(position):
+                    self.active_popup = None
+                    self._start_ai_request(finalproposal=True)
+                elif self.popupcancel.collidepoint(position):
+                    self.active_popup = None
+            elif self.active_popup == "counter":
+                if self.popupconfirm.collidepoint(position):
+                    self._accept_counteroffer()
+                elif self.popupcancel.collidepoint(position):
+                    self.active_popup = None
+                    self.chat_open = True
+            elif self.popupclose.collidepoint(position):
+                if self.result:
+                    self.running = False
+                self.active_popup = None
+            return
+        if self.exitbutton.collidepoint(position):
+            if self.negotiation.occupation_ratio >= 0.999:
+                self.popup_message = (
+                    "Total occupation is complete. The NPC has no remaining leverage "
+                    "and must accept a submitted proposal."
+                )
+                self.active_popup = "error"
+                return
+            self.result = {"accepted": False, "reason": "conference_deferred"}
+            self.running = False
+            return
+        if self.chatbutton.collidepoint(position):
+            self.chat_open = not self.chat_open
+            return
+        if self.historybutton.collidepoint(position):
+            if self.proposal_history:
+                latest = self.proposal_history[-1]
+                self.popup_message = (
+                    f"Latest: {latest['decision']} · "
+                    f"{', '.join(latest['demands'])} · "
+                    f"{len(latest['territories'])} states."
+                )
+            else:
+                self.popup_message = "No proposals have been submitted."
+            self.active_popup = "history"
+            return
+        if self.submitbutton.collidepoint(position):
+            self._request_submit()
+            return
+        for demand, rect in zip(self.demands, self.demandrects):
+            if not rect.collidepoint(position):
+                continue
+            if demand == "CEASEFIRE":
+                return
+            if demand in self.selected_demands:
+                self.selected_demands.remove(demand)
+                if demand == "STATE TRANSFER":
+                    self.selected_territories.clear()
+            else:
+                self.selected_demands.add(demand)
+            return
+        if not self.chat_open and "STATE TRANSFER" in self.selected_demands:
+            for option, rect in self._state_rows():
+                if rect.collidepoint(position):
+                    stateid = option["id"]
+                    if stateid in self.selected_territories:
+                        self.selected_territories.remove(stateid)
+                    else:
+                        self.selected_territories.add(stateid)
+                    return
+
+    def handle_event(self, event):
+        if event.type == pygame.QUIT:
+            self.result = {"accepted": False, "reason": "window_closed"}
+            self.running = False
+            return
+        if event.type == pygame.VIDEORESIZE:
+            self._layout()
+            return
+        if event.type == pygame.MOUSEWHEEL and not self.chat_open and not self.active_popup:
+            self.territory_scroll -= event.y
+            return
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            self._handle_click(event.pos)
+            return
+        if event.type == pygame.KEYUP and event.key == pygame.K_BACKSPACE:
+            self.backspace_held = False
+            return
+        if event.type != pygame.KEYDOWN:
+            return
+        if event.key == pygame.K_ESCAPE:
+            if self.active_popup:
+                self.active_popup = None
+            elif self.chat_open:
+                self.chat_open = False
+            else:
+                if self.negotiation.occupation_ratio >= 0.999:
+                    self.popup_message = (
+                        "Total occupation is complete. Submit your terms; the NPC must accept."
+                    )
+                    self.active_popup = "error"
+                    return
+                self.result = {"accepted": False, "reason": "conference_deferred"}
+                self.running = False
+            return
+        if not self.chat_open or self.active_popup or self.pending_future is not None:
+            return
+        if event.key == pygame.K_RETURN:
+            self._submit_chat()
+        elif event.key == pygame.K_BACKSPACE:
+            self.chat_input_text = self.chat_input_text[:-1]
+            self.backspace_held = True
+            self.backspace_started = pygame.time.get_ticks()
+            self.backspace_last = self.backspace_started
+        elif event.unicode and event.unicode.isprintable() and len(self.chat_input_text) < 500:
+            self.chat_input_text += event.unicode
+
+    def run(self):
+        try:
+            while self.running:
+                for event in pygame.event.get():
+                    self.handle_event(event)
+                now = pygame.time.get_ticks()
+                if (
+                    self.backspace_held
+                    and self.chat_open
+                    and not self.active_popup
+                    and now - self.backspace_started >= 380
+                    and now - self.backspace_last >= 45
+                ):
+                    self.chat_input_text = self.chat_input_text[:-1]
+                    self.backspace_last = now
+                self._poll_ai()
+                self.draw()
+                self.clock.tick(60)
+        finally:
+            self.executor.shutdown(wait=False, cancel_futures=True)
+        return self.result or {"accepted": False, "reason": "conference_closed"}

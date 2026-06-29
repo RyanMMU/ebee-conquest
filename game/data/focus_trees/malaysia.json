@@ -584,6 +584,146 @@
       ]
     },
     {
+      "id": "vaccine_science_taskforce",
+      "title": "Vaccine Science Taskforce",
+      "description": "Create a scientific advisory group to evaluate vaccine candidates and trial data.",
+      "branch": "Vaccine Program",
+      "focus_type": "emergency_focus",
+      "duration_days": 15,
+      "political_power_cost": 5,
+      "icon": "assets/focus/research.png",
+      "x": 9,
+      "y": 7,
+      "prerequisites": ["activate_health_crisis_council"],
+      "available_condition": {"date_at_least": "2020-04-01"},
+      "effects": [
+        {"type": "modify_domestic_variable", "key": "covid_vaccine_research_progress", "amount": 28},
+        {"type": "modify_domestic_variable", "key": "state_capacity", "amount": 3},
+        {"type": "modify_domestic_variable", "key": "economic_pressure", "amount": 2}
+      ]
+    },
+    {
+      "id": "join_covax_facility",
+      "title": "Join COVAX Facility",
+      "description": "Join multilateral vaccine purchasing channels to secure early doses.",
+      "branch": "Vaccine Program",
+      "focus_type": "diplomatic_focus",
+      "duration_days": 15,
+      "political_power_cost": 6,
+      "icon": "assets/focus/diplomacy.png",
+      "x": 10,
+      "y": 7,
+      "prerequisites": ["vaccine_science_taskforce"],
+      "available_condition": {"date_at_least": "2020-06-01"},
+      "effects": [
+        {"type": "modify_domestic_variable", "key": "covid_vaccine_procurement", "amount": 34},
+        {"type": "modify_domestic_variable", "key": "international_confidence", "amount": 5},
+        {"type": "modify_domestic_variable", "key": "economic_pressure", "amount": 2}
+      ]
+    },
+    {
+      "id": "build_cold_chain_network",
+      "title": "Build Cold Chain Network",
+      "description": "Prepare refrigeration, transport and clinic logistics for nationwide vaccination.",
+      "branch": "Vaccine Program",
+      "focus_type": "economic_focus",
+      "duration_days": 20,
+      "political_power_cost": 7,
+      "icon": "assets/focus/factory.png",
+      "x": 9,
+      "y": 8,
+      "prerequisites": ["vaccine_science_taskforce"],
+      "available_condition": {"date_at_least": "2020-07-01"},
+      "effects": [
+        {"type": "modify_domestic_variable", "key": "covid_vaccine_daily_capacity", "amount": 90, "max": 1000},
+        {"type": "modify_domestic_variable", "key": "state_capacity", "amount": 5},
+        {"type": "modify_domestic_variable", "key": "economic_pressure", "amount": 4}
+      ]
+    },
+    {
+      "id": "emergency_use_framework",
+      "title": "Emergency Use Framework",
+      "description": "Create approval rules for emergency vaccine use once sufficient trial data arrives.",
+      "branch": "Vaccine Program",
+      "focus_type": "legislative_focus",
+      "duration_days": 15,
+      "political_power_cost": 7,
+      "icon": "assets/focus/parliament.png",
+      "x": 10,
+      "y": 8,
+      "prerequisites": ["join_covax_facility", "build_cold_chain_network"],
+      "available_condition": {"date_at_least": "2020-12-01"},
+      "effects": [
+        {"type": "set_domestic_flag", "flag": "covid_vaccine_rollout_active", "value": true},
+        {"type": "set_domestic_value", "key": "covid_vaccine_rollout_start_date", "value": "2021-01-01"},
+        {"type": "set_domestic_value", "key": "covid_vaccine_effectiveness", "value": 0.84},
+        {"type": "set_domestic_value", "key": "covid_vaccine_severe_protection", "value": 0.74},
+        {"type": "modify_domestic_variable", "key": "covid_vaccine_public_trust", "amount": 8}
+      ]
+    },
+    {
+      "id": "national_vaccination_drive",
+      "title": "National Vaccination Drive",
+      "description": "Scale appointments, clinics and public outreach for mass vaccination.",
+      "branch": "Vaccine Program",
+      "focus_type": "emergency_focus",
+      "duration_days": 25,
+      "political_power_cost": 10,
+      "icon": "assets/focus/security.png",
+      "x": 10,
+      "y": 9,
+      "prerequisites": ["emergency_use_framework"],
+      "available_condition": {"date_at_least": "2021-01-01"},
+      "effects": [
+        {"type": "modify_domestic_variable", "key": "covid_vaccine_daily_capacity", "amount": 260, "max": 1000},
+        {"type": "modify_domestic_variable", "key": "covid_vaccine_procurement", "amount": 24},
+        {"type": "modify_domestic_variable", "key": "covid_vaccine_public_trust", "amount": 8},
+        {"type": "modify_domestic_variable", "key": "covid_crisis_level", "amount": -18},
+        {"type": "modify_domestic_variable", "key": "economic_pressure", "amount": -10}
+      ]
+    },
+    {
+      "id": "community_vaccine_outreach",
+      "title": "Community Vaccine Outreach",
+      "description": "Work with states, religious leaders and local clinics to improve uptake.",
+      "branch": "Vaccine Program",
+      "focus_type": "administrative_focus",
+      "duration_days": 20,
+      "political_power_cost": 7,
+      "icon": "assets/focus/asean.png",
+      "x": 11,
+      "y": 9,
+      "prerequisites": ["emergency_use_framework"],
+      "available_condition": {"date_at_least": "2021-01-01"},
+      "effects": [
+        {"type": "modify_domestic_variable", "key": "covid_vaccine_public_trust", "amount": 18},
+        {"type": "modify_domestic_variable", "key": "covid_vaccine_daily_capacity", "amount": 80, "max": 1000},
+        {"type": "modify_domestic_variable", "key": "public_unrest", "amount": -5},
+        {"type": "modify_domestic_variable", "key": "public_approval", "amount": 5}
+      ]
+    },
+    {
+      "id": "booster_and_variant_surveillance",
+      "title": "Booster And Variant Surveillance",
+      "description": "Track variants, protect high-risk groups and prepare booster campaigns.",
+      "branch": "Vaccine Program",
+      "focus_type": "emergency_focus",
+      "duration_days": 25,
+      "political_power_cost": 9,
+      "icon": "assets/focus/research.png",
+      "x": 11,
+      "y": 10,
+      "prerequisites": ["national_vaccination_drive", "community_vaccine_outreach"],
+      "available_condition": {"date_at_least": "2021-04-01"},
+      "effects": [
+        {"type": "set_domestic_value", "key": "covid_vaccine_effectiveness", "value": 0.88},
+        {"type": "set_domestic_value", "key": "covid_vaccine_severe_protection", "value": 0.82},
+        {"type": "modify_domestic_variable", "key": "covid_vaccine_daily_capacity", "amount": 120, "max": 1000},
+        {"type": "modify_domestic_variable", "key": "state_capacity", "amount": 6},
+        {"type": "modify_domestic_variable", "key": "covid_crisis_level", "amount": -12}
+      ]
+    },
+    {
       "id": "negotiate_with_gps",
       "title": "Negotiate With GPS",
       "description": "Try to make GPS the bridge out of a hung parliament.",
