@@ -1,6 +1,6 @@
 {
   "volume": 75,
-  "setup_complete": true,
+  "setup_complete": false,
   "player_name": "ryfried",
   "llm_mode": "online",
   "online_api_key": "",

@@ -785,10 +785,11 @@ class AnimatedMainMenu:
         aimode = pygame.Rect(panel.x + 54, panel.y + 238, panel.width - 108, 50)
         back = pygame.Rect(panel.x + 54, panel.y + 326, (panel.width - 124) // 2, 50)
         cache = pygame.Rect(back.right + 16, back.y, back.width, 50)
-        return panel, slider, fullscreen, aimode, back, cache
+        reset_setup = pygame.Rect(panel.x + 54, panel.y + 394, panel.width - 108, 50)
+        return panel, slider, fullscreen, aimode, back, cache, reset_setup
 
     def _draw_settings(self, dt):
-        panel, slider, fullscreen, aimode, back, cache = self._settings_controls()
+        panel, slider, fullscreen, aimode, back, cache, reset_setup = self._settings_controls()
         t = pygame.time.get_ticks() / 1000.0
         enter = ease_out_back(self.menu_transition)
         panel = panel.move(0, int((1.0 - enter) * 42))
@@ -834,12 +835,19 @@ class AnimatedMainMenu:
         self.screen.blit(modenote, (aimode.x, aimode.bottom + 9))
         self._draw_button(back, "settings_back", "BACK", dt)
         self._draw_button(cache, "settings_cache", "REMOVE CACHE", dt, danger=True)
+        self._draw_button(
+            reset_setup,
+            "settings_reset_setup",
+            "RESET FIRST-RUN SETUP",
+            dt,
+            danger=True,
+        )
 
         warning = self.small_font.render("WARNING: REMOVING CACHE WILL CAUSE THE GAME TO LAUNCH SLOWER WHEN YOU RUN IT !!!", True, (236, 166, 166))
         self.screen.blit(warning, (panel.x + 54, panel.bottom - 50))
 
     def _handle_settings_click(self):
-        panel, slider, fullscreen, aimode, back, cache = self._settings_controls()
+        panel, slider, fullscreen, aimode, back, cache, reset_setup = self._settings_controls()
         if slider.inflate(6, 24).collidepoint(self.mouse):
             self.volume_dragging = True
             self._update_volume_from_mouse(slider)
@@ -867,10 +875,27 @@ class AnimatedMainMenu:
             remove_cache()
             self.notice = "Cache removed."
             self.notice_time = 2.2
+            return
+        if reset_setup.collidepoint(self.mouse):
+            self._button_click("settings_reset_setup", reset_setup)
+            self.settings = updatesettings({"setup_complete": False})
+            self.setup_active = True
+            self.setup_active_field = "player_name"
+            self.setup_error = ""
+            self.setup_expand = 1.0 if self.setup_mode == "online" else 0.0
+            return
 
     def _update_volume_from_mouse(self, slider=None):
         if slider is None:
-            _panel, slider, _fullscreen, _aimode, _back, _cache = self._settings_controls()
+            (
+                _panel,
+                slider,
+                _fullscreen,
+                _aimode,
+                _back,
+                _cache,
+                _reset_setup,
+            ) = self._settings_controls()
         self.volume = int(clamp((self.mouse[0] - slider.x) / max(1, slider.width)) * 100)
         vol = self.volume / 100.0
         try:
