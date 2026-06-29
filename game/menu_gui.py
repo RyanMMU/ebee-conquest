@@ -105,8 +105,10 @@ def _scale_splash_logo(logo, max_width, max_height):
 def _create_splash_card(screen_size, logo_path, heading=None, footer=None, game_logo=False):
     width, height = screen_size
     card = pygame.Surface(screen_size, pygame.SRCALPHA)
-    logo = pygame.image.load(logo_path).convert_alpha()
-
+    try:
+        logo = pygame.image.load(logo_path).convert_alpha()
+    except (FileNotFoundError, pygame.error):
+        logo = pygame.Surface((1, 1), pygame.SRCALPHA)
     if game_logo:
         logo = _scale_splash_logo(logo, width * 0.6, height * 0.6)
         card.blit(logo, logo.get_rect(center=(width // 2, height // 2)))
