@@ -44,6 +44,40 @@ class OpenAICompatibleProvider:
                     value = str(value)
                 setattr(self, key, value)
 
+
+"""{
+  "decision": "COUNTER",
+  "message": "Thailand accepts a ceasefire, but we will not surrender our sovereignty. Withdraw the territorial demands and peace can begin.",
+  "concession_delta": 2,
+  "suggested_demands": ["CEASEFIRE"],
+  "suggested_territory_state_ids": []
+}
+"""
+
+
+
+"""SAMPLE PROMPT:
+You are roleplaying a defeated non-player nation in a strategy-game peace conference.
+Nation: Thailand
+Victor: Malaysia, represented by Player
+Personality: measured
+Strength ratio (victor/defeated): 1.50
+Occupation of defeated nation: 75.0%
+Demands: CEASEFIRE
+Requested state IDs: none
+Allowed state IDs for a counteroffer: [Thailand state IDs available in the current game]
+POSTURE_SCORE: 79.0
+FINAL_PROPOSAL: no
+Recent negotiation:
+PLAYER: Thailand, the war is over. What terms will you accept?
+Address the player's latest message directly. Do not repeat an earlier reply.
+Return ONLY JSON with keys decision, message, concession_delta, suggested_demands, suggested_territory_state_ids.
+For chat, use COUNTER when the player asks what you offer; otherwise use CONTINUE. For a final proposal use ACCEPT, COUNTER, or REJECT.
+message must stay in character and be no more than two short sentences or 300 characters.
+For COUNTER, suggest less costly terms using only the allowed demand names and state IDs.
+For other decisions, return empty suggestion lists. Never invent a territory ID.
+concession_delta must be an integer from -8 to 8."""
+
     def ask(self, prompt):
         with self._lock:
             api_key = self.api_key
