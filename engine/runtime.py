@@ -4788,7 +4788,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                     
                     country = getprovincecontroller(sourceprovince)
                     country_move_sound = country_move_sounds.get(country)
-                    if country_move_sound is not None:
+                    if country_move_sound is not None and country_move_sound.get_num_channels() == 0:
                         country_move_sound.play()
                     
                     movementorderlist.append(
