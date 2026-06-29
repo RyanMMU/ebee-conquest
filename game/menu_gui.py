@@ -1,5 +1,6 @@
 import math
 import os
+import random
 import shutil
 import sys
 
@@ -28,6 +29,12 @@ _ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 _FONTS = os.path.join(_ROOT, "fonts")
 _IMAGES = os.path.join(_ROOT, "images")
 _MENU_BACKGROUND = os.path.join(_IMAGES, "Game Menu UI Design (1).png")
+_SPLASH_ASSETS = os.path.join(_ROOT, "game", "images")
+_GAME_LOGO = os.path.join(_SPLASH_ASSETS, "developer_logo.png")
+_ILMU_LOGO = os.path.join(_SPLASH_ASSETS, "ilmulogo.svg")
+_MMU_LOGO = os.path.join(_SPLASH_ASSETS, "mmulogo.svg")
+_MMU_PADU_SFX = os.path.join(_SPLASH_ASSETS, "mmupadusfx.mp3")
+_BGM_DIRECTORY = os.path.join(_ROOT, "game", "sounds", "bgm")
 
 _C_TEXT = (248, 250, 252)
 _C_MUTED = (156, 163, 175)
@@ -65,59 +72,116 @@ def _safe_sound(path, volume=0.4):
         return sound
     except pygame.error:
         return None
-    
-def show_splash_screen(screen):
-    clock = pygame.time.Clock()
 
-    splash_images = [
-        "game/images/developer_logo.png",
-        "game/images/game_logo.png",
+
+def _play_random_bgm(volume):
+    try:
+        track_paths = [
+            entry.path
+            for entry in os.scandir(_BGM_DIRECTORY)
+            if entry.is_file() and entry.name.lower().endswith((".mp3", ".ogg", ".wav"))
+        ]
+        if not track_paths:
+            return None
+
+        track_path = random.choice(track_paths)
+        pygame.mixer.music.load(track_path)
+        pygame.mixer.music.set_volume(max(0.0, min(1.0, volume)))
+        pygame.mixer.music.play(-1)
+        return track_path
+    except (OSError, pygame.error):
+        return None
+
+
+def _scale_splash_logo(logo, max_width, max_height):
+    scale = min(max_width / logo.get_width(), max_height / logo.get_height())
+    size = (
+        max(1, int(logo.get_width() * scale)),
+        max(1, int(logo.get_height() * scale)),
+    )
+    return pygame.transform.smoothscale(logo, size)
+
+
+def _create_splash_card(screen_size, logo_path, heading=None, footer=None, game_logo=False):
+    width, height = screen_size
+    card = pygame.Surface(screen_size, pygame.SRCALPHA)
+    logo = pygame.image.load(logo_path).convert_alpha()
+
+    if game_logo:
+        logo = _scale_splash_logo(logo, width * 0.6, height * 0.6)
+        card.blit(logo, logo.get_rect(center=(width // 2, height // 2)))
+        return card
+
+    logo = _scale_splash_logo(logo, width * 0.48, height * 0.30)
+    heading_font = _load_font("Inter_18pt-Medium.ttf", max(20, int(height * 0.042)))
+    footer_font = _load_font("Inter_18pt-Medium.ttf", max(22, int(height * 0.05)), bold=True)
+    logo_center_y = height // 2
+
+    if heading:
+        heading_surface = heading_font.render(heading, True, _C_MUTED)
+        heading_rect = heading_surface.get_rect(center=(width // 2, int(height * 0.22)))
+        card.blit(heading_surface, heading_rect)
+
+    if footer:
+        logo_center_y = int(height * 0.47)
+        footer_surface = footer_font.render(footer, True, _C_TEXT)
+        footer_rect = footer_surface.get_rect(center=(width // 2, int(height * 0.79)))
+        card.blit(footer_surface, footer_rect)
+
+    card.blit(logo, logo.get_rect(center=(width // 2, logo_center_y)))
+    return card
+
+
+def show_splash_screen(screen, volume=1.0):
+    clock = pygame.time.Clock()
+    mmu_sound = _safe_sound(_MMU_PADU_SFX, max(0.0, min(1.0, volume)))
+    final_hold_seconds = 1.2
+    if mmu_sound is not None:
+        final_hold_seconds = max(final_hold_seconds, mmu_sound.get_length() - 1.0)
+
+    cards = [
+        (_create_splash_card(screen.get_size(), _GAME_LOGO, game_logo=True), 1.2, None),
+        (_create_splash_card(screen.get_size(), _ILMU_LOGO, heading="Powered by"), 1.2, None),
+        (
+            _create_splash_card(
+                screen.get_size(),
+                _MMU_LOGO,
+                heading="Part of",
+                footer="Mini IT Project 2026",
+            ),
+            final_hold_seconds,
+            mmu_sound,
+        ),
     ]
 
-    for image_path in splash_images:
-        logo = pygame.image.load(image_path).convert_alpha()
+    fade_seconds = 0.5
+    for card, hold_seconds, sound in cards:
+        if sound is not None:
+            sound.play()
 
-        sw, sh = screen.get_size()
-
-        scale = min(sw * 0.6 / logo.get_width(), sh * 0.6 / logo.get_height())
-
-        logo = pygame.transform.smoothscale(
-            logo,
-            (
-                int(logo.get_width() * scale),
-                int(logo.get_height() * scale),
-            ),
-        )
-
-        for alpha in range(0, 256, 8):
+        elapsed = 0.0
+        total_seconds = fade_seconds + hold_seconds + fade_seconds
+        while elapsed < total_seconds:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    return
+                    if mmu_sound is not None:
+                        mmu_sound.stop()
+                    return False
+
+            if elapsed < fade_seconds:
+                alpha = int(255 * elapsed / fade_seconds)
+            elif elapsed > fade_seconds + hold_seconds:
+                alpha = int(255 * (total_seconds - elapsed) / fade_seconds)
+            else:
+                alpha = 255
 
             screen.fill((0, 0, 0))
-
-            logo.set_alpha(alpha)
-
-            screen.blit(logo, logo.get_rect(center=(sw // 2, sh // 2)))
-
+            card.set_alpha(max(0, min(255, alpha)))
+            screen.blit(card, (0, 0))
             pygame.display.flip()
-            clock.tick(60)
+            elapsed += clock.tick(60) / 1000.0
 
-        pygame.time.delay(1200)
-
-        for alpha in range(255, -1, -8):
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    return
-
-            screen.fill((0, 0, 0))
-
-            logo.set_alpha(alpha)
-
-            screen.blit(logo, logo.get_rect(center=(sw // 2, sh // 2)))
-
-            pygame.display.flip()
-            clock.tick(60)
+    return True
 
 
 def _draw_vertical_gradient(surface, rect, top_color, bottom_color, radius=0):
@@ -171,7 +235,10 @@ class AnimatedMainMenu:
         self._bg_size = None
         self._refresh_background()
         
-        show_splash_screen(self.screen)
+        if not show_splash_screen(self.screen, self.volume / 100.0):
+            self.running = False
+        else:
+            self.bgm_path = _play_random_bgm(self.volume / 100.0)
 
     def _refresh_background(self):
         size = self.screen.get_size()

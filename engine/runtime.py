@@ -1108,7 +1108,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
         "Cambodia": pygame.mixer.Sound("game/speeches/cambodia_move.wav"),
         "Laos": pygame.mixer.Sound("game/speeches/laos_move.wav"),
         "Myanmar": pygame.mixer.Sound("game/speeches/myanmar_move.wav"),
-        "Timor-Leste": pygame.mixer.Sound("game/speeches/timorleste_move.wav"),
+        "Timor_Leste": pygame.mixer.Sound("game/speeches/timorleste_move.wav"),
     }
 
     for sound in country_move_sounds.values():
@@ -1590,6 +1590,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
     gamephase = "choosecountry"
     pendingcountry = None
     playercountry = None
+    bgmvolumehalvedforplay = False
 
     # Economy defaults come from economy module
     currentturnnumber = 1
@@ -3149,6 +3150,12 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
             choosecountry_intro_progress = min(1.0, choosecountry_intro_progress + elapsedseconds * 0.62)
         else:
             choosecountry_intro_progress = 1.0
+        if gamephase == "play" and not bgmvolumehalvedforplay:
+            try:
+                pygame.mixer.music.set_volume(max(0.0, min(1.0, volume * 0.5)))
+            except pygame.error:
+                pass
+            bgmvolumehalvedforplay = True
         updatescriptengine()
         esomodule.updaterollingfpshistory(fpshistory, clock.get_fps(), fpshistorymaxsamples)
         mouseposition_full = pygame.mouse.get_pos()
@@ -4780,7 +4787,9 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0):
                         playerap = max(0, playerap - moveorderapcost)
                     
                     country = getprovincecontroller(sourceprovince)
-                    play_country_move_voice(country)
+                    country_move_sound = country_move_sounds.get(country)
+                    if country_move_sound is not None:
+                        country_move_sound.play()
                     
                     movementorderlist.append(
                         {
