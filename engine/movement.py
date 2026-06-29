@@ -32,7 +32,6 @@ def getprovincecontroller(province):
     # get the current controller
     return province.get("controllercountry", province.get("country"))
 
-
 def getprovinceowner(province):
     # get the original owner
     return province.get("ownercountry", province.get("country"))

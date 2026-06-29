@@ -4148,9 +4148,42 @@ class InGameUI:
            left_rect.y + 12,
            left_rect.width - 28,
            self.font_bold
-        )
+       )
 
-       y = left_rect.y + 44
+       # ===== HEALTH ALERT SYSTEM (NEW) =====
+       risk = health.get("risk_level", "Low")
+
+       if risk == "High":
+           alert_text = "⚠ CRISIS: Severe health situation detected!"
+           alert_color = (220, 80, 80)
+       elif risk == "Medium":
+           alert_text = "⚠ WARNING: Health risks present in country."
+           alert_color = (240, 180, 80)
+       else:
+           alert_text = "✅ STABLE: Health situation under control."
+           alert_color = (120, 220, 140)
+
+       self._draw_text_fit(
+           surface,
+           alert_text,
+           alert_color,
+           left_rect.x + 14,
+           left_rect.y + 32,
+           left_rect.width - 28,
+           self.small_font
+       )
+       
+       pygame.draw.line(
+           surface,
+           (80, 90, 110),
+           (left_rect.x + 14, left_rect.y + 52),
+           (left_rect.right - 14, left_rect.y + 52),
+           1
+       )
+
+       # ===== HEALTH ROWS =====
+       y = left_rect.y + 60
+
        rows = (
            ("New Cases", f"{int(health.get('new_cases', 0) or 0):,}"),
            ("Recovered", f"{int(health.get('recovered', 0) or 0):,}"),
@@ -4158,6 +4191,7 @@ class InGameUI:
            ("Mortality Rate", f"{float(health.get('mortality', 0) or 0):.2f}%"),
            ("Healthcare Load", health.get("healthcare_load", "Normal")),
            ("R0", f"{float(health.get('r0', 0) or 0):.2f}"),
+           ("Risk Level", risk),
         )
 
        for label, value in rows:
@@ -4168,10 +4202,37 @@ class InGameUI:
                label,
                value,
                left_rect.width - 28
-            )
+           )
            y += 28
 
-       
+       # ===== EPIDEMIC STATE BADGE =====
+       badge_color = (120, 220, 140)
+
+       if risk == "High":
+           state = "EPIDEMIC 🔴"
+           badge_color = (220, 80, 80)
+       elif risk == "Medium":
+           state = "WATCH 🟠"
+           badge_color = (240, 180, 80)
+       else:
+           state = "NORMAL 🟢"
+
+       # background highlight effect
+       badge_rect = pygame.Rect(left_rect.x + 14, y + 6, 180, 26)
+
+       pygame.draw.rect(surface, badge_color, badge_rect, border_radius=6)
+
+       self._draw_text_fit(
+           surface,
+           state,
+           (255, 255, 255),
+           badge_rect.x,
+           badge_rect.y + 4,
+           badge_rect.width,
+           self.small_font
+        )
+
+       # RIGHT PANEL
        self._draw_vertical_gradient_rect(surface, right_rect, (15, 24, 38), (8, 13, 22), radius=6)
        pygame.draw.rect(surface, (52, 65, 82), right_rect, 1, border_radius=6)
 
