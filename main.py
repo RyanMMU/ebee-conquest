@@ -29,9 +29,35 @@ if getattr(sys, "frozen", False):
     os.chdir(getattr(sys, "_MEIPASS", os.path.dirname(sys.executable)))
 
 import game.menu_gui as menu
+
+
+def runpackagedsmoketest():
+    from engine import core
+    from engine import eso
+
+    stateshapes = core.loadsvgshapes("map/states.svg")
+    provinceshapes = core.loadsvgshapes("map/provinces.svg")
+    statetocountry, countrytocolor = core.loadcountrydata("map/countries.json")
+    provincegraph = eso.loadprovincegraphcache(
+        "map/provinces.svg",
+        set(statetocountry),
+    )
+    if (
+        not stateshapes
+        or not provinceshapes
+        or not statetocountry
+        or not countrytocolor
+        or not provincegraph
+    ):
+        raise RuntimeError("Packaged map data failed to load.")
+
+
 # NOTE!!
 # This is a DIRECT engine launcher, not meant for normal gameplay. 
 # This is only used for testing and debugging only. 
 # pls use menu_gui.py (name will be changed later), it is more preferable. 
 # This file might be modified so please be advised.
-menu.main()
+if "--smoke-test" in sys.argv:
+    runpackagedsmoketest()
+else:
+    menu.main()

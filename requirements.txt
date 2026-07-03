@@ -2,3 +2,4 @@ pygame-ce==2.5.2
 pygame-gui==0.6.13
 svgelements==1.9.6
 pydantic>=2.7,<3
+numpy>=2.0,<3
