@@ -11,3 +11,6 @@ AGENTS.md
 /saves
 /saves
 settings.json
+/build/
+/.pyinstaller/
+/.venv-build/

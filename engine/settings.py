@@ -1,8 +1,17 @@
 import json
 import os
+import sys
 
 
-SETTINGS_PATH = "settings.json"
+if getattr(sys, "frozen", False):
+    _localappdata = os.environ.get("LOCALAPPDATA") or os.path.join(
+        os.path.expanduser("~"),
+        "AppData",
+        "Local",
+    )
+    SETTINGS_PATH = os.path.join(_localappdata, "Ebee Conquest", "settings.json")
+else:
+    SETTINGS_PATH = "settings.json"
 ILMU_BASE_URL = "https://api.ilmu.ai/v1"
 ILMU_MODEL = "ilmu-mini-v3.3"
 DEMO_API_KEY = "sk-72b11bc620b04aefb85d89ece756fafa368241868c0c52fa"

@@ -1,8 +1,18 @@
 import json
 import os
 import time
+import sys
 
-SAVES_DIRECTORY = "saves"
+
+if getattr(sys, "frozen", False):
+    _localappdata = os.environ.get("LOCALAPPDATA") or os.path.join(
+        os.path.expanduser("~"),
+        "AppData",
+        "Local",
+    )
+    SAVES_DIRECTORY = os.path.join(_localappdata, "Ebee Conquest", "saves")
+else:
+    SAVES_DIRECTORY = "saves"
 MAX_SAVE_SLOTS = 10
 
 

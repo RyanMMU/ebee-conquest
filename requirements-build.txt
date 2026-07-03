@@ -1,0 +1,4 @@
+# Requires Python 3.10 or newer.
+-r requirements.txt
+pyinstaller==6.21.0
+pillow==11.3.0
