@@ -2541,7 +2541,11 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                 "territory_state_ids": sorted(selectedstates),
             })
 
-    def runplayerpeaceconference(defeatedcountry, victoriouscountry):
+    def runplayerpeaceconference(
+        defeatedcountry,
+        victoriouscountry,
+        iscapitulation=True,
+    ):
         from engine.peace import PeaceNegotiation, calculate_country_strength
         from game.peace_ui import PeaceTreatyScreen
 
@@ -2579,6 +2583,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
             defeated_strength=defeatedstrength,
             available_state_ids=[option["id"] for option in territoryoptions],
             occupation_ratio=occupationratio,
+            is_capitulation=iscapitulation,
         )
         conferencescreen = pygame.display.get_surface()
         conference = PeaceTreatyScreen(
@@ -2592,6 +2597,110 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
         if result.get("reason") == "window_closed":
             pygame.event.post(pygame.event.Event(pygame.QUIT))
         return result, territoryoptions
+
+    def cancelhostilepeaceorders(firstcountry, secondcountry):
+        keptorders = []
+        cancelledcount = 0
+        countrypair = {firstcountry, secondcountry}
+        for movementorder in movementorderlist:
+            movingcountry = movementorder.get(
+                "controllercountry",
+                movementorder.get("country"),
+            )
+            if movingcountry not in countrypair:
+                keptorders.append(movementorder)
+                continue
+
+            othercountry = (
+                secondcountry if movingcountry == firstcountry else firstcountry
+            )
+            pathlist = list(movementorder.get("path", ()))
+            currentindex = max(0, safeint(movementorder.get("index", 0), 0))
+            remainingpath = pathlist[currentindex + 1:]
+            orderishostile = any(
+                provinceid in provincemap
+                and (
+                    getprovinceowner(provincemap[provinceid]) == othercountry
+                    or getprovincecontroller(provincemap[provinceid]) == othercountry
+                )
+                for provinceid in remainingpath
+            )
+            if not orderishostile:
+                keptorders.append(movementorder)
+                continue
+
+            returnprovince = None
+            for provinceid in reversed(pathlist[:currentindex + 1]):
+                province = provincemap.get(provinceid)
+                if province and getprovincecontroller(province) == movingcountry:
+                    returnprovince = province
+                    break
+            if returnprovince is not None:
+                returnprovince["troops"] = max(
+                    0,
+                    int(returnprovince.get("troops", 0)),
+                ) + max(0, int(movementorder.get("amount", 0)))
+                markprovincetroopactivity(returnprovince, currentturnnumber)
+            cancelledcount += 1
+
+        movementorderlist[:] = keptorders
+        return cancelledcount
+
+    def runvoluntarypeacenegotiation(enemycountry):
+        nonlocal countrybordersdirty
+        normalizedpair = normalizewarpair(playercountry, enemycountry)
+        if normalizedpair is None or normalizedpair not in warpairset:
+            return False
+
+        conferenceresult, territoryoptions = runplayerpeaceconference(
+            enemycountry,
+            playercountry,
+            iscapitulation=False,
+        )
+        if not conferenceresult.get("accepted"):
+            pushnotification(
+                "PEACE TALKS ENDED",
+                f"No treaty was agreed with {enemycountry}. The war continues.",
+            )
+            return False
+
+        cancelhostilepeaceorders(playercountry, enemycountry)
+        applyplayerpeacesettlement(
+            enemycountry,
+            playercountry,
+            conferenceresult,
+            territoryoptions,
+        )
+        warpairset.discard(normalizedpair)
+        warrecordlookup.pop(normalizedpair, None)
+        countriesatwarset.clear()
+        for activepair in warpairset:
+            if playercountry == activepair[0]:
+                countriesatwarset.add(activepair[1])
+            elif playercountry == activepair[1]:
+                countriesatwarset.add(activepair[0])
+
+        npcdirector.rebuildcountryindexes()
+        npcdirector.sync_player_wars(
+            playercountry,
+            countriesatwarset,
+            warpairset=warpairset,
+        )
+        countrybordersdirty = True
+        eventbus.emit(
+            "warended",
+            {
+                "country1": playercountry,
+                "country2": enemycountry,
+                "turn": currentturnnumber,
+                "source": "peace_negotiation",
+            },
+        )
+        pushnotification(
+            "PEACE TREATY SIGNED",
+            f"{playercountry} and {enemycountry} have ended their war.",
+        )
+        return True
 
     def executecapitulation(
         defeatedcountry,
@@ -4697,6 +4806,24 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                         )
                         camerashakeamount = max(camerashakeamount, 1.75)
                         emitmappulse((maprect.width * 0.5, maprect.height * 0.5), (224, 93, 93), radius=260, duration=1.05, width=4)
+                runtimeui.select_map_country(None)
+                countrymenutarget = None
+                continue
+
+            if (
+                uiaction == InGameUI.actionnegotiatepeace
+                and gamephase == "play"
+            ):
+                targetcountry = (
+                    countrymenutarget
+                    or runtimeui._selectedmapcountry
+                )
+                if (
+                    targetcountry
+                    and targetcountry != playercountry
+                    and targetcountry in countriesatwarset
+                ):
+                    runvoluntarypeacenegotiation(targetcountry)
                 runtimeui.select_map_country(None)
                 countrymenutarget = None
                 continue

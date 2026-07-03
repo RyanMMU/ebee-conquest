@@ -157,6 +157,7 @@ class PeaceNegotiation:
         defeated_strength,
         available_state_ids,
         occupation_ratio=0.0,
+        is_capitulation=True,
     ):
         self.ai_manager = ai_manager
         self.victor = str(victor)
@@ -167,6 +168,7 @@ class PeaceNegotiation:
         self.defeated_strength = max(1.0, float(defeated_strength))
         self.available_state_ids = set(str(value) for value in available_state_ids)
         self.occupation_ratio = max(0.0, min(1.0, float(occupation_ratio)))
+        self.is_capitulation = bool(is_capitulation)
         self.chat_history = []
         self.conversation_score = 0
         self.provider_available = True
@@ -266,11 +268,16 @@ class PeaceNegotiation:
 
     def build_prompt(self, demands, territory_state_ids, finalproposal):
         score = self.posture_score(demands, territory_state_ids)
+        situation = (
+            "a defeated non-player nation in a strategy-game peace conference"
+            if self.is_capitulation
+            else "a non-player nation negotiating an end to an active strategy-game war"
+        )
         historylines = [
             f"{speaker}: {message}" for speaker, message in self.chat_history[-8:]
         ]
         return "\n".join([
-            "You are roleplaying a defeated non-player nation in a strategy-game peace conference.",
+            f"You are roleplaying {situation}.",
             f"Nation: {self.defeated}",
             f"Victor: {self.victor}, represented by {self.player_name}",
             f"Personality: {getattr(self.personality, 'negotiationstyle', 'measured')}",

@@ -386,6 +386,7 @@ class InGameUI:
     actionrecruit = "recruit"
     actionendturn = "endturn"
     actiondeclarewar = "declarewar"
+    actionnegotiatepeace = "negotiatepeace"
     actionsplit = "split"
     actionmerge = "merge"
     actionfrontline = "frontline"
@@ -407,6 +408,15 @@ class InGameUI:
     actionweapon2 = "weapon_2"
     actionweapon3 = "weapon_3"
     actionweapon4 = "weapon_4"
+
+    @staticmethod
+    def cannegotiatepeace(playercountry, targetcountry, countriesatwarset):
+        return bool(
+            playercountry
+            and targetcountry
+            and targetcountry != playercountry
+            and targetcountry in set(countriesatwarset or ())
+        )
 
 
 
@@ -560,6 +570,7 @@ class InGameUI:
    
         self._recruit_action_rect = pygame.Rect(0, 0, 10, 10)
         self._declarewar_rect = pygame.Rect(0, 0, 10, 10)
+        self._negotiatepeace_rect = pygame.Rect(0, 0, 10, 10)
         self._split_rect = pygame.Rect(0, 0, 10, 10)
         self._merge_rect = pygame.Rect(0, 0, 10, 10)
         self._frontline_rect = pygame.Rect(0, 0, 10, 10)
@@ -1939,6 +1950,7 @@ class InGameUI:
         content_w = max(1, self.rightbar.rect.width - 24)
         self._recruit_action_rect = pygame.Rect(content_x, content_y + 40, content_w, 34)
         self._declarewar_rect = pygame.Rect(content_x, content_y + 82, content_w, 34)
+        self._negotiatepeace_rect = pygame.Rect(content_x, content_y + 124, content_w, 34)
         self._production_blank_rect = pygame.Rect(content_x, content_y + 40, content_w, 90)
 
         
@@ -2628,12 +2640,23 @@ class InGameUI:
                 self.ui_click_sound.play()
                 self.warprogressopen = not self.warprogressopen
                 return self.actionwarprogress
-        if self._selectedmapcountry and not self._countrymenutarget:
+        countryactiontarget = self._countrymenutarget or self._selectedmapcountry
+        if (
+            self.cannegotiatepeace(
+                self.playercountry,
+                countryactiontarget,
+                self._countriesatwarset,
+            )
+            and self._negotiatepeace_rect.collidepoint(pos)
+        ):
+            self.ui_click_sound.play()
+            return self.actionnegotiatepeace
+        if countryactiontarget:
             if self._declarewar_rect.collidepoint(pos):
                 if (
                     self.playercountry
-                    and self._selectedmapcountry != self.playercountry
-                    and self._selectedmapcountry not in self._countriesatwarset
+                    and countryactiontarget != self.playercountry
+                    and countryactiontarget not in self._countriesatwarset
                 ):
                     return self.actiondeclarewar
                 return None
@@ -3124,7 +3147,11 @@ class InGameUI:
 
        
         if self._countrymenutarget:
-            alreadyatwar = self._countrymenutarget in self._countriesatwarset
+            alreadyatwar = self.cannegotiatepeace(
+                self.playercountry,
+                self._countrymenutarget,
+                self._countriesatwarset,
+            )
             surface.blit(self.font.render("Country actions", True, (240, 240, 240)), (content_rect.x, y_cursor + 6))
             country_key = str(self._countrymenutarget or "").strip().lower().replace(" ", "_").replace("-", "_")
             flag_img = self._flags.get(country_key) if country_key else None
@@ -3143,7 +3170,20 @@ class InGameUI:
                 "Declare War" if not alreadyatwar else "Already at war!",
                 mouse=mouse,
             )
-            y_cursor += 130
+            if alreadyatwar:
+                self._negotiatepeace_rect.topleft = (content_rect.x, y_cursor + 124)
+                self._draw_glow_btn(
+                    surface,
+                    "negotiatepeace",
+                    self._negotiatepeace_rect,
+                    True,
+                    "Negotiate Peace",
+                    primary=True,
+                    mouse=mouse,
+                )
+                y_cursor += 172
+            else:
+                y_cursor += 130
 
         if self._selectedmapcountry and not self._countrymenutarget:
             big_flag = self._get_big_flag(self._selectedmapcountry, size=(240, 144))
@@ -3168,7 +3208,11 @@ class InGameUI:
                 surface.blit(self.font.render(line, True, (212, 212, 212)), (content_rect.x, y_cursor))
                 y_cursor += 20
 
-            alreadyatwar = self._selectedmapcountry in self._countriesatwarset
+            alreadyatwar = self.cannegotiatepeace(
+                self.playercountry,
+                self._selectedmapcountry,
+                self._countriesatwarset,
+            )
             can_declare = (
                 bool(self.playercountry)
                 and self._selectedmapcountry != self.playercountry
@@ -3178,7 +3222,20 @@ class InGameUI:
             status_surf = self.small_font.render(f"STATUS: {status.upper()}", True, _C_TEXT_MUTED)
             surface.blit(status_surf, (content_rect.x, y_cursor + 8))
 
-            self._declarewar_rect.topleft = (content_rect.x, content_rect.bottom - self._declarewar_rect.height)
+            actionbottom = content_rect.bottom - self._declarewar_rect.height
+            if alreadyatwar:
+                self._negotiatepeace_rect.topleft = (content_rect.x, actionbottom)
+                self._draw_glow_btn(
+                    surface,
+                    "negotiatepeace_selected_country",
+                    self._negotiatepeace_rect,
+                    True,
+                    "NEGOTIATE PEACE",
+                    primary=True,
+                    mouse=mouse,
+                )
+                actionbottom -= self._declarewar_rect.height + 8
+            self._declarewar_rect.topleft = (content_rect.x, actionbottom)
             declare_label = "DECLARE WAR" if can_declare else ("ALREADY AT WAR" if alreadyatwar else "DECLARE WAR")
             self._draw_glow_btn(
                 surface,

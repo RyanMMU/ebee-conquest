@@ -59,13 +59,20 @@ class PeaceTreatyScreen:
         self.mini_font = pygame.font.SysFont("bahnschrift", 12)
         self.running = True
         self.result = None
+        self.is_capitulation = bool(
+            getattr(self.negotiation, "is_capitulation", True)
+        )
         self.chat_open = False
         self.chat_input_text = ""
         self.chat_history = self.negotiation.chat_history
         if not self.chat_history:
             self.chat_history.append((
                 self.negotiation.defeated,
-                "Our armed resistance has ended. State the peace you intend to impose.",
+                (
+                    "Our armed resistance has ended. State the peace you intend to impose."
+                    if self.is_capitulation
+                    else "We are prepared to discuss terms for ending this war."
+                ),
             ))
         self.selected_demands = {"CEASEFIRE"}
         self.selected_territories = set()
@@ -191,11 +198,16 @@ class PeaceTreatyScreen:
             self.title_font.render("EBEE COMMAND", True, _GOLD_BRIGHT),
             (16, 19),
         )
-        title = self.title_font.render(
-            f"PEACE CONFERENCE · {self.negotiation.defeated.upper()} CAPITULATED",
-            True,
-            _TEXT,
-        )
+        if self.is_capitulation:
+            titletext = (
+                f"PEACE CONFERENCE · {self.negotiation.defeated.upper()} CAPITULATED"
+            )
+        else:
+            titletext = (
+                f"PEACE NEGOTIATIONS · {self.negotiation.victor.upper()} / "
+                f"{self.negotiation.defeated.upper()}"
+            )
+        title = self.title_font.render(titletext, True, _TEXT)
         self.screen.blit(title, title.get_rect(center=status.center))
         score = self.negotiation.posture_score(
             self.selected_demands, self.selected_territories
@@ -219,8 +231,12 @@ class PeaceTreatyScreen:
         self.screen.blit(heading, heading.get_rect(centerx=self.leftbar.centerx, y=self.leftbar.y + 18))
         countries = [self.negotiation.victor, self.negotiation.defeated]
         roles = [
-            f"VICTOR · {self.negotiation.player_name.upper()}"[:28],
-            "CAPITULATED",
+            (
+                f"VICTOR · {self.negotiation.player_name.upper()}"[:28]
+                if self.is_capitulation
+                else f"PLAYER · {self.negotiation.player_name.upper()}"[:28]
+            ),
+            "CAPITULATED" if self.is_capitulation else "OPPOSING NATION",
         ]
         mouse = pygame.mouse.get_pos()
         for index, rect in enumerate(self.countryrects):

@@ -32,7 +32,7 @@ class FailingAIManager:
         raise AIProviderError("credential rejected")
 
 
-def makenegotiation(response="{}"):
+def makenegotiation(response="{}", **kwargs):
     return PeaceNegotiation(
         ai_manager=FakeAIManager(response),
         victor="Malaysia",
@@ -47,6 +47,7 @@ def makenegotiation(response="{}"):
         victor_strength=200,
         defeated_strength=100,
         available_state_ids={"Siam", "Isan"},
+        **kwargs,
     )
 
 
@@ -118,6 +119,15 @@ def test_respectful_negotiation_improves_posture():
     )
     after = negotiation.posture_score({"CEASEFIRE"}, set())
     assert after > before
+
+
+def test_active_war_negotiation_uses_non_capitulation_prompt():
+    negotiation = makenegotiation(is_capitulation=False)
+
+    prompt = negotiation.build_prompt({"CEASEFIRE"}, set(), finalproposal=False)
+
+    assert "negotiating an end to an active strategy-game war" in prompt
+    assert "defeated non-player nation" not in prompt
 
 
 def test_graph_provider_follows_posture_state_graph():
