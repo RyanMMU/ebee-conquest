@@ -1,0 +1,42 @@
+Top net Python allocations during profiled game run
+========================================================
+D:\Github\Repo\ebee-conquest\engine\eso.py:44: size=45.9 MiB (+45.9 MiB), count=1164969 (+1164969), average=41 B
+D:\Github\Repo\ebee-conquest\engine\eso.py:128: size=6258 KiB (+6258 KiB), count=17919 (+17919), average=358 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:194: size=3924 KiB (+3924 KiB), count=10046 (+10046), average=400 B
+D:\Github\Repo\ebee-conquest\engine\core.py:402: size=1003 KiB (+1003 KiB), count=22040 (+22040), average=47 B
+D:\Github\Repo\ebee-conquest\engine\core.py:248: size=997 KiB (+997 KiB), count=20062 (+20062), average=51 B
+C:\Users\User\AppData\Roaming\Python\Python314\site-packages\pygame\__init__.py:376: size=940 KiB (+940 KiB), count=24052 (+24052), average=40 B
+D:\Github\Repo\ebee-conquest\engine\runtime.py:992: size=703 KiB (+703 KiB), count=15515 (+15515), average=46 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:979: size=683 KiB (+683 KiB), count=5140 (+5140), average=136 B
+D:\Github\Repo\ebee-conquest\engine\camera.py:45: size=661 KiB (+661 KiB), count=16900 (+16900), average=40 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:186: size=631 KiB (+631 KiB), count=10072 (+10072), average=64 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:195: size=628 KiB (+628 KiB), count=10046 (+10046), average=64 B
+<frozen importlib._bootstrap_external>:511: size=539 KiB (+539 KiB), count=4587 (+4587), average=120 B
+D:\Github\Repo\ebee-conquest\engine\eso.py:97: size=529 KiB (+529 KiB), count=10046 (+10046), average=54 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:981: size=281 KiB (+281 KiB), count=7710 (+7710), average=37 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:980: size=273 KiB (+273 KiB), count=7382 (+7382), average=38 B
+D:\Github\Repo\ebee-conquest\engine\runtime.py:1320: size=212 KiB (+212 KiB), count=1046 (+1046), average=208 B
+D:\Github\Repo\ebee-conquest\engine\runtime.py:1391: size=203 KiB (+203 KiB), count=2 (+2), average=101 KiB
+D:\Github\Repo\ebee-conquest\engine\npc\strength.py:24: size=203 KiB (+203 KiB), count=1 (+1), average=203 KiB
+D:\Github\Repo\ebee-conquest\engine\core.py:383: size=101 KiB (+101 KiB), count=1044 (+1044), average=99 B
+D:\Github\Repo\ebee-conquest\engine\runtime.py:1496: size=84.4 KiB (+84.4 KiB), count=1350 (+1350), average=64 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:196: size=83.1 KiB (+83.1 KiB), count=1 (+1), average=83.1 KiB
+C:\Users\User\AppData\Roaming\Python\Python314\site-packages\pygame\sysfont.py:50: size=65.2 KiB (+65.2 KiB), count=662 (+662), average=101 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:984: size=60.2 KiB (+60.2 KiB), count=2570 (+2570), average=24 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:983: size=60.2 KiB (+60.2 KiB), count=2570 (+2570), average=24 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:975: size=60.2 KiB (+60.2 KiB), count=2570 (+2570), average=24 B
+C:\Python314\Lib\collections\__init__.py:515: size=59.5 KiB (+59.5 KiB), count=280 (+280), average=218 B
+D:\Github\Repo\ebee-conquest\engine\core.py:376: size=57.2 KiB (+57.2 KiB), count=1046 (+1046), average=56 B
+C:\Python314\Lib\linecache.py:188: size=39.6 KiB (+39.6 KiB), count=461 (+461), average=88 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:1011: size=39.4 KiB (+39.4 KiB), count=412 (+412), average=98 B
+D:\Github\Repo\ebee-conquest\engine\runtime.py:996: size=30.8 KiB (+30.8 KiB), count=197 (+197), average=160 B
+D:\Github\Repo\ebee-conquest\engine\runtime.py:981: size=27.4 KiB (+27.4 KiB), count=783 (+783), average=36 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:1106: size=25.5 KiB (+25.5 KiB), count=408 (+408), average=64 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:1102: size=25.5 KiB (+25.5 KiB), count=408 (+408), average=64 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:1098: size=25.5 KiB (+25.5 KiB), count=408 (+408), average=64 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:978: size=24.2 KiB (+24.2 KiB), count=155 (+155), average=160 B
+<frozen ntpath>:137: size=22.5 KiB (+22.5 KiB), count=331 (+331), average=69 B
+C:\Python314\Lib\collections\__init__.py:447: size=21.7 KiB (+21.7 KiB), count=232 (+232), average=96 B
+<frozen abc>:106: size=20.2 KiB (+20.2 KiB), count=68 (+68), average=304 B
+D:\Github\Repo\ebee-conquest\engine\movement.py:1169: size=16.5 KiB (+16.5 KiB), count=311 (+311), average=54 B
+C:\Users\User\AppData\Roaming\Python\Python314\site-packages\pygame\sysfont.py:49: size=15.9 KiB (+15.9 KiB), count=254 (+254), average=64 B

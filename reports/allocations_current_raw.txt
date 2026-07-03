@@ -1,0 +1,44 @@
+CURRENT VERSION - APRIL 29 2024
+local@EbeeEngine:~$   0.13s | pygame init | working=90.0MB private=421.1MB | python=3.14.4 pygame=2.5.2
+local@EbeeEngine:~$   0.23s | window created | working=93.8MB private=425.0MB | size=1280x720 driver=dummy fullscreen=False
+local@EbeeEngine:~$   0.32s | fonts done | working=94.7MB private=425.5MB | development_mode=True
+local@EbeeEngine:~$   ESO cache hit for states.svg with 1046 shapes!
+local@EbeeEngine:~$   5.60s | Precompiling states geometry... | working=216.8MB private=550.4MB | progress=0/1 (0.0%) elapsed=5.5s
+local@EbeeEngine:~$   5.68s | Precompiling states geometry... | working=216.9MB private=550.5MB | progress=1/1 (100.0%) elapsed=5.6s
+local@EbeeEngine:~$   5.68s | states loaded | working=216.9MB private=550.5MB | count=1046
+local@EbeeEngine:~$   5.98s | countries loaded | working=216.9MB private=550.5MB | state_links=42 country_colors=11 visible_states=42 total_states=1046
+local@EbeeEngine:~$   ESO cache hit for provinces.svg with 10046 shapes!
+local@EbeeEngine:~$  22.46s | Precompiling provinces geometry... | working=446.1MB private=786.6MB | progress=0/1 (0.0%) elapsed=22.3s
+local@EbeeEngine:~$  22.58s | Precompiling provinces geometry... | working=446.1MB private=786.6MB | progress=1/1 (100.0%) elapsed=22.5s
+local@EbeeEngine:~$  22.58s | provinces loaded | working=446.1MB private=786.6MB | count=10046
+local@EbeeEngine:~$  23.51s | province metadata done | working=449.6MB private=790.6MB | count=10046
+local@EbeeEngine:~$  24.08s | province graph cache check | working=460.3MB private=801.0MB | status=hit elapsed=0.563s nodes=10046
+local@EbeeEngine:~$  24.22s | Compiling province graph.. | working=460.3MB private=801.0MB | progress=0/1 (0.0%) elapsed=24.1s
+local@EbeeEngine:~$  24.33s | Compiling province graph.. | working=460.3MB private=801.0MB | progress=1/1 (100.0%) elapsed=24.2s
+local@EbeeEngine:~$  24.37s | province graph done | working=460.4MB private=801.2MB | nodes=10046 edges=26889
+local@EbeeEngine:~$  24.84s | world partitioned | working=460.4MB private=801.2MB | playable_states=42 non_playable_states=1004 grouping_elapsed=0.468s
+local@EbeeEngine:~$  29.63s | blacked world prepared | working=463.2MB private=804.0MB | states=1004 polygons=1903 surface=1401x510 elapsed=4.743s
+local@EbeeEngine:~$  29.63s | blacked render config | working=463.2MB private=804.0MB | bucket_step=0.03 close_zoom_threshold=1.45
+local@EbeeEngine:~$  29.63s | startup complete | working=463.2MB private=804.0MB | map_size=1399.0x508.0
+scriptloader@EbeeEngine:~$ [test] TEST script ready
+menu/scriptloader@EbeeEngine:~$ test loaded
+scriptloader@EbeeEngine:~$ [toolboxtest] developer toolbox loaded
+menu/scriptloader@EbeeEngine:~$ toolboxtest loaded
+C:\Users\User\AppData\Roaming\Python\Python314\site-packages\pygame\sysfont.py:490: UserWarning: The system font 'freesansbold.ttf' couldn't be found. Did you mean: 'freesansbold', 'freesans'? Using the default font instead.
+  warnings.warn(
+scriptloader@EbeeEngine:~$ [test] war declared: Malaysia v Brunei
+scriptloader@EbeeEngine:~$ [test] war declared: Malaysia v Indonesia
+scriptloader@EbeeEngine:~$ [test] war declared: Malaysia v Singapore
+scriptloader@EbeeEngine:~$ [test] war declared: Malaysia v Thailand
+EBEE_PERF_SPAWNWAR turn=2 sources=Malaysia created=4 active_wars=4 pairs=[('Malaysia', 'Brunei'), ('Malaysia', 'Indonesia'), ('Malaysia', 'Singapore'), ('Malaysia', 'Thailand')]
+EBEE_PERF_TURN_IDLE turn=2 frames=1 warmup_frames=0 avg_ms=1828.924 p95_ms=1828.924 p99_ms=1828.924 max_ms=1828.924 fps_est=0.5 orders=14 active_wars=4
+EBEE_PERF_TURN_SECTION turn=2 runtime_ui_draw avg_ms=741.036
+EBEE_PERF_TURN_SECTION turn=2 borders_labels_capitals avg_ms=614.443
+EBEE_PERF_TURN_SECTION turn=2 background_grid avg_ms=178.919
+EBEE_PERF_TURN_SECTION turn=2 map_polygons avg_ms=161.870
+EBEE_PERF_TURN_SECTION turn=2 movement_paths avg_ms=77.771
+EBEE_PERF_TURN_SECTION turn=2 troop_badges avg_ms=29.365
+EBEE_PERF_TURN_SECTION turn=2 frontline_overlay avg_ms=19.310
+EBEE_PERF_TURN_SECTION turn=2 ui_state_prep avg_ms=5.905
+EBEE_PERF_TURN_SECTION turn=2 overlays_console avg_ms=0.305
+EBEE_PROFILE_COMPLETE wall_seconds=46.579 rss_mb=315.2109375

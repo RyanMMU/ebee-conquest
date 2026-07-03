@@ -1,0 +1,582 @@
+{
+  "protocol_version": 1,
+  "python": "3.14.4 (tags/v3.14.4:23116f9, Apr  7 2026, 14:10:54) [MSC v.1944 64 bit (AMD64)]",
+  "wall_seconds": 11.383495700079948,
+  "scenario": {
+    "country": "Malaysia",
+    "turn": 100,
+    "idle_frames": 60,
+    "warmup_frames": 5,
+    "monitor_turns": 3,
+    "war_countries": [
+      "Malaysia",
+      "Singapore",
+      "Indonesia",
+      "Thailand",
+      "Philippines",
+      "Vietnam",
+      "Myanmar",
+      "Cambodia",
+      "Laos",
+      "Brunei",
+      "Timor_Leste"
+    ],
+    "headless": true
+  },
+  "process_memory": {
+    "rss_mb": 215.2109375,
+    "vms_mb": 545.2734375,
+    "private_mb": 545.2734375,
+    "peak_rss_mb": 276.87109375
+  },
+  "metrics": [
+    {
+      "metric": "EBEE_PERF_SPAWNWAR",
+      "turn": 100,
+      "sources": "Malaysia,Singapore,Indonesia,Thailand,Philippines,Vietnam,Myanmar,Cambodia,Laos,Brunei,Timor_Leste",
+      "created": 22,
+      "active_wars": 22,
+      "pairs": "[('Malaysia'",
+      "raw": "EBEE_PERF_SPAWNWAR turn=100 sources=Malaysia,Singapore,Indonesia,Thailand,Philippines,Vietnam,Myanmar,Cambodia,Laos,Brunei,Timor_Leste created=22 active_wars=22 pairs=[('Malaysia', 'Brunei'), ('Malaysia', 'Indonesia'), ('Malaysia', 'Singapore'), ('Malaysia', 'Thailand'), ('Indonesia', 'Timor_Leste'), ('Thailand', 'Cambodia'), ('Thailand', 'Laos'), ('Thailand', 'Myanmar'), ('Philippines', 'Brunei'), ('Philippines', 'Cambodia'), ('Philippines', 'Indonesia'), ('Philippines', 'Laos')]"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_IDLE",
+      "turn": 100,
+      "frames": 60,
+      "warmup_frames": 5,
+      "avg_ms": 21.136,
+      "p95_ms": 31.634,
+      "p99_ms": 34.407,
+      "max_ms": 34.407,
+      "fps_est": 47.3,
+      "orders": 15,
+      "active_wars": 22,
+      "raw": "EBEE_PERF_TURN_IDLE turn=100 frames=60 warmup_frames=5 avg_ms=21.136 p95_ms=31.634 p99_ms=34.407 max_ms=34.407 fps_est=47.3 orders=15 active_wars=22"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 100,
+      "avg_ms": 7.849,
+      "section": "runtime_ui_draw",
+      "raw": "EBEE_PERF_TURN_SECTION turn=100 runtime_ui_draw avg_ms=7.849"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 100,
+      "avg_ms": 5.414,
+      "section": "map_polygons",
+      "raw": "EBEE_PERF_TURN_SECTION turn=100 map_polygons avg_ms=5.414"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 100,
+      "avg_ms": 2.359,
+      "section": "ui_state_prep",
+      "raw": "EBEE_PERF_TURN_SECTION turn=100 ui_state_prep avg_ms=2.359"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 100,
+      "avg_ms": 2.099,
+      "section": "troop_badges",
+      "raw": "EBEE_PERF_TURN_SECTION turn=100 troop_badges avg_ms=2.099"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 100,
+      "avg_ms": 1.303,
+      "section": "background_grid",
+      "raw": "EBEE_PERF_TURN_SECTION turn=100 background_grid avg_ms=1.303"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 100,
+      "avg_ms": 0.951,
+      "section": "borders_labels_capitals",
+      "raw": "EBEE_PERF_TURN_SECTION turn=100 borders_labels_capitals avg_ms=0.951"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 100,
+      "avg_ms": 0.695,
+      "section": "movement_paths",
+      "raw": "EBEE_PERF_TURN_SECTION turn=100 movement_paths avg_ms=0.695"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 100,
+      "avg_ms": 0.246,
+      "section": "frame_wait",
+      "raw": "EBEE_PERF_TURN_SECTION turn=100 frame_wait avg_ms=0.246"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 100,
+      "avg_ms": 0.097,
+      "section": "update_prep",
+      "raw": "EBEE_PERF_TURN_SECTION turn=100 update_prep avg_ms=0.097"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 100,
+      "avg_ms": 0.085,
+      "section": "frontline_overlay",
+      "raw": "EBEE_PERF_TURN_SECTION turn=100 frontline_overlay avg_ms=0.085"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 100,
+      "avg_ms": 0.031,
+      "section": "events_display",
+      "raw": "EBEE_PERF_TURN_SECTION turn=100 events_display avg_ms=0.031"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 100,
+      "avg_ms": 0.006,
+      "section": "overlays_console",
+      "raw": "EBEE_PERF_TURN_SECTION turn=100 overlays_console avg_ms=0.006"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_ADVANCE",
+      "from": 100,
+      "to": 101,
+      "ms": 82.25,
+      "orders": 139,
+      "active_wars": 22,
+      "raw": "EBEE_PERF_TURN_ADVANCE from=100 to=101 ms=82.250 orders=139 active_wars=22"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 100,
+      "to": 101,
+      "phase": "movement_frontlines",
+      "ms": 0.102,
+      "raw": "EBEE_PERF_TURN_PHASE from=100 to=101 phase=movement_frontlines ms=0.102"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 100,
+      "to": 101,
+      "phase": "focus_economy",
+      "ms": 2.107,
+      "raw": "EBEE_PERF_TURN_PHASE from=100 to=101 phase=focus_economy ms=2.107"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 100,
+      "to": 101,
+      "phase": "npc_ai",
+      "ms": 78.308,
+      "raw": "EBEE_PERF_TURN_PHASE from=100 to=101 phase=npc_ai ms=78.308"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 100,
+      "to": 101,
+      "phase": "capitulation_domestic",
+      "ms": 1.666,
+      "raw": "EBEE_PERF_TURN_PHASE from=100 to=101 phase=capitulation_domestic ms=1.666"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 100,
+      "to": 101,
+      "phase": "post_frontlines_events",
+      "ms": 0.063,
+      "raw": "EBEE_PERF_TURN_PHASE from=100 to=101 phase=post_frontlines_events ms=0.063"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_IDLE",
+      "turn": 101,
+      "frames": 60,
+      "warmup_frames": 5,
+      "avg_ms": 16.647,
+      "p95_ms": 18.558,
+      "p99_ms": 22.074,
+      "max_ms": 22.074,
+      "fps_est": 60.1,
+      "orders": 139,
+      "active_wars": 22,
+      "raw": "EBEE_PERF_TURN_IDLE turn=101 frames=60 warmup_frames=5 avg_ms=16.647 p95_ms=18.558 p99_ms=22.074 max_ms=22.074 fps_est=60.1 orders=139 active_wars=22"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 101,
+      "avg_ms": 4.782,
+      "section": "runtime_ui_draw",
+      "raw": "EBEE_PERF_TURN_SECTION turn=101 runtime_ui_draw avg_ms=4.782"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 101,
+      "avg_ms": 4.301,
+      "section": "map_polygons",
+      "raw": "EBEE_PERF_TURN_SECTION turn=101 map_polygons avg_ms=4.301"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 101,
+      "avg_ms": 3.141,
+      "section": "frame_wait",
+      "raw": "EBEE_PERF_TURN_SECTION turn=101 frame_wait avg_ms=3.141"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 101,
+      "avg_ms": 1.502,
+      "section": "troop_badges",
+      "raw": "EBEE_PERF_TURN_SECTION turn=101 troop_badges avg_ms=1.502"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 101,
+      "avg_ms": 1.264,
+      "section": "background_grid",
+      "raw": "EBEE_PERF_TURN_SECTION turn=101 background_grid avg_ms=1.264"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 101,
+      "avg_ms": 0.656,
+      "section": "borders_labels_capitals",
+      "raw": "EBEE_PERF_TURN_SECTION turn=101 borders_labels_capitals avg_ms=0.656"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 101,
+      "avg_ms": 0.575,
+      "section": "movement_paths",
+      "raw": "EBEE_PERF_TURN_SECTION turn=101 movement_paths avg_ms=0.575"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 101,
+      "avg_ms": 0.243,
+      "section": "ui_state_prep",
+      "raw": "EBEE_PERF_TURN_SECTION turn=101 ui_state_prep avg_ms=0.243"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 101,
+      "avg_ms": 0.086,
+      "section": "update_prep",
+      "raw": "EBEE_PERF_TURN_SECTION turn=101 update_prep avg_ms=0.086"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 101,
+      "avg_ms": 0.065,
+      "section": "frontline_overlay",
+      "raw": "EBEE_PERF_TURN_SECTION turn=101 frontline_overlay avg_ms=0.065"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 101,
+      "avg_ms": 0.027,
+      "section": "events_display",
+      "raw": "EBEE_PERF_TURN_SECTION turn=101 events_display avg_ms=0.027"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 101,
+      "avg_ms": 0.004,
+      "section": "overlays_console",
+      "raw": "EBEE_PERF_TURN_SECTION turn=101 overlays_console avg_ms=0.004"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_ADVANCE",
+      "from": 101,
+      "to": 102,
+      "ms": 69.492,
+      "orders": 182,
+      "active_wars": 22,
+      "raw": "EBEE_PERF_TURN_ADVANCE from=101 to=102 ms=69.492 orders=182 active_wars=22"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 101,
+      "to": 102,
+      "phase": "movement_frontlines",
+      "ms": 3.435,
+      "raw": "EBEE_PERF_TURN_PHASE from=101 to=102 phase=movement_frontlines ms=3.435"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 101,
+      "to": 102,
+      "phase": "focus_economy",
+      "ms": 1.907,
+      "raw": "EBEE_PERF_TURN_PHASE from=101 to=102 phase=focus_economy ms=1.907"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 101,
+      "to": 102,
+      "phase": "npc_ai",
+      "ms": 62.633,
+      "raw": "EBEE_PERF_TURN_PHASE from=101 to=102 phase=npc_ai ms=62.633"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 101,
+      "to": 102,
+      "phase": "capitulation_domestic",
+      "ms": 1.486,
+      "raw": "EBEE_PERF_TURN_PHASE from=101 to=102 phase=capitulation_domestic ms=1.486"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 101,
+      "to": 102,
+      "phase": "post_frontlines_events",
+      "ms": 0.03,
+      "raw": "EBEE_PERF_TURN_PHASE from=101 to=102 phase=post_frontlines_events ms=0.030"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_IDLE",
+      "turn": 102,
+      "frames": 60,
+      "warmup_frames": 5,
+      "avg_ms": 16.579,
+      "p95_ms": 18.871,
+      "p99_ms": 20.284,
+      "max_ms": 20.284,
+      "fps_est": 60.3,
+      "orders": 182,
+      "active_wars": 22,
+      "raw": "EBEE_PERF_TURN_IDLE turn=102 frames=60 warmup_frames=5 avg_ms=16.579 p95_ms=18.871 p99_ms=20.284 max_ms=20.284 fps_est=60.3 orders=182 active_wars=22"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 102,
+      "avg_ms": 5.961,
+      "section": "map_polygons",
+      "raw": "EBEE_PERF_TURN_SECTION turn=102 map_polygons avg_ms=5.961"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 102,
+      "avg_ms": 4.641,
+      "section": "runtime_ui_draw",
+      "raw": "EBEE_PERF_TURN_SECTION turn=102 runtime_ui_draw avg_ms=4.641"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 102,
+      "avg_ms": 1.54,
+      "section": "frame_wait",
+      "raw": "EBEE_PERF_TURN_SECTION turn=102 frame_wait avg_ms=1.540"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 102,
+      "avg_ms": 1.502,
+      "section": "troop_badges",
+      "raw": "EBEE_PERF_TURN_SECTION turn=102 troop_badges avg_ms=1.502"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 102,
+      "avg_ms": 1.354,
+      "section": "background_grid",
+      "raw": "EBEE_PERF_TURN_SECTION turn=102 background_grid avg_ms=1.354"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 102,
+      "avg_ms": 0.592,
+      "section": "movement_paths",
+      "raw": "EBEE_PERF_TURN_SECTION turn=102 movement_paths avg_ms=0.592"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 102,
+      "avg_ms": 0.577,
+      "section": "borders_labels_capitals",
+      "raw": "EBEE_PERF_TURN_SECTION turn=102 borders_labels_capitals avg_ms=0.577"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 102,
+      "avg_ms": 0.237,
+      "section": "ui_state_prep",
+      "raw": "EBEE_PERF_TURN_SECTION turn=102 ui_state_prep avg_ms=0.237"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 102,
+      "avg_ms": 0.081,
+      "section": "update_prep",
+      "raw": "EBEE_PERF_TURN_SECTION turn=102 update_prep avg_ms=0.081"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 102,
+      "avg_ms": 0.066,
+      "section": "frontline_overlay",
+      "raw": "EBEE_PERF_TURN_SECTION turn=102 frontline_overlay avg_ms=0.066"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 102,
+      "avg_ms": 0.024,
+      "section": "events_display",
+      "raw": "EBEE_PERF_TURN_SECTION turn=102 events_display avg_ms=0.024"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 102,
+      "avg_ms": 0.004,
+      "section": "overlays_console",
+      "raw": "EBEE_PERF_TURN_SECTION turn=102 overlays_console avg_ms=0.004"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_ADVANCE",
+      "from": 102,
+      "to": 103,
+      "ms": 44.306,
+      "orders": 218,
+      "active_wars": 22,
+      "raw": "EBEE_PERF_TURN_ADVANCE from=102 to=103 ms=44.306 orders=218 active_wars=22"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 102,
+      "to": 103,
+      "phase": "movement_frontlines",
+      "ms": 3.104,
+      "raw": "EBEE_PERF_TURN_PHASE from=102 to=103 phase=movement_frontlines ms=3.104"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 102,
+      "to": 103,
+      "phase": "focus_economy",
+      "ms": 2.472,
+      "raw": "EBEE_PERF_TURN_PHASE from=102 to=103 phase=focus_economy ms=2.472"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 102,
+      "to": 103,
+      "phase": "npc_ai",
+      "ms": 37.368,
+      "raw": "EBEE_PERF_TURN_PHASE from=102 to=103 phase=npc_ai ms=37.368"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 102,
+      "to": 103,
+      "phase": "capitulation_domestic",
+      "ms": 1.334,
+      "raw": "EBEE_PERF_TURN_PHASE from=102 to=103 phase=capitulation_domestic ms=1.334"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_PHASE",
+      "from": 102,
+      "to": 103,
+      "phase": "post_frontlines_events",
+      "ms": 0.028,
+      "raw": "EBEE_PERF_TURN_PHASE from=102 to=103 phase=post_frontlines_events ms=0.028"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_IDLE",
+      "turn": 103,
+      "frames": 60,
+      "warmup_frames": 5,
+      "avg_ms": 16.789,
+      "p95_ms": 19.231,
+      "p99_ms": 19.781,
+      "max_ms": 19.781,
+      "fps_est": 59.6,
+      "orders": 218,
+      "active_wars": 22,
+      "raw": "EBEE_PERF_TURN_IDLE turn=103 frames=60 warmup_frames=5 avg_ms=16.789 p95_ms=19.231 p99_ms=19.781 max_ms=19.781 fps_est=59.6 orders=218 active_wars=22"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 103,
+      "avg_ms": 6.471,
+      "section": "map_polygons",
+      "raw": "EBEE_PERF_TURN_SECTION turn=103 map_polygons avg_ms=6.471"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 103,
+      "avg_ms": 4.744,
+      "section": "runtime_ui_draw",
+      "raw": "EBEE_PERF_TURN_SECTION turn=103 runtime_ui_draw avg_ms=4.744"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 103,
+      "avg_ms": 1.541,
+      "section": "troop_badges",
+      "raw": "EBEE_PERF_TURN_SECTION turn=103 troop_badges avg_ms=1.541"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 103,
+      "avg_ms": 1.43,
+      "section": "background_grid",
+      "raw": "EBEE_PERF_TURN_SECTION turn=103 background_grid avg_ms=1.430"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 103,
+      "avg_ms": 1.052,
+      "section": "frame_wait",
+      "raw": "EBEE_PERF_TURN_SECTION turn=103 frame_wait avg_ms=1.052"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 103,
+      "avg_ms": 0.602,
+      "section": "movement_paths",
+      "raw": "EBEE_PERF_TURN_SECTION turn=103 movement_paths avg_ms=0.602"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 103,
+      "avg_ms": 0.557,
+      "section": "borders_labels_capitals",
+      "raw": "EBEE_PERF_TURN_SECTION turn=103 borders_labels_capitals avg_ms=0.557"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 103,
+      "avg_ms": 0.23,
+      "section": "ui_state_prep",
+      "raw": "EBEE_PERF_TURN_SECTION turn=103 ui_state_prep avg_ms=0.230"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 103,
+      "avg_ms": 0.071,
+      "section": "update_prep",
+      "raw": "EBEE_PERF_TURN_SECTION turn=103 update_prep avg_ms=0.071"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 103,
+      "avg_ms": 0.062,
+      "section": "frontline_overlay",
+      "raw": "EBEE_PERF_TURN_SECTION turn=103 frontline_overlay avg_ms=0.062"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 103,
+      "avg_ms": 0.024,
+      "section": "events_display",
+      "raw": "EBEE_PERF_TURN_SECTION turn=103 events_display avg_ms=0.024"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 103,
+      "avg_ms": 0.004,
+      "section": "overlays_console",
+      "raw": "EBEE_PERF_TURN_SECTION turn=103 overlays_console avg_ms=0.004"
+    }
+  ]
+}

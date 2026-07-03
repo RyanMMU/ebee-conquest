@@ -1,4 +1,5 @@
 from engine.npc import NpcDirector
+from engine.npc.index import NpcCountryIndex
 
 
 def _economy_config():
@@ -41,6 +42,35 @@ def _director(provincemap, provincegraph, playercountry, wars, economy_config=No
     director.setplayercountry(playercountry)
     director.sync_player_wars(playercountry, wars)
     return director, events
+
+
+def test_country_alias_lookup_is_reused_without_rescanning_provinces():
+    provincemap = {
+        "A1": _province("A1", "Alpha"),
+        "B1": _province("B1", "Beta"),
+    }
+    countryindex = NpcCountryIndex(provincemap, {})
+    countryindex.rebuild()
+
+    def fail_if_rebuilt():
+        raise AssertionError("cached country aliases should avoid a province rescan")
+
+    countryindex.rebuild = fail_if_rebuilt
+    assert countryindex.canonicalizecountry("  aLPHa ") == "Alpha"
+    assert countryindex.canonicalizecountry("BETA") == "Beta"
+
+
+def test_country_alias_lookup_refreshes_when_world_index_rebuilds():
+    province = _province("A1", "Alpha")
+    countryindex = NpcCountryIndex({"A1": province}, {})
+    countryindex.rebuild()
+
+    province["ownercountry"] = "New Republic"
+    province["controllercountry"] = "New Republic"
+    province["country"] = "New Republic"
+    countryindex.rebuild()
+
+    assert countryindex.canonicalizecountry("new republic") == "New Republic"
 
 
 def test_npc_recruits_for_non_player_country():

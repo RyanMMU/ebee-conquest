@@ -996,6 +996,19 @@ def getcachedscreenpolygon(polygon, zoomvalue, offsetx, offsety):
     cache[cachekey] = cachedentry
     return cachedentry
 
+
+def getmapcacheplan(cacheallowed, currentkey, cachedkey, candidatekey, rejectedkey):
+    """Return cache hit/build decisions without weakening map hit testing."""
+    cachehit = cacheallowed and rejectedkey != currentkey and cachedkey == currentkey
+    cachebuild = (
+        cacheallowed
+        and not cachehit
+        and candidatekey == currentkey
+        and rejectedkey != currentkey
+    )
+    return cachehit, cachebuild
+
+
 # Loading screen and main loop starts 
 # start after main()
 
@@ -1475,6 +1488,11 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
         }
         for provinceid in playableprovinceidset
     }
+    coastalprovinceidset = movementmodule.buildcoastalprovinceidset(
+        provincemap,
+        provincegraph,
+        candidateprovinceidset=playableprovinceidset,
+    )
 
     provinceedgepairlist = []
     for firstprovinceid, neighboridset in playableprovincegraph.items():
@@ -1611,6 +1629,10 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
     except ValueError:
         perfidleframes = 0
     try:
+        perfwarmupframes = max(0, int(os.environ.get("EBEE_PERF_WARMUP_FRAMES", "0") or "0"))
+    except ValueError:
+        perfwarmupframes = 0
+    try:
         perfwarturn = int(os.environ.get("EBEE_PERF_WAR_TURN", "0") or "0")
     except ValueError:
         perfwarturn = 0
@@ -1624,6 +1646,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
         if countryname.strip()
     ]
     perfmonitoractive = perfwarturn > 0 and perfmonitorturns > 0 and bool(perfwarcountries)
+    # Monitor N turn advances, which yields N + 1 idle-frame snapshots.
     perfmonitorstopturn = perfwarturn + perfmonitorturns
     if perfmonitoractive and perfidleframes <= 0:
         perfidleframes = 30
@@ -1632,6 +1655,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
     perfsectiontotals = {}
     perfidlecollecting = False
     perfmonitoridleturn = None
+    perfwarmupremaining = perfwarmupframes
     perfwarspawned = False
     sea_gradient_cache = None
     sea_gradient_cache_size = None
@@ -1639,6 +1663,14 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
     grid_overlay_cache_key = None
     movement_path_overlay_cache = None
     movement_path_overlay_cache_key = None
+    country_border_overlay_cache = None
+    country_border_overlay_cache_key = None
+    country_border_overlay_source = None
+    map_polygon_cache = None
+    map_polygon_cache_key = None
+    map_polygon_candidate_key = None
+    map_polygon_rejected_key = None
+    map_polygon_revision = 0
     map_vignette_cache = None
     map_vignette_cache_size = None
     cinematicpulseoverlay = PulseLayer()
@@ -1675,11 +1707,13 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
     # THIS is the NPC instance
     # controls non player country
     # access to runtime data but not rendering or input
-    # provincemap and provincegraph for decision making, 
+    # NPC decisions only involve playable provinces. The filtered map retains
+    # the original province objects, so troop/control mutations remain shared
+    # with the runtime without scanning thousands of inert world-map nodes.
     # can emit orders through eventbus, economyconfig for economic decisions, countrytocolorlookup for any color needs
     npcdirector = npcmodule.NpcDirector(
-        provincemap,
-        provincegraph,
+        playableprovincemap,
+        playableprovincegraph,
         countrytocolorlookup=countrytocolorlookup,
         emit=eventbus.emit,
         economyconfig=economyconfig,
@@ -1850,27 +1884,10 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
         return (second, first)
 
     def canonicalizecountry(rawcountry):
-        if rawcountry is None:
-            return None
-
-        countrytext = str(rawcountry).strip()
-        if not countrytext:
-            return None
-
-        aliaslookup = {}
-        for province in provincemap.values():
-            for key in ("ownercountry", "controllercountry", "country"):
-                knowncountry = province.get(key)
-                if not knowncountry:
-                    continue
-                knowntext = str(knowncountry).strip()
-                if not knowntext:
-                    continue
-                lowerknown = knowntext.lower()
-                if lowerknown not in aliaslookup:
-                    aliaslookup[lowerknown] = knowntext
-
-        return aliaslookup.get(countrytext.lower(), countrytext)
+        # The NPC world index is rebuilt after control-changing movement each
+        # turn, so its alias table stays current without rescanning every
+        # province for every combat and occupation event.
+        return npcdirector.countryindex.canonicalizecountry(rawcountry)
 
     def safeint(value, default=0):
         try:
@@ -3605,6 +3622,10 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
             perf_section_start = 0.0
             perf_sections_frame = {}
         elapsedseconds = clock.tick(60) / 1000.0
+        if perfidlecollecting:
+            perfsectionnow = time.perf_counter()
+            perf_sections_frame["frame_wait"] = (perfsectionnow - perf_section_start) * 1000.0
+            perf_section_start = perfsectionnow
         ambientphasetimer += elapsedseconds
         camerashakeamount = max(0.0, camerashakeamount - elapsedseconds * 18.0)
         cinematicpulseoverlay.update(elapsedseconds)
@@ -3763,6 +3784,11 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
         camerax = camerastate.x + math.sin(shakephase) * shakefalloff
         cameray = camerastate.y + math.cos(shakephase * 1.21) * shakefalloff * 0.72
 
+        if perfidlecollecting:
+            perfsectionnow = time.perf_counter()
+            perf_sections_frame["update_prep"] = (perfsectionnow - perf_section_start) * 1000.0
+            perf_section_start = perfsectionnow
+
         # draw the map inside the viewport subsurface
         map_w, map_h = screen.get_size()
         if sea_gradient_cache is None or sea_gradient_cache_size != (map_w, map_h):
@@ -3872,6 +3898,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
 
         if countrybordersdirty:
             staterenderlookupdirty = True
+            map_polygon_revision += 1
         currentstaterenderkey = (expandedstateid, gamephase)
         if staterenderlookupdirty or staterenderlookupcachekey != currentstaterenderkey:
             staterenderlookupcache = buildstaterenderlookup(
@@ -3892,10 +3919,60 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
             countrymenupulsevalue = 0.35 + 0.45 * (0.5 + 0.5 * math.sin(pygame.time.get_ticks() * 0.008))
         covidcaselookup = buildcovidcaselookup(domesticaffairsstate) if covidcasemapenabled and gamephase == "play" else None
 
+        # Pulsing map items stay on the live vector path; otherwise reuse the
+        # rasterized layer until camera, ownership, view mode, or hover input changes.
+        map_polygon_cache_allowed = not pendingcountry and not countrymenutarget
+        if map_polygon_cache_allowed:
+            renderedmapitemidset = {
+                drawitem.get("id")
+                for stateshape in playablestateshapelist
+                for drawitem in staterenderlookup.get(stateshape["id"], {}).get("drawitems", (stateshape,))
+            }
+            map_polygon_cache_allowed = (
+                renderedmapitemidset.isdisjoint(selectedprovinceidset)
+                and renderedmapitemidset.isdisjoint(routepreviewset)
+                and renderedmapitemidset.isdisjoint(movingprovinceidset)
+            )
+        current_map_polygon_cache_key = None
+        if map_polygon_cache_allowed:
+            current_map_polygon_cache_key = (
+                map_w,
+                map_h,
+                round(zoomvalue, 4),
+                round(camerax, 2),
+                round(cameray, 2),
+                tuple(round(copyshift, 2) for copyshift in copyshiftlist),
+                staterenderlookupcachekey,
+                covidcasemapenabled,
+                map_polygon_revision,
+                None if pointerovergameui else mouseposition,
+            )
+        map_polygon_cache_hit, map_polygon_cache_build = getmapcacheplan(
+            map_polygon_cache_allowed
+            and map_polygon_cache is not None,
+            current_map_polygon_cache_key,
+            map_polygon_cache_key,
+            map_polygon_candidate_key,
+            map_polygon_rejected_key,
+        )
+        if map_polygon_cache_hit:
+            screen.blit(map_polygon_cache, (0, 0))
+            maprenderstates = ()
+            mapdrawtarget = None
+        else:
+            maprenderstates = playablestateshapelist
+            mapdrawtarget = (
+                pygame.Surface((map_w, map_h), pygame.SRCALPHA)
+                if map_polygon_cache_build
+                else screen
+            )
+        map_polygon_candidate_key = current_map_polygon_cache_key
+        maprenderhadhover = False
+
         for copyshift in copyshiftlist:
             drawcamerax = camerax + copyshift
 
-            for stateshape in playablestateshapelist:
+            for stateshape in maprenderstates:
                 staterectanglescreen = getscreenrectangle(stateshape["rectangle"], zoomvalue, drawcamerax, cameray)
                 if not staterectanglescreen.colliderect(screenrectangle):
                     continue
@@ -3943,6 +4020,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                             if gamephase == "choosecountry" and not stateshape.get("country"):
                                 continue
                             itemhovered = True
+                            maprenderhadhover = True
 
                             hoveredstateid = drawitem.get("parentid", stateshape["id"])
                             hoveredprovinceid = drawitem["id"] if "parentid" in drawitem else None
@@ -4057,8 +4135,15 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
 
                     finalfillcolor = mix_color(hovercolor, (255, 226, 138), 0.25 * pulse(ambientphasetimer, 6.0)) if itemhovered else basefillcolor
                     for drawpolygon in drawpolygonlist:
-                        pygame.draw.polygon(screen, finalfillcolor, drawpolygon)
-                        pygame.draw.polygon(screen, (18, 27, 34), drawpolygon, 1)
+                        pygame.draw.polygon(mapdrawtarget, finalfillcolor, drawpolygon)
+                        pygame.draw.polygon(mapdrawtarget, (18, 27, 34), drawpolygon, 1)
+        if mapdrawtarget is not None and mapdrawtarget is not screen:
+            screen.blit(mapdrawtarget, (0, 0))
+            if not maprenderhadhover:
+                map_polygon_cache = mapdrawtarget
+                map_polygon_cache_key = current_map_polygon_cache_key
+        if maprenderhadhover:
+            map_polygon_rejected_key = current_map_polygon_cache_key
         if perfidlecollecting:
             now = time.perf_counter()
             perf_sections_frame["map_polygons"] = (now - perf_section_start) * 1000.0
@@ -4183,15 +4268,32 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
             frontlineborderedgesdirty = True
 
         if gamephase == "play" and zoomvalue >= minimumzoomforframe * 1.08:
-            gui_drawcountryborders(
-                screen,
-                countryborderentrylist,
-                zoomvalue,
-                camerax,
-                cameray,
-                copyshiftlist,
-                screenrectangle,
+            current_country_border_overlay_key = (
+                map_w,
+                map_h,
+                round(zoomvalue, 4),
+                round(camerax, 2),
+                round(cameray, 2),
+                tuple(round(copyshift, 2) for copyshift in copyshiftlist),
             )
+            if (
+                country_border_overlay_cache is None
+                or country_border_overlay_source is not countryborderentrylist
+                or country_border_overlay_cache_key != current_country_border_overlay_key
+            ):
+                country_border_overlay_cache_key = current_country_border_overlay_key
+                country_border_overlay_source = countryborderentrylist
+                country_border_overlay_cache = pygame.Surface((map_w, map_h), pygame.SRCALPHA)
+                gui_drawcountryborders(
+                    country_border_overlay_cache,
+                    countryborderentrylist,
+                    zoomvalue,
+                    camerax,
+                    cameray,
+                    copyshiftlist,
+                    screenrectangle,
+                )
+            screen.blit(country_border_overlay_cache, (0, 0))
 
         if gui_shouldshowcountrylabels(zoomvalue, minimumzoomforframe):
             gui_drawcountrylabels(
@@ -4472,56 +4574,7 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
         if perfidlecollecting:
             now = time.perf_counter()
             perf_sections_frame["overlays_console"] = (now - perf_section_start) * 1000.0
-            if perfmonitoractive:
-                if perfmonitoridleturn != currentturnnumber:
-                    perfmonitoridleturn = currentturnnumber
-                    perfidleframetimes = []
-                    perfsectiontotals = {}
-                perfidleframetimes.append((now - perf_frame_start) * 1000.0)
-                for sectionname, sectionms in perf_sections_frame.items():
-                    perfsectiontotals[sectionname] = perfsectiontotals.get(sectionname, 0.0) + sectionms
-                if len(perfidleframetimes) >= perfidleframes:
-                    ordered = sorted(perfidleframetimes)
-                    avg = sum(perfidleframetimes) / len(perfidleframetimes)
-                    p95 = ordered[int(len(ordered) * 0.95) - 1]
-                    print(
-                        "EBEE_PERF_TURN_IDLE "
-                        f"turn={currentturnnumber} frames={len(perfidleframetimes)} "
-                        f"avg_ms={avg:.3f} p95_ms={p95:.3f} "
-                        f"fps_est={1000.0 / max(0.001, avg):.1f} "
-                        f"orders={len(movementorderlist)} active_wars={len(warpairset)}",
-                        flush=True,
-                    )
-                    for sectionname, totalms in sorted(perfsectiontotals.items(), key=lambda item: item[1], reverse=True):
-                        print(
-                            f"EBEE_PERF_TURN_SECTION turn={currentturnnumber} "
-                            f"{sectionname} avg_ms={totalms / len(perfidleframetimes):.3f}",
-                            flush=True,
-                        )
-                    perfidlecollecting = False
-                    if currentturnnumber < perfmonitorstopturn:
-                        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
-                    else:
-                        isrunning = False
-            else:
-                perfidleframetimes.append((now - perf_frame_start) * 1000.0)
-                for sectionname, sectionms in perf_sections_frame.items():
-                    perfsectiontotals[sectionname] = perfsectiontotals.get(sectionname, 0.0) + sectionms
-                if len(perfidleframetimes) >= perfidleframes:
-                    ordered = sorted(perfidleframetimes)
-                    avg = sum(perfidleframetimes) / len(perfidleframetimes)
-                    p95 = ordered[int(len(ordered) * 0.95) - 1]
-                    print(
-                        "EBEE_PERF_IDLE "
-                        f"turn={currentturnnumber} frames={len(perfidleframetimes)} "
-                        f"avg_ms={avg:.3f} p95_ms={p95:.3f} "
-                        f"fps_est={1000.0 / max(0.001, avg):.1f} "
-                        f"orders={len(movementorderlist)}",
-                        flush=True,
-                    )
-                    for sectionname, totalms in sorted(perfsectiontotals.items(), key=lambda item: item[1], reverse=True):
-                        print(f"EBEE_PERF_SECTION {sectionname} avg_ms={totalms / len(perfidleframetimes):.3f}", flush=True)
-                    isrunning = False
+            perf_section_start = now
 
 
 
@@ -5329,6 +5382,16 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                         provincegraph,
                         allowedprovinceidset=allowedprovinceidset,
                     )
+                    isnavalinvasion = False
+                    if len(foundpath) < 2 and destinationcountry != playercountry:
+                        foundpath = movementmodule.findnavalinvasionpath(
+                            sourceprovinceid,
+                            hoveredprovinceid,
+                            provincemap,
+                            allowedprovinceidset=allowedprovinceidset,
+                            coastalprovinceidset=coastalprovinceidset,
+                        )
+                        isnavalinvasion = len(foundpath) >= 2
 
                     routepreviewset.update(foundpath)
                     if len(foundpath) < 2:
@@ -5346,20 +5409,29 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                     country_move_sound = country_move_sounds.get(country)
                     if country_move_sound is not None and country_move_sound.get_num_channels() == 0:
                         country_move_sound.play()
-                    
-                    movementorderlist.append(
-                        {
-                            "amount": movingtroopcount,
-                            "path": foundpath, # list of province ids to move through in order per turn
-                            "index": 0, # the current provincei n the path list
-                            "current": foundpath[0],
-                            "speedmodifier": 1.0,
-                            "controllercountry": getprovincecontroller(sourceprovince),
-                            "country": getprovincecontroller(sourceprovince),
-                            "countrycolor": sourceprovince.get("countrycolor"),
-                            "ordercreatedturn": currentturnnumber,
-                        }
-                    )
+
+                    movementorder = {
+                        "amount": movingtroopcount,
+                        "path": foundpath, # list of province ids to move through in order per turn
+                        "index": 0, # the current provincei n the path list
+                        "current": foundpath[0],
+                        "speedmodifier": 1.0,
+                        "controllercountry": getprovincecontroller(sourceprovince),
+                        "country": getprovincecontroller(sourceprovince),
+                        "countrycolor": sourceprovince.get("countrycolor"),
+                        "ordercreatedturn": currentturnnumber,
+                        "isnavalinvasion": isnavalinvasion,
+                    }
+                    navaltraveltime = None
+                    if isnavalinvasion:
+                        navaltraveltime = movementmodule.getnavalinvasiontraveltime(
+                            sourceprovinceid,
+                            hoveredprovinceid,
+                            provincemap,
+                        )
+                        movementorder["navalturnstotal"] = navaltraveltime
+                        movementorder["navalturnsremaining"] = navaltraveltime
+                    movementorderlist.append(movementorder)
                     eventbus.emit(
                         EngineEventType.MOVEORDERCREATED,
                         {
@@ -5369,6 +5441,8 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                             "troops": movingtroopcount,
                             "country": getprovincecontroller(sourceprovince),
                             "turn": currentturnnumber,
+                            "isNavalInvasion": isnavalinvasion,
+                            "navalTravelTurns": navaltraveltime,
                         },
                     )
                     emitmappulse(eventmappos, (124, 196, 255), radius=135, duration=0.78, width=3)
@@ -5390,6 +5464,8 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                 # Space = next turn (only in play phase, and not while dev console is capturing input)
                 if event.key == pygame.K_SPACE and gamephase == "play" and not devconsole.visible:
                     perfturnstart = time.perf_counter() if perfmonitoractive and currentturnnumber >= perfwarturn else None
+                    perfturnphasestart = perfturnstart
+                    perfturnphasems = {}
                     perfturnfrom = currentturnnumber
                     frontlineupdates = refreshfrontlines(allowautoadvance=True)
                     processmovementorders(
@@ -5400,6 +5476,10 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                         provincegraph=provincegraph,
                         countrycapitalprovinceidlookup=countrycapitalprovinceidlookup,
                     )
+                    if perfturnphasestart is not None:
+                        perfturnphasenow = time.perf_counter()
+                        perfturnphasems["movement_frontlines"] = (perfturnphasenow - perfturnphasestart) * 1000.0
+                        perfturnphasestart = perfturnphasenow
                     countrybordersdirty = True
                     focuseffectcontext = buildfocuseffectcontext()
                     focusturnresult = focustree.advanceturn(focuseffectcontext)
@@ -5428,11 +5508,19 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                         playerap,
                         mco_enabled=countrydata.get("mco_enabled", False),
                     )
+                    if perfturnphasestart is not None:
+                        perfturnphasenow = time.perf_counter()
+                        perfturnphasems["focus_economy"] = (perfturnphasenow - perfturnphasestart) * 1000.0
+                        perfturnphasestart = perfturnphasenow
                     npcdirector.sync_player_wars(playercountry, countriesatwarset, warpairset=warpairset)
                     npcdirector.executeturn(
                         movementorderlist,
                         currentturnnumber,
                     )
+                    if perfturnphasestart is not None:
+                        perfturnphasenow = time.perf_counter()
+                        perfturnphasems["npc_ai"] = (perfturnphasenow - perfturnphasestart) * 1000.0
+                        perfturnphasestart = perfturnphasenow
                     checkcapitulations()
                     playerstability, _ = applycapitalstabilitypenalties(
                         provincemap,
@@ -5451,6 +5539,10 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                                 "turn": currentturnnumber,
                             })
                             researching_node_id = None
+                    if perfturnphasestart is not None:
+                        perfturnphasenow = time.perf_counter()
+                        perfturnphasems["capitulation_domestic"] = (perfturnphasenow - perfturnphasestart) * 1000.0
+                        perfturnphasestart = perfturnphasenow
                     frontlineupdates.update(refreshfrontlines(allowautoadvance=False))
                     currentturnnumber += 1
                     routepreviewset = frontlineupdates
@@ -5470,6 +5562,8 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                     emitmappulse((maprect.width * 0.5, maprect.height * 0.5), (67, 181, 129), radius=240, duration=0.92, width=3)
                     camerashakeamount = max(camerashakeamount, 1.0)
                     if perfturnstart is not None:
+                        perfturnphasenow = time.perf_counter()
+                        perfturnphasems["post_frontlines_events"] = (perfturnphasenow - perfturnphasestart) * 1000.0
                         print(
                             "EBEE_PERF_TURN_ADVANCE "
                             f"from={perfturnfrom} to={currentturnnumber} "
@@ -5477,6 +5571,13 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
                             f"orders={len(movementorderlist)} active_wars={len(warpairset)}",
                             flush=True,
                         )
+                        for perfturnphasename, perfturnphasemsvalue in perfturnphasems.items():
+                            print(
+                                "EBEE_PERF_TURN_PHASE "
+                                f"from={perfturnfrom} to={currentturnnumber} "
+                                f"phase={perfturnphasename} ms={perfturnphasemsvalue:.3f}",
+                                flush=True,
+                            )
                     continue
 
 
@@ -5562,6 +5663,83 @@ def main(eventbus=None, is_fullscreen=False, volume=1.0, load_slot=None):
             screen.blit(pulse_surface, (0, 0))
 
         pygame.display.flip()
+
+        if perfidlecollecting:
+            now = time.perf_counter()
+            perf_sections_frame["events_display"] = (now - perf_section_start) * 1000.0
+            if perfmonitoractive:
+                if perfmonitoridleturn != currentturnnumber:
+                    perfmonitoridleturn = currentturnnumber
+                    perfidleframetimes = []
+                    perfsectiontotals = {}
+                    perfwarmupremaining = perfwarmupframes
+                if perfwarmupremaining > 0:
+                    perfwarmupremaining -= 1
+                else:
+                    perfidleframetimes.append((now - perf_frame_start) * 1000.0)
+                    for sectionname, sectionms in perf_sections_frame.items():
+                        perfsectiontotals[sectionname] = perfsectiontotals.get(sectionname, 0.0) + sectionms
+                if len(perfidleframetimes) >= perfidleframes:
+                    ordered = sorted(perfidleframetimes)
+                    avg = sum(perfidleframetimes) / len(perfidleframetimes)
+                    p95 = ordered[int(len(ordered) * 0.95) - 1]
+                    p99 = ordered[max(0, math.ceil(len(ordered) * 0.99) - 1)]
+                    print(
+                        "EBEE_PERF_TURN_IDLE "
+                        f"turn={currentturnnumber} frames={len(perfidleframetimes)} "
+                        f"warmup_frames={perfwarmupframes} avg_ms={avg:.3f} "
+                        f"p95_ms={p95:.3f} p99_ms={p99:.3f} max_ms={ordered[-1]:.3f} "
+                        f"fps_est={1000.0 / max(0.001, avg):.1f} "
+                        f"orders={len(movementorderlist)} active_wars={len(warpairset)}",
+                        flush=True,
+                    )
+                    for sectionname, totalms in sorted(
+                        perfsectiontotals.items(),
+                        key=lambda item: item[1],
+                        reverse=True,
+                    ):
+                        print(
+                            f"EBEE_PERF_TURN_SECTION turn={currentturnnumber} "
+                            f"{sectionname} avg_ms={totalms / len(perfidleframetimes):.3f}",
+                            flush=True,
+                        )
+                    perfidlecollecting = False
+                    if currentturnnumber < perfmonitorstopturn:
+                        pygame.event.post(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_SPACE))
+                    else:
+                        isrunning = False
+            else:
+                if perfwarmupremaining > 0:
+                    perfwarmupremaining -= 1
+                else:
+                    perfidleframetimes.append((now - perf_frame_start) * 1000.0)
+                    for sectionname, sectionms in perf_sections_frame.items():
+                        perfsectiontotals[sectionname] = perfsectiontotals.get(sectionname, 0.0) + sectionms
+                if len(perfidleframetimes) >= perfidleframes:
+                    ordered = sorted(perfidleframetimes)
+                    avg = sum(perfidleframetimes) / len(perfidleframetimes)
+                    p95 = ordered[int(len(ordered) * 0.95) - 1]
+                    p99 = ordered[max(0, math.ceil(len(ordered) * 0.99) - 1)]
+                    print(
+                        "EBEE_PERF_IDLE "
+                        f"turn={currentturnnumber} frames={len(perfidleframetimes)} "
+                        f"warmup_frames={perfwarmupframes} avg_ms={avg:.3f} "
+                        f"p95_ms={p95:.3f} p99_ms={p99:.3f} max_ms={ordered[-1]:.3f} "
+                        f"fps_est={1000.0 / max(0.001, avg):.1f} "
+                        f"orders={len(movementorderlist)}",
+                        flush=True,
+                    )
+                    for sectionname, totalms in sorted(
+                        perfsectiontotals.items(),
+                        key=lambda item: item[1],
+                        reverse=True,
+                    ):
+                        print(
+                            f"EBEE_PERF_SECTION {sectionname} "
+                            f"avg_ms={totalms / len(perfidleframetimes):.3f}",
+                            flush=True,
+                        )
+                    isrunning = False
 
     peaceaimanager.shutdown(wait=False)
     return exitdestination

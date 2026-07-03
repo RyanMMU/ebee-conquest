@@ -1,0 +1,114 @@
+CURRENT VERSION - APRIL 29 2024
+local@EbeeEngine:~$   0.23s | pygame init | working=87.9MB private=419.0MB | python=3.14.4 pygame=2.5.2
+local@EbeeEngine:~$   0.25s | window created | working=91.7MB private=422.9MB | size=1280x720 driver=dummy fullscreen=False
+local@EbeeEngine:~$   0.31s | fonts done | working=92.3MB private=423.2MB | development_mode=True
+local@EbeeEngine:~$   ESO cache hit for states.svg with 1046 shapes!
+local@EbeeEngine:~$   0.72s | Precompiling states geometry... | working=132.2MB private=463.0MB | progress=0/1 (0.0%) elapsed=0.7s
+local@EbeeEngine:~$   0.74s | Precompiling states geometry... | working=132.3MB private=463.1MB | progress=1/1 (100.0%) elapsed=0.7s
+local@EbeeEngine:~$   0.74s | states loaded | working=132.3MB private=463.1MB | count=1046
+local@EbeeEngine:~$   0.75s | countries loaded | working=132.3MB private=463.1MB | state_links=42 country_colors=11 visible_states=42 total_states=1046
+local@EbeeEngine:~$   ESO cache hit for provinces.svg with 10046 shapes!
+local@EbeeEngine:~$   2.16s | Precompiling provinces geometry... | working=202.2MB private=533.1MB | progress=0/1 (0.0%) elapsed=2.1s
+local@EbeeEngine:~$   2.18s | Precompiling provinces geometry... | working=202.3MB private=533.1MB | progress=1/1 (100.0%) elapsed=2.2s
+local@EbeeEngine:~$   2.18s | provinces loaded | working=202.3MB private=533.1MB | count=10046
+local@EbeeEngine:~$   2.25s | province metadata done | working=205.7MB private=536.1MB | count=10046
+local@EbeeEngine:~$   2.35s | province graph cache check | working=215.3MB private=545.7MB | status=hit elapsed=0.078s nodes=10046
+local@EbeeEngine:~$   2.38s | Compiling province graph.. | working=215.3MB private=545.7MB | progress=0/1 (0.0%) elapsed=2.3s
+local@EbeeEngine:~$   2.40s | Compiling province graph.. | working=215.3MB private=545.7MB | progress=1/1 (100.0%) elapsed=2.4s
+local@EbeeEngine:~$   2.41s | province graph done | working=215.3MB private=545.7MB | nodes=10046 edges=26889
+local@EbeeEngine:~$   2.42s | world partitioned | working=215.4MB private=545.7MB | playable_states=42 non_playable_states=1004 grouping_elapsed=0.014s
+local@EbeeEngine:~$   2.52s | blacked world prepared | working=218.2MB private=548.4MB | states=1004 polygons=1903 surface=1401x510 elapsed=0.079s
+local@EbeeEngine:~$   2.52s | blacked render config | working=218.2MB private=548.4MB | bucket_step=0.03 close_zoom_threshold=1.45
+local@EbeeEngine:~$   2.52s | startup complete | working=218.2MB private=548.4MB | map_size=1399.0x508.0
+scriptloader@EbeeEngine:~$ [test] TEST script ready
+menu/scriptloader@EbeeEngine:~$ test loaded
+scriptloader@EbeeEngine:~$ [toolboxtest] developer toolbox loaded
+menu/scriptloader@EbeeEngine:~$ toolboxtest loaded
+C:\Users\User\AppData\Roaming\Python\Python314\site-packages\pygame\sysfont.py:490: UserWarning: The system font 'freesansbold.ttf' couldn't be found. Did you mean: 'freesansbold', 'freesans'? Using the default font instead.
+  warnings.warn(
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 5, now 12225
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 10, now 12500
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 15, now 12775
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 20, now 13050
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 25, now 13325
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 30, now 13600
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 35, now 13875
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 40, now 14150
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 45, now 14425
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 50, now 14700
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 55, now 14975
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 60, now 15250
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 65, now 15525
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 70, now 15800
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 75, now 16075
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 80, now 16335
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 85, now 16531
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 90, now 16681
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 95, now 16831
+scriptloader@EbeeEngine:~$ [test] Malaysia received 25 gold on turn 100, now 16981
+scriptloader@EbeeEngine:~$ [test] war declared: Malaysia v Brunei
+scriptloader@EbeeEngine:~$ [test] war declared: Malaysia v Indonesia
+scriptloader@EbeeEngine:~$ [test] war declared: Malaysia v Singapore
+scriptloader@EbeeEngine:~$ [test] war declared: Malaysia v Thailand
+scriptloader@EbeeEngine:~$ [test] war declared: Indonesia v Timor_Leste
+scriptloader@EbeeEngine:~$ [test] war declared: Thailand v Cambodia
+scriptloader@EbeeEngine:~$ [test] war declared: Thailand v Laos
+scriptloader@EbeeEngine:~$ [test] war declared: Thailand v Myanmar
+scriptloader@EbeeEngine:~$ [test] war declared: Philippines v Brunei
+scriptloader@EbeeEngine:~$ [test] war declared: Philippines v Cambodia
+scriptloader@EbeeEngine:~$ [test] war declared: Philippines v Indonesia
+scriptloader@EbeeEngine:~$ [test] war declared: Philippines v Laos
+scriptloader@EbeeEngine:~$ [test] war declared: Philippines v Malaysia
+scriptloader@EbeeEngine:~$ [test] war declared: Philippines v Myanmar
+scriptloader@EbeeEngine:~$ [test] war declared: Philippines v Singapore
+scriptloader@EbeeEngine:~$ [test] war declared: Philippines v Thailand
+scriptloader@EbeeEngine:~$ [test] war declared: Philippines v Timor_Leste
+scriptloader@EbeeEngine:~$ [test] war declared: Philippines v Vietnam
+scriptloader@EbeeEngine:~$ [test] war declared: Vietnam v Cambodia
+scriptloader@EbeeEngine:~$ [test] war declared: Vietnam v Laos
+scriptloader@EbeeEngine:~$ [test] war declared: Myanmar v Laos
+scriptloader@EbeeEngine:~$ [test] war declared: Cambodia v Laos
+EBEE_PERF_SPAWNWAR turn=100 sources=Malaysia,Singapore,Indonesia,Thailand,Philippines,Vietnam,Myanmar,Cambodia,Laos,Brunei,Timor_Leste created=22 active_wars=22 pairs=[('Malaysia', 'Brunei'), ('Malaysia', 'Indonesia'), ('Malaysia', 'Singapore'), ('Malaysia', 'Thailand'), ('Indonesia', 'Timor_Leste'), ('Thailand', 'Cambodia'), ('Thailand', 'Laos'), ('Thailand', 'Myanmar'), ('Philippines', 'Brunei'), ('Philippines', 'Cambodia'), ('Philippines', 'Indonesia'), ('Philippines', 'Laos')]
+EBEE_PERF_TURN_IDLE turn=100 frames=60 avg_ms=217.682 p95_ms=24.825 fps_est=4.6 orders=4 active_wars=22
+EBEE_PERF_TURN_SECTION turn=100 background_grid avg_ms=198.449
+EBEE_PERF_TURN_SECTION turn=100 runtime_ui_draw avg_ms=9.018
+EBEE_PERF_TURN_SECTION turn=100 map_polygons avg_ms=5.316
+EBEE_PERF_TURN_SECTION turn=100 borders_labels_capitals avg_ms=2.105
+EBEE_PERF_TURN_SECTION turn=100 troop_badges avg_ms=1.878
+EBEE_PERF_TURN_SECTION turn=100 movement_paths avg_ms=0.737
+EBEE_PERF_TURN_SECTION turn=100 frontline_overlay avg_ms=0.088
+EBEE_PERF_TURN_SECTION turn=100 ui_state_prep avg_ms=0.082
+EBEE_PERF_TURN_SECTION turn=100 overlays_console avg_ms=0.007
+EBEE_PERF_TURN_ADVANCE from=100 to=101 ms=373.350 orders=128 active_wars=22
+EBEE_PERF_TURN_IDLE turn=101 frames=60 avg_ms=21.079 p95_ms=26.707 fps_est=47.4 orders=128 active_wars=22
+EBEE_PERF_TURN_SECTION turn=101 runtime_ui_draw avg_ms=8.571
+EBEE_PERF_TURN_SECTION turn=101 map_polygons avg_ms=5.347
+EBEE_PERF_TURN_SECTION turn=101 borders_labels_capitals avg_ms=2.083
+EBEE_PERF_TURN_SECTION turn=101 troop_badges avg_ms=1.992
+EBEE_PERF_TURN_SECTION turn=101 background_grid avg_ms=1.969
+EBEE_PERF_TURN_SECTION turn=101 movement_paths avg_ms=0.822
+EBEE_PERF_TURN_SECTION turn=101 ui_state_prep avg_ms=0.206
+EBEE_PERF_TURN_SECTION turn=101 frontline_overlay avg_ms=0.084
+EBEE_PERF_TURN_SECTION turn=101 overlays_console avg_ms=0.007
+EBEE_PERF_TURN_ADVANCE from=101 to=102 ms=1028.156 orders=186 active_wars=22
+EBEE_PERF_TURN_IDLE turn=102 frames=60 avg_ms=26.267 p95_ms=38.518 fps_est=38.1 orders=186 active_wars=22
+EBEE_PERF_TURN_SECTION turn=102 runtime_ui_draw avg_ms=9.613
+EBEE_PERF_TURN_SECTION turn=102 map_polygons avg_ms=8.066
+EBEE_PERF_TURN_SECTION turn=102 borders_labels_capitals avg_ms=2.798
+EBEE_PERF_TURN_SECTION turn=102 troop_badges avg_ms=2.255
+EBEE_PERF_TURN_SECTION turn=102 background_grid avg_ms=2.198
+EBEE_PERF_TURN_SECTION turn=102 movement_paths avg_ms=1.196
+EBEE_PERF_TURN_SECTION turn=102 frontline_overlay avg_ms=0.116
+EBEE_PERF_TURN_SECTION turn=102 ui_state_prep avg_ms=0.018
+EBEE_PERF_TURN_SECTION turn=102 overlays_console avg_ms=0.007
+EBEE_PERF_TURN_ADVANCE from=102 to=103 ms=869.152 orders=209 active_wars=22
+EBEE_PERF_TURN_IDLE turn=103 frames=60 avg_ms=32.102 p95_ms=41.999 fps_est=31.2 orders=209 active_wars=22
+EBEE_PERF_TURN_SECTION turn=103 runtime_ui_draw avg_ms=12.532
+EBEE_PERF_TURN_SECTION turn=103 map_polygons avg_ms=9.558
+EBEE_PERF_TURN_SECTION turn=103 troop_badges avg_ms=2.927
+EBEE_PERF_TURN_SECTION turn=103 borders_labels_capitals avg_ms=2.924
+EBEE_PERF_TURN_SECTION turn=103 background_grid avg_ms=2.728
+EBEE_PERF_TURN_SECTION turn=103 movement_paths avg_ms=1.267
+EBEE_PERF_TURN_SECTION turn=103 frontline_overlay avg_ms=0.138
+EBEE_PERF_TURN_SECTION turn=103 ui_state_prep avg_ms=0.020
+EBEE_PERF_TURN_SECTION turn=103 overlays_console avg_ms=0.008

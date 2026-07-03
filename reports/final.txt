@@ -1,0 +1,88 @@
+         25795148 function calls (25680490 primitive calls) in 13.861 seconds
+
+   Ordered by: cumulative time
+   List reduced from 1111 to 80 due to restriction <80>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+        1    0.672    0.672   13.862   13.862 runtime.py:1148(main)
+      127    0.026    0.000    3.171    0.025 ingame_ui.py:2705(draw)
+      127    0.011    0.000    2.185    0.017 ingame_ui.py:2008(_get_visible_troop_badges)
+      103    0.431    0.004    2.064    0.020 gui.py:341(gui_mergetroopbadgeentries)
+      102    0.009    0.000    1.850    0.018 director.py:218(executeturn)
+ 11223850    1.748    0.000    1.748    0.000 {method 'get' of 'dict' objects}
+  2182261    0.690    0.000    1.289    0.000 movement.py:31(getprovincecontroller)
+    12181    0.025    0.000    1.103    0.000 {built-in method builtins.sum}
+      127    0.621    0.005    1.022    0.008 ingame_ui.py:2059(sync)
+        2    0.000    0.000    0.937    0.468 core.py:47(loadsvgshapes)
+    22610    0.936    0.000    0.936    0.000 {method 'blit' of 'pygame.surface.Surface' objects}
+      102    0.001    0.000    0.912    0.009 economy.py:91(applyendturneconomy)
+     4956    0.329    0.000    0.908    0.000 economy.py:104(<genexpr>)
+        3    0.882    0.294    0.892    0.297 {built-in method _pickle.load}
+        2    0.000    0.000    0.882    0.441 eso.py:34(loadcache)
+      114    0.373    0.003    0.872    0.008 index.py:29(rebuild)
+      103    0.003    0.000    0.802    0.008 director.py:202(rebuildcountryindexes)
+   271329    0.492    0.000    0.716    0.000 gui.py:279(gui_shouldmergetroopbadgerects)
+      103    0.198    0.002    0.625    0.006 eso.py:185(buildcountryborderentries)
+      254    0.274    0.001    0.587    0.002 motion.py:226(draw)
+      102    0.266    0.003    0.557    0.005 gui.py:311(gui_gettroopbadgecandidatepairs)
+      918    0.120    0.000    0.525    0.001 defense.py:87(movereservestotargets)
+      990    0.004    0.000    0.445    0.000 defense.py:215(buildupborderforceswhenidle)
+     5975    0.262    0.000    0.414    0.000 movement.py:289(findprovincepath)
+      102    0.001    0.000    0.407    0.004 runtime.py:2686(checkcapitulations)
+      102    0.181    0.002    0.405    0.004 runtime.py:1938(buildwarcountrymetrics)
+      102    0.185    0.002    0.389    0.004 gui.py:1527(gui_drawmovementorderpaths)
+      103    0.246    0.002    0.362    0.004 gui.py:1661(gui_drawcountryborders)
+    89357    0.353    0.000    0.353    0.000 {built-in method pygame.draw.polygon}
+     1020    0.023    0.000    0.311    0.000 invasion.py:194(invadecountry)
+  2129389    0.254    0.000    0.254    0.000 {built-in method builtins.max}
+      102    0.003    0.000    0.236    0.002 runtime.py:3549(advancedomesticturneffects)
+      102    0.009    0.000    0.230    0.002 domestic.py:1571(advance_domestic_affairs_turn)
+    23835    0.178    0.000    0.230    0.000 {built-in method builtins.sorted}
+      127    0.001    0.000    0.229    0.002 runtime.py:3451(builddomesticaffairsviewdata)
+      127    0.009    0.000    0.227    0.002 domestic.py:1660(build_domestic_affairs_view)
+      254    0.011    0.000    0.227    0.001 invasion.py:32(buildattackplans)
+  1437717    0.217    0.000    0.217    0.000 {method 'add' of 'set' objects}
+      635    0.008    0.000    0.204    0.000 runtime.py:386(blitblackworldslice)
+   143510    0.162    0.000    0.193    0.000 camera.py:48(getscreenrectangle)
+     2457    0.018    0.000    0.189    0.000 domestic.py:679(legislature_totals)
+      725    0.022    0.000    0.178    0.000 domestic.py:701(refresh_government_state)
+  1239000    0.154    0.000    0.163    0.000 {built-in method builtins.min}
+     1020    0.001    0.000    0.157    0.000 defense.py:235(reacttoinvasion)
+1609832/1606874    0.151    0.000    0.157    0.000 {built-in method builtins.isinstance}
+      265    0.026    0.000    0.145    0.001 movement.py:1109(getsharedbordersegments)
+      127    0.028    0.000    0.137    0.001 ingame_ui.py:83(draw)
+      127    0.022    0.000    0.137    0.001 gui.py:1415(gui_drawcountrylabels)
+        1    0.051    0.051    0.129    0.129 runtime.py:3087(perfspawnwarsforsources)
+      127    0.002    0.000    0.126    0.001 ingame_ui.py:892(_draw_command_atmosphere)
+      127    0.024    0.000    0.124    0.001 motion.py:290(draw)
+      229    0.002    0.000    0.122    0.001 runtime.py:3465(refreshfocustreecontext)
+      140    0.120    0.001    0.120    0.001 {built-in method pygame.transform.scale}
+    13592    0.012    0.000    0.115    0.000 defense.py:45(frontlinedesiredtroops)
+   796491    0.114    0.000    0.114    0.000 {method 'colliderect' of 'pygame.rect.Rect' objects}
+      229    0.014    0.000    0.111    0.000 domestic.py:782(build_focus_context)
+    92598    0.068    0.000    0.111    0.000 domestic.py:607(party_side)
+    20491    0.067    0.000    0.110    0.000 ingame_ui.py:2009(<genexpr>)
+    16088    0.044    0.000    0.107    0.000 gui.py:106(gui_gettroopbadgevisualrect)
+      103    0.049    0.000    0.107    0.001 runtime.py:674(buildstaterenderlookup)
+      127    0.040    0.000    0.106    0.001 focustree.py:428(viewdata)
+        8    0.014    0.002    0.103    0.013 runtime.py:1018(drawloadingscreen)
+    91423    0.100    0.000    0.100    0.000 {built-in method pygame.draw.line}
+    13592    0.037    0.000    0.099    0.000 defense.py:28(estimateadjacentenemythreat)
+    27781    0.028    0.000    0.094    0.000 runtime.py:980(getcachedscreenpolygon)
+     6104    0.094    0.000    0.094    0.000 {method 'render' of 'pygame.font.Font' objects}
+     1122    0.021    0.000    0.093    0.000 domestic.py:436(_advance_country_covid)
+     1012    0.007    0.000    0.090    0.000 gui.py:1295(gui_drawtroopcountbadge)
+      254    0.003    0.000    0.087    0.000 domestic.py:1084(calculate_policy_passing_chance)
+    15926    0.034    0.000    0.087    0.000 gui.py:1474(gui_arrowhead)
+       23    0.000    0.000    0.086    0.004 sysfont.py:428(SysFont)
+      102    0.020    0.000    0.085    0.001 movement.py:456(processmovementorders)
+     2293    0.024    0.000    0.085    0.000 motion.py:84(draw_soft_glow)
+      744    0.011    0.000    0.085    0.000 ingame_ui.py:1140(_draw_resource_chip)
+        6    0.000    0.000    0.082    0.014 diagnostics.py:111(loadingprogresscallback)
+   468246    0.080    0.000    0.080    0.000 {method 'append' of 'list' objects}
+   134588    0.043    0.000    0.080    0.000 movement.py:35(getprovinceowner)
+   101637    0.048    0.000    0.079    0.000 gui.py:385(union)
+    15644    0.076    0.000    0.076    0.000 {built-in method pygame.draw.rect}
+        1    0.074    0.074    0.074    0.074 {built-in method pygame.base.init}
+
+

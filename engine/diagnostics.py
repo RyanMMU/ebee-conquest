@@ -1,4 +1,5 @@
 import os
+import math
 import time
 
 # i separated diagnostics into its own module because its getting too complicated
@@ -18,6 +19,62 @@ def getprocessmemoryusage():
 
     except Exception:
         return None, None #imortant, if psutil is not available memory will just say cannot find
+
+
+def getprocessmemorystats():
+    """Return portable process memory counters in MiB when psutil is available."""
+    try:
+        import psutil
+
+        memoryinfo = psutil.Process(os.getpid()).memory_info()
+        megabyte = 1024 * 1024
+        peakrss = getattr(memoryinfo, "peak_wset", None)
+        return {
+            "rss_mb": memoryinfo.rss / megabyte,
+            "vms_mb": memoryinfo.vms / megabyte,
+            "private_mb": getattr(memoryinfo, "private", memoryinfo.vms) / megabyte,
+            "peak_rss_mb": None if peakrss is None else peakrss / megabyte,
+        }
+    except Exception:
+        return {
+            "rss_mb": None,
+            "vms_mb": None,
+            "private_mb": None,
+            "peak_rss_mb": None,
+        }
+
+
+def percentile(samples, quantile):
+    """Use the nearest-rank percentile so p99 includes the max for small samples."""
+    if not samples:
+        return None
+    ordered = sorted(float(sample) for sample in samples)
+    boundedquantile = max(0.0, min(1.0, float(quantile)))
+    rank = max(1, math.ceil(boundedquantile * len(ordered)))
+    return ordered[rank - 1]
+
+
+def summarizeframetimes(samples):
+    if not samples:
+        return {
+            "count": 0,
+            "average_ms": None,
+            "p95_ms": None,
+            "p99_ms": None,
+            "max_ms": None,
+            "fps": None,
+        }
+
+    floatsamples = [float(sample) for sample in samples]
+    averagemilliseconds = sum(floatsamples) / len(floatsamples)
+    return {
+        "count": len(floatsamples),
+        "average_ms": averagemilliseconds,
+        "p95_ms": percentile(floatsamples, 0.95),
+        "p99_ms": percentile(floatsamples, 0.99),
+        "max_ms": max(floatsamples),
+        "fps": 1000.0 / max(0.001, averagemilliseconds),
+    }
 
 
 

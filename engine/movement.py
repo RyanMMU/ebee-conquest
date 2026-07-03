@@ -26,6 +26,10 @@ capitalcutoffsupplymultiplier = 0.70
 sharedLineTolerance = 0.9
 sharedAlignmentTolerance = 0.16
 sharedMinLength = 0.48 * 0.4
+coastalExposureRatio = 0.03
+coastalMinimumExposure = sharedMinLength
+navalDistancePerTurn = 30.0
+navalMinimumTravelTurns = 2
 
 
 def getprovincecontroller(province):
@@ -355,10 +359,62 @@ def findprovincepath(startprovinceid, goalprovinceid, provincemap, provincegraph
     return []
 
 
+def findnavalinvasionpath(
+    startprovinceid,
+    goalprovinceid,
+    provincemap,
+    allowedprovinceidset=None,
+    coastalprovinceidset=None,
+):
+    if startprovinceid not in provincemap or goalprovinceid not in provincemap:
+        return []
+    if startprovinceid == goalprovinceid:
+        return []
+    if allowedprovinceidset is not None:
+        if startprovinceid not in allowedprovinceidset or goalprovinceid not in allowedprovinceidset:
+            return []
+
+    if coastalprovinceidset is None:
+        startiscoastal = provincemap[startprovinceid].get("iscoastal") is True
+        goaliscoastal = provincemap[goalprovinceid].get("iscoastal") is True
+    else:
+        startiscoastal = startprovinceid in coastalprovinceidset
+        goaliscoastal = goalprovinceid in coastalprovinceidset
+
+    if not startiscoastal or not goaliscoastal:
+        return []
+    return [startprovinceid, goalprovinceid]
+
+
+def getnavalinvasiontraveltime(startprovinceid, goalprovinceid, provincemap):
+    startprovince = provincemap.get(startprovinceid)
+    goalprovince = provincemap.get(goalprovinceid)
+    if not startprovince or not goalprovince:
+        return navalMinimumTravelTurns
+
+    startcenter = startprovince.get("center")
+    goalcenter = goalprovince.get("center")
+    if startcenter is None or goalcenter is None:
+        return navalMinimumTravelTurns
+
+    traveldistance = math.hypot(
+        goalcenter[0] - startcenter[0],
+        goalcenter[1] - startcenter[1],
+    )
+    distanceturns = int(math.ceil(traveldistance / navalDistancePerTurn))
+    return max(navalMinimumTravelTurns, distanceturns)
+
+
 def buildmovementordercurrentindex(movementorderlist, currentturnnumber=None):
     movementorderindex = {}
     for movementorder in movementorderlist:
         if int(movementorder.get("amount", 0)) <= 0:
+            continue
+
+        if (
+            movementorder.get("isnavalinvasion")
+            and int(movementorder.get("navalturnsremaining", 1)) > 0
+        ):
             continue
 
         resumeturn = movementorder.get("_resumeonturn")
@@ -478,6 +534,12 @@ def processmovementorders(
         if int(movementorder.get("amount", 0)) <= 0:
             return None
 
+        if (
+            movementorder.get("isnavalinvasion")
+            and int(movementorder.get("navalturnsremaining", 1)) > 0
+        ):
+            return None
+
         resumeturn = movementorder.get("_resumeonturn")
         if resumeturn is not None and currentturnnumber is not None:
             if int(currentturnnumber) < int(resumeturn):
@@ -542,10 +604,33 @@ def processmovementorders(
         movingcountry = movementorder.get("controllercountry", movementorder.get("country"))
         movingcountrycolor = movementorder.get("countrycolor")
 
+        if movementorder.get("isnavalinvasion") and currentpathindex < len(pathlist) - 1:
+            navalturnstotal = max(
+                navalMinimumTravelTurns,
+                int(
+                    movementorder.get(
+                        "navalturnstotal",
+                        getnavalinvasiontraveltime(pathlist[0], pathlist[-1], provincemap),
+                    )
+                ),
+            )
+            navalturnsremaining = max(
+                1,
+                int(movementorder.get("navalturnsremaining", navalturnstotal)),
+            )
+            movementorder["navalturnstotal"] = navalturnstotal
+            if navalturnsremaining > 1:
+                movementorder["navalturnsremaining"] = navalturnsremaining - 1
+                continue
+            movementorder["navalturnsremaining"] = 0
+
         while currentpathindex < len(pathlist) - 1:
             nextprovinceid = pathlist[currentpathindex + 1]
             nextprovince = provincemap[nextprovinceid]
-            movecost = getterrainmovecost(nextprovince)
+            if movementorder.get("isnavalinvasion"):
+                movecost = 1.0
+            else:
+                movecost = getterrainmovecost(nextprovince)
             # move next turn if not enough
             if movementpoints < movecost:
                 break
@@ -1168,6 +1253,64 @@ def getsharedbordersegments(
     if playerprovinceid and foreignprovinceid:
         bordersegmentcache[cachekey] = list(sharedsegmentlist)
     return sharedsegmentlist
+
+
+def buildcoastalprovinceidset(
+    provincemap,
+    provincegraph,
+    candidateprovinceidset=None,
+    minimumexposureratio=coastalExposureRatio,
+    minimumexposurelength=coastalMinimumExposure,
+):
+    coastalprovinceidset = set()
+    provinceiditerable = provincemap if candidateprovinceidset is None else candidateprovinceidset
+
+    for provinceid in provinceiditerable:
+        province = provincemap.get(provinceid)
+        if not province:
+            continue
+        explicitvalue = province.get("iscoastal")
+        if isinstance(explicitvalue, bool):
+            if explicitvalue:
+                coastalprovinceidset.add(provinceid)
+            continue
+
+        edgeentries = getprovinceedgedata(province)
+        perimeterlength = sum(edgeentry["length"] for edgeentry in edgeentries)
+        if perimeterlength <= 1e-6:
+            province["iscoastal"] = False
+            continue
+
+        sharedlength = 0.0
+        for neighborprovinceid in provincegraph.get(provinceid, ()):
+            neighborprovince = provincemap.get(neighborprovinceid)
+            if not neighborprovince:
+                continue
+            sharedsegments = getsharedbordersegments(
+                province,
+                neighborprovince,
+                linetolerancee=sharedLineTolerance,
+                alignmenttolerance=sharedAlignmentTolerance,
+                minlength=sharedMinLength,
+            )
+            sharedlength += sum(
+                math.hypot(
+                    segmentend[0] - segmentstart[0],
+                    segmentend[1] - segmentstart[1],
+                )
+                for segmentstart, segmentend in sharedsegments
+            )
+
+        exposedlength = max(0.0, perimeterlength - sharedlength)
+        provinceiscoastal = (
+            exposedlength >= minimumexposurelength
+            and exposedlength / perimeterlength >= minimumexposureratio
+        )
+        province["iscoastal"] = provinceiscoastal
+        if provinceiscoastal:
+            coastalprovinceidset.add(provinceid)
+
+    return coastalprovinceidset
 
 
 def getcountryborderedges(provincemap, provincegraph, countryname):

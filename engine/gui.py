@@ -283,7 +283,15 @@ def gui_shouldmergetroopbadgerects(firstrect, secondrect):
 
     widthratio = intersection.width / float(max(1, min(firstrect.width, secondrect.width)))
     heightratio = intersection.height / float(max(1, min(firstrect.height, secondrect.height)))
-    arearatio = gui_getoverlapratio(firstrect, secondrect)
+    intersectionarea = intersection.width * intersection.height
+    minimumarea = max(
+        1,
+        min(
+            firstrect.width * firstrect.height,
+            secondrect.width * secondrect.height,
+        ),
+    )
+    arearatio = intersectionarea / float(minimumarea)
     return (
         arearatio >= troopbadgeoverlapmergethreshold
         or (
@@ -298,6 +306,36 @@ def gui_findtroopbadgeparent(parentlist, index):
         parentlist[index] = parentlist[parentlist[index]]
         index = parentlist[index]
     return index
+
+
+def gui_gettroopbadgecandidatepairs(entries):
+    """Return possible 2D overlaps in the legacy nested-loop order."""
+    if len(entries) <= 1:
+        return []
+
+    cellsize = 64
+    celllookup = {}
+    candidatepairset = set()
+    for index, entry in enumerate(entries):
+        rectangle = entry["_visualrect"]
+        if rectangle.width <= 0 or rectangle.height <= 0:
+            continue
+        firstcellx = rectangle.left // cellsize
+        lastcellx = (rectangle.right - 1) // cellsize
+        firstcelly = rectangle.top // cellsize
+        lastcelly = (rectangle.bottom - 1) // cellsize
+        for cellx in range(firstcellx, lastcellx + 1):
+            for celly in range(firstcelly, lastcelly + 1):
+                cellkey = (cellx, celly)
+                priorindices = celllookup.get(cellkey)
+                if priorindices is None:
+                    celllookup[cellkey] = [index]
+                    continue
+                for priorindex in priorindices:
+                    candidatepairset.add((priorindex, index))
+                priorindices.append(index)
+
+    return sorted(candidatepairset)
 
 
 def gui_mergetroopbadgeentries(troopbadgelist, fontobject, flags=None):
@@ -350,14 +388,13 @@ def gui_mergetroopbadgeentries(troopbadgelist, fontobject, flags=None):
         if firstroot != secondroot:
             parentlist[secondroot] = firstroot
 
-    for firstindex in range(len(entries)):
+    for firstindex, secondindex in gui_gettroopbadgecandidatepairs(entries):
         firstrect = entries[firstindex]["_visualrect"]
-        for secondindex in range(firstindex + 1, len(entries)):
-            secondrect = entries[secondindex]["_visualrect"]
-            if not firstrect.colliderect(secondrect):
-                continue
-            if gui_shouldmergetroopbadgerects(firstrect, secondrect):
-                union(firstindex, secondindex)
+        secondrect = entries[secondindex]["_visualrect"]
+        if not firstrect.colliderect(secondrect):
+            continue
+        if gui_shouldmergetroopbadgerects(firstrect, secondrect):
+            union(firstindex, secondindex)
 
     clusterlookup = {}
     for index, entry in enumerate(entries):

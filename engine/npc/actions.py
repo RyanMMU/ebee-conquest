@@ -1,5 +1,5 @@
 from ..events import EngineEventType
-from ..movement import markprovincetroopactivity
+from ..movement import getnavalinvasiontraveltime, markprovincetroopactivity
 
 
 # NPC ACTIONS
@@ -19,21 +19,39 @@ class NpcTurnActions:
         if callable(self.emitfunction):
             self.emitfunction(eventname, payload)
 
-    def appendmovementorder(self, movementorderlist, countryname, sourceprovinceid, path, troopcount, turnnumber):
+    def appendmovementorder(
+        self,
+        movementorderlist,
+        countryname,
+        sourceprovinceid,
+        path,
+        troopcount,
+        turnnumber,
+        isnavalinvasion=False,
+    ):
         sourceprovince = self.provincemap[sourceprovinceid]
-        movementorderlist.append(
-            {
-                "amount": troopcount,
-                "path": path,
-                "index": 0,
-                "current": path[0],
-                "speedmodifier": 1.0,
-                "controllercountry": countryname,
-                "country": countryname,
-                "countrycolor": sourceprovince.get("countrycolor", self.countrytocolorlookup.get(countryname)),
-                "ordercreatedturn": turnnumber,
-            }
-        )
+        movementorder = {
+            "amount": troopcount,
+            "path": path,
+            "index": 0,
+            "current": path[0],
+            "speedmodifier": 1.0,
+            "controllercountry": countryname,
+            "country": countryname,
+            "countrycolor": sourceprovince.get("countrycolor", self.countrytocolorlookup.get(countryname)),
+            "ordercreatedturn": turnnumber,
+            "isnavalinvasion": bool(isnavalinvasion),
+        }
+        navaltraveltime = None
+        if isnavalinvasion:
+            navaltraveltime = getnavalinvasiontraveltime(
+                sourceprovinceid,
+                path[-1],
+                self.provincemap,
+            )
+            movementorder["navalturnstotal"] = navaltraveltime
+            movementorder["navalturnsremaining"] = navaltraveltime
+        movementorderlist.append(movementorder)
 
         self.emit(
             EngineEventType.MOVEORDERCREATED,
@@ -45,10 +63,21 @@ class NpcTurnActions:
                 "country": countryname,
                 "turn": turnnumber,
                 "isNpc": True,
+                "isNavalInvasion": bool(isnavalinvasion),
+                "navalTravelTurns": navaltraveltime,
             },
         )
 
-    def movetrooporder(self, movementorderlist, countryname, sourceprovinceid, path, troopcount, turnnumber):
+    def movetrooporder(
+        self,
+        movementorderlist,
+        countryname,
+        sourceprovinceid,
+        path,
+        troopcount,
+        turnnumber,
+        isnavalinvasion=False,
+    ):
         sourceprovince = self.provincemap[sourceprovinceid]
         sourceprovince["troops"] -= troopcount
         self.countryindex.adjusttroopcount(countryname, -troopcount)
@@ -60,6 +89,7 @@ class NpcTurnActions:
             path,
             troopcount,
             turnnumber,
+            isnavalinvasion=isnavalinvasion,
         )
 
     def recruit(self, countryname, provinceid, troopcount, turnnumber):

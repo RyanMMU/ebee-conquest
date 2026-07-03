@@ -1,4 +1,9 @@
-from ..movement import findprovincepath, getprovincecontroller
+from ..movement import (
+    buildcoastalprovinceidset,
+    findnavalinvasionpath,
+    findprovincepath,
+    getprovincecontroller,
+)
 # INVASION PLANNER 
 
 
@@ -28,6 +33,10 @@ class NpcInvasionPlanner:
         self.maxinvasiontargetsperenemy = maxinvasiontargetsperenemy
         self.attritionattackthresholdratio = attritionattackthresholdratio
         self.attritionattackcommitratio = attritionattackcommitratio
+        self.coastalprovinceidset = buildcoastalprovinceidset(
+            self.provincemap,
+            self.provincegraph,
+        )
 
     def buildattackplans(self, countryname, sourceprovinceids, targetprovinceid, allowedprovinceidset, pathcache):
         attackplanlist = []
@@ -39,8 +48,8 @@ class NpcInvasionPlanner:
                 continue
 
             pathkey = (sourceprovinceid, targetprovinceid)
-            path = pathcache.get(pathkey)
-            if path is None:
+            cachedpath = pathcache.get(pathkey)
+            if cachedpath is None:
                 path = findprovincepath(
                     sourceprovinceid,
                     targetprovinceid,
@@ -48,7 +57,19 @@ class NpcInvasionPlanner:
                     self.provincegraph,
                     allowedprovinceidset=allowedprovinceidset,
                 )
-                pathcache[pathkey] = path
+                isnavalinvasion = False
+                if len(path) < 2:
+                    path = findnavalinvasionpath(
+                        sourceprovinceid,
+                        targetprovinceid,
+                        self.provincemap,
+                        allowedprovinceidset=allowedprovinceidset,
+                        coastalprovinceidset=self.coastalprovinceidset,
+                    )
+                    isnavalinvasion = len(path) >= 2
+                cachedpath = (path, isnavalinvasion)
+                pathcache[pathkey] = cachedpath
+            path, isnavalinvasion = cachedpath
             if len(path) < 2:
                 continue
 
@@ -57,6 +78,7 @@ class NpcInvasionPlanner:
                     "sourceProvinceId": sourceprovinceid,
                     "path": path,
                     "troops": movabletroops,
+                    "isNavalInvasion": isnavalinvasion,
                 }
             )
 
@@ -181,6 +203,7 @@ class NpcInvasionPlanner:
                 attackplan["path"],
                 movingtroops,
                 turnnumber,
+                isnavalinvasion=attackplan["isNavalInvasion"],
             )
             orderscreated += 1
             enemyorderscreated += 1
@@ -221,7 +244,12 @@ class NpcInvasionPlanner:
                 allowedsetcache[enemycountry] = allowedprovinceidset
             pathcache = {}
 
-            targetprovinceids = self.countryindex.enemybordertargetids(countryname, enemycountry)
+            targetprovinceids = set(self.countryindex.enemybordertargetids(countryname, enemycountry))
+            targetprovinceids.update(
+                provinceid
+                for provinceid in self.countryindex.controlledprovinceids(enemycountry)
+                if provinceid in self.coastalprovinceidset
+            )
             if not targetprovinceids:
                 continue
 

@@ -1,0 +1,101 @@
+{
+  "protocol_version": 1,
+  "python": "3.14.4 (tags/v3.14.4:23116f9, Apr  7 2026, 14:10:54) [MSC v.1944 64 bit (AMD64)]",
+  "wall_seconds": 46.57904689991847,
+  "scenario": {
+    "country": "Malaysia",
+    "turn": 2,
+    "idle_frames": 1,
+    "warmup_frames": 0,
+    "monitor_turns": 1,
+    "war_countries": [
+      "Malaysia"
+    ],
+    "headless": true
+  },
+  "process_memory": {
+    "rss_mb": 315.2109375,
+    "vms_mb": 647.61328125,
+    "private_mb": 647.61328125,
+    "peak_rss_mb": 637.46484375
+  },
+  "metrics": [
+    {
+      "metric": "EBEE_PERF_SPAWNWAR",
+      "turn": 2,
+      "sources": "Malaysia",
+      "created": 4,
+      "active_wars": 4,
+      "pairs": "[('Malaysia'",
+      "raw": "EBEE_PERF_SPAWNWAR turn=2 sources=Malaysia created=4 active_wars=4 pairs=[('Malaysia', 'Brunei'), ('Malaysia', 'Indonesia'), ('Malaysia', 'Singapore'), ('Malaysia', 'Thailand')]"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_IDLE",
+      "turn": 2,
+      "frames": 1,
+      "warmup_frames": 0,
+      "avg_ms": 1828.924,
+      "p95_ms": 1828.924,
+      "p99_ms": 1828.924,
+      "max_ms": 1828.924,
+      "fps_est": 0.5,
+      "orders": 14,
+      "active_wars": 4,
+      "raw": "EBEE_PERF_TURN_IDLE turn=2 frames=1 warmup_frames=0 avg_ms=1828.924 p95_ms=1828.924 p99_ms=1828.924 max_ms=1828.924 fps_est=0.5 orders=14 active_wars=4"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 2,
+      "avg_ms": 741.036,
+      "raw": "EBEE_PERF_TURN_SECTION turn=2 runtime_ui_draw avg_ms=741.036"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 2,
+      "avg_ms": 614.443,
+      "raw": "EBEE_PERF_TURN_SECTION turn=2 borders_labels_capitals avg_ms=614.443"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 2,
+      "avg_ms": 178.919,
+      "raw": "EBEE_PERF_TURN_SECTION turn=2 background_grid avg_ms=178.919"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 2,
+      "avg_ms": 161.87,
+      "raw": "EBEE_PERF_TURN_SECTION turn=2 map_polygons avg_ms=161.870"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 2,
+      "avg_ms": 77.771,
+      "raw": "EBEE_PERF_TURN_SECTION turn=2 movement_paths avg_ms=77.771"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 2,
+      "avg_ms": 29.365,
+      "raw": "EBEE_PERF_TURN_SECTION turn=2 troop_badges avg_ms=29.365"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 2,
+      "avg_ms": 19.31,
+      "raw": "EBEE_PERF_TURN_SECTION turn=2 frontline_overlay avg_ms=19.310"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 2,
+      "avg_ms": 5.905,
+      "raw": "EBEE_PERF_TURN_SECTION turn=2 ui_state_prep avg_ms=5.905"
+    },
+    {
+      "metric": "EBEE_PERF_TURN_SECTION",
+      "turn": 2,
+      "avg_ms": 0.305,
+      "raw": "EBEE_PERF_TURN_SECTION turn=2 overlays_console avg_ms=0.305"
+    }
+  ]
+}

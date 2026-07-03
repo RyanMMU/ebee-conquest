@@ -32,6 +32,8 @@ class ScriptUIManager:
         self.drawcallbacks = {}
         self.messages = []
         self.lastsize = (1, 1)
+        self._font = None
+        self._titlefont = None
 
     def registerpanel(
         self,
@@ -199,8 +201,11 @@ class ScriptUIManager:
         self.lastsize = surface.get_size()
         self.rundrawcallbacks(surface)
 
-        font = pygame.font.SysFont("Arial", 14)
-        titlefont = pygame.font.SysFont("Arial", 15, bold=True)
+        if self._font is None:
+            self._font = pygame.font.SysFont("Arial", 14)
+            self._titlefont = pygame.font.SysFont("Arial", 15, bold=True)
+        font = self._font
+        titlefont = self._titlefont
         mouseposition = pygame.mouse.get_pos()
 
         for fullid in list(self.order):

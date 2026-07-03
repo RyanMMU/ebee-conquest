@@ -1,7 +1,30 @@
 import math
 import random
+from collections import OrderedDict
 
 import pygame
+
+
+_SCANLINE_SURFACE_CACHE = OrderedDict()
+_LIGHT_SWEEP_SURFACE_CACHE = OrderedDict()
+_SURFACE_CACHE_MAX_ENTRIES = 16
+_SURFACE_CACHE_MAX_PIXELS = 4_000_000
+
+
+def _cache_surface(cache, key, create):
+    cached = cache.get(key)
+    if cached is not None:
+        cache.move_to_end(key)
+        return cached
+
+    cached = create()
+    cache[key] = cached
+    cache.move_to_end(key)
+    cachedpixels = sum(surface.get_width() * surface.get_height() for surface in cache.values())
+    while len(cache) > _SURFACE_CACHE_MAX_ENTRIES or cachedpixels > _SURFACE_CACHE_MAX_PIXELS:
+        _, removed = cache.popitem(last=False)
+        cachedpixels -= removed.get_width() * removed.get_height()
+    return cached
 
 
 def clamp(value, minimum=0.0, maximum=1.0):
@@ -91,12 +114,19 @@ def draw_soft_glow(surface, rect, color, strength=1.0, radius=8, rings=5):
 def draw_scanlines(surface, rect, time_value, color=(74, 143, 231), alpha=16, spacing=28):
     if rect.width <= 0 or rect.height <= 0:
         return
-    overlay = pygame.Surface(rect.size, pygame.SRCALPHA)
+    spacing = max(1, int(spacing))
+    cachekey = (rect.width, rect.height, tuple(color[:3]), alpha, spacing)
+
+    def createoverlay():
+        overlay = pygame.Surface((rect.width, rect.height + spacing), pygame.SRCALPHA)
+        for y in range(0, overlay.get_height(), spacing):
+            pygame.draw.line(overlay, (*color[:3], alpha), (0, y), (rect.width, y), 1)
+        return overlay
+
+    overlay = _cache_surface(_SCANLINE_SURFACE_CACHE, cachekey, createoverlay)
     offset = int((time_value * 42.0) % max(1, spacing))
-    for y in range(-spacing, rect.height + spacing, spacing):
-        line_y = y + offset
-        pygame.draw.line(overlay, (*color, alpha), (0, line_y), (rect.width, line_y), 1)
-    surface.blit(overlay, rect.topleft)
+    sourcearea = pygame.Rect(0, spacing - offset, rect.width, rect.height)
+    surface.blit(overlay, rect.topleft, sourcearea)
 
 
 def draw_light_sweep(surface, rect, time_value, color=(255, 230, 150), alpha=38):
@@ -104,15 +134,29 @@ def draw_light_sweep(surface, rect, time_value, color=(255, 230, 150), alpha=38)
         return
     travel = rect.width + rect.height + 120
     sweep_x = int((time_value * 180.0) % travel) - rect.height - 60
-    sweep = pygame.Surface(rect.size, pygame.SRCALPHA)
-    points = [
-        (sweep_x, 0),
-        (sweep_x + 36, 0),
-        (sweep_x + rect.height + 36, rect.height),
-        (sweep_x + rect.height, rect.height),
-    ]
-    pygame.draw.polygon(sweep, (*color[:3], alpha), points)
-    surface.blit(sweep, rect.topleft)
+    cachekey = (rect.height, tuple(color[:3]), alpha)
+
+    def createsweep():
+        sweep = pygame.Surface((rect.height + 36, rect.height), pygame.SRCALPHA)
+        points = [
+            (0, 0),
+            (36, 0),
+            (rect.height + 36, rect.height),
+            (rect.height, rect.height),
+        ]
+        pygame.draw.polygon(sweep, (*color[:3], alpha), points)
+        return sweep
+
+    sweep = _cache_surface(_LIGHT_SWEEP_SURFACE_CACHE, cachekey, createsweep)
+    oldclip = surface.get_clip()
+    sweepclip = oldclip.clip(rect)
+    if sweepclip.width <= 0 or sweepclip.height <= 0:
+        return
+    surface.set_clip(sweepclip)
+    try:
+        surface.blit(sweep, (rect.x + sweep_x, rect.y))
+    finally:
+        surface.set_clip(oldclip)
 
 
 def draw_animated_icon(
@@ -180,6 +224,7 @@ class PulseLayer:
         self.pulses = alive
 
     def draw(self, surface, offset=(0, 0)):
+        surfaceclip = surface.get_clip()
         for entry in self.pulses:
             progress = clamp(entry["age"] / entry["duration"])
             eased = ease_out_cubic(progress)
@@ -188,6 +233,14 @@ class PulseLayer:
             if alpha <= 0:
                 continue
             size = radius * 2 + 8
+            destination = pygame.Rect(
+                int(entry["x"] + offset[0] - size // 2),
+                int(entry["y"] + offset[1] - size // 2),
+                size,
+                size,
+            )
+            if not destination.colliderect(surfaceclip):
+                continue
             pulse_surface = pygame.Surface((size, size), pygame.SRCALPHA)
             center = (size // 2, size // 2)
             pygame.draw.circle(
@@ -202,10 +255,7 @@ class PulseLayer:
                 pygame.draw.circle(pulse_surface, (*entry["color"], inner_alpha), center, max(1, radius // 3))
             surface.blit(
                 pulse_surface,
-                (
-                    int(entry["x"] + offset[0] - size // 2),
-                    int(entry["y"] + offset[1] - size // 2),
-                ),
+                destination.topleft,
             )
 
 
@@ -215,6 +265,7 @@ class AmbientParticleField:
         self.seed = seed
         self._size = None
         self._particles = []
+        self._overlay = None
 
     def _reset(self, size):
         rng = random.Random(self.seed)
@@ -234,13 +285,15 @@ class AmbientParticleField:
                 }
             )
         self._size = (width, height)
+        self._overlay = pygame.Surface(self._size, pygame.SRCALPHA)
 
     def draw(self, surface, rect, time_value, color=(124, 196, 255), parallax=(0.0, 0.0)):
         if rect.width <= 0 or rect.height <= 0:
             return
         if self._size != rect.size:
             self._reset(rect.size)
-        overlay = pygame.Surface(rect.size, pygame.SRCALPHA)
+        overlay = self._overlay
+        overlay.fill((0, 0, 0, 0))
         width, height = rect.size
         for particle in self._particles:
             x = (particle["x"] + math.sin(time_value * 0.5 + particle["phase"]) * particle["drift"] + parallax[0]) % width
