@@ -66,8 +66,7 @@ The main menu provides campaign creation, save loading, script management, setti
 ```powershell
 git clone https://github.com/mrhmmu/ebee-conquest.git
 cd ebee-conquest
-python -m pip install -r requirements.txt
-python main.py
+./game.bat
 ```
 
 You can also launch `game.bat` from File Explorer.
